@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lavish Lavender - Inventory</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-slate-50 font-['Plus_Jakarta_Sans'] text-slate-900 antialiased selection:bg-violet-100 selection:text-violet-900 custom-scrollbar overflow-x-hidden">
+    <div id="app" class="h-screen flex flex-col md:flex-row overflow-hidden">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-72 bg-[#0f172a] border-r border-white/5 transition-transform duration-300 md:relative md:translate-x-0 -translate-x-full">
+            <!-- Content injected by app.js -->
+        </aside>
+
+        <main class="flex-1 flex flex-col min-w-0 bg-slate-50 h-screen overflow-hidden">
+            <!-- Header -->
+            <header class="h-20 bg-white/70 backdrop-blur-md border-b border-slate-100 px-8 flex items-center justify-between z-40 sticky top-0">
+                <div class="flex items-center gap-4">
+                    <button onclick="document.getElementById('sidebar').classList.toggle('-translate-x-full')" class="p-2.5 bg-slate-50 rounded-xl text-slate-500 md:hidden hover:bg-slate-100 transition-colors">
+                        <i data-lucide="Menu" class="w-5 h-5"></i>
+                    </button>
+                    <h2 class="text-xl font-black text-slate-800 uppercase tracking-tight">Inventory Control</h2>
+                </div>
+            </header>
+
+            <div id="view-content" class="flex-1 overflow-hidden">
+                <div class="h-full flex items-center justify-center">
+                    <div class="animate-pulse text-slate-300 font-bold uppercase tracking-widest text-xs">Loading Catalog...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Core Scripts -->
+    <script src="js/app.js"></script>
+    <script src="js/firebase.js"></script>
+    <script src="js/inventory.js"></script>
+    
+    <script>
+        window.renderApp = function() {
+            window.renderSidebar('inventory');
+            const container = document.getElementById('view-content');
+            if (window.renderInventory) {
+                container.innerHTML = window.renderInventory();
+                lucide.createIcons();
+            }
+        };
+
+        window.addEventListener('firebase-ready', () => {
+            window.FB.collection('items').onSnapshot((snap) => {
+                window.erpState.items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            window.FB.collection('sales').onSnapshot((snap) => {
+                window.erpState.sales = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            window.FB.root('orders').onSnapshot((snap) => {
+                window.erpState.orders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            window.FB.collection('expenses').onSnapshot((snap) => {
+                window.erpState.expenses = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            // Listen to general settings
+            window.FB.collection('settings').doc('general').onSnapshot((doc) => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    window.erpState.printerWidth = data.printerWidth || '58';
+                    window.erpState.whatsappTemplates = data.whatsappTemplates;
+                    if (data.taxes) window.erpState.taxes = data.taxes;
+                    if (data.discounts) window.erpState.discounts = data.discounts;
+
+                    window.renderApp();
+                }
+            });
+        });
+
+        // Render from cache immediately
+        window.renderApp();
+    </script>
+</body>
+</html>

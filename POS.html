@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Lavish Lavender - Retail POS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-slate-50 font-['DM_Sans'] text-slate-900 antialiased selection:bg-violet-100 selection:text-violet-900 custom-scrollbar overflow-x-hidden">
+    <div id="app" class="h-screen flex flex-col md:flex-row overflow-hidden">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-72 bg-[#0f172a] border-r border-white/5 transition-transform duration-300 md:relative md:translate-x-0 -translate-x-full">
+            <!-- Injected by app.js -->
+        </aside>
+
+        <main class="flex-1 flex flex-col min-w-0 bg-slate-50 h-screen overflow-hidden">
+            <!-- Header -->
+            <header class="h-20 bg-white/70 backdrop-blur-md border-b border-slate-100 px-8 flex items-center justify-between z-40 sticky top-0">
+                <div class="flex items-center gap-4">
+                    <button onclick="document.getElementById('sidebar').classList.toggle('-translate-x-full')" class="p-2.5 bg-slate-50 rounded-xl text-slate-500 md:hidden hover:bg-slate-100 transition-colors">
+                        <i data-lucide="Menu" class="w-5 h-5"></i>
+                    </button>
+                    <h2 class="text-xl font-black text-slate-800 uppercase tracking-tight">Retail Terminal</h2>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div id="status-indicator" class="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-100">
+                        <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> Online
+                    </div>
+                </div>
+            </header>
+
+            <!-- Sub-Navigation (Tabs) -->
+            <div id="sub-nav-container" class="bg-white border-b border-slate-100 overflow-x-auto no-scrollbar">
+                <div class="flex min-w-max px-4">
+                    <button onclick="window.setPOSTab('pos')" id="tab-pos" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Terminal</button>
+                    <button onclick="window.setPOSTab('history')" id="tab-history" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Sales History</button>
+                    <button onclick="window.setPOSTab('dues')" id="tab-dues" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Pending Dues</button>
+                    <button onclick="window.setPOSTab('tickets')" id="tab-tickets" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Saved Tickets</button>
+                </div>
+            </div>
+
+            <div id="view-content" class="flex-1 overflow-hidden relative">
+                <div class="h-full flex items-center justify-center text-slate-400 gap-3">
+                    <div class="w-6 h-6 border-4 border-violet-200 border-t-violet-600 rounded-full animate-spin"></div>
+                    <span class="font-black uppercase tracking-widest text-xs">Initializing Terminal...</span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Core Scripts -->
+    <script src="js/app.js"></script>
+    <script src="js/firebase.js"></script>
+    <script src="js/pos.js"></script>
+    
+    <script>
+        // Initialize POS-specific state defaults
+        window.erpState.historyFilter = window.erpState.historyFilter || 'all';
+        window.erpState.historySearch = window.erpState.historySearch || '';
+        window.erpState.dueSearch = window.erpState.dueSearch || '';
+        window.erpState.clientSearch = window.erpState.clientSearch || '';
+        window.erpState.activeSettingsSection = window.erpState.activeSettingsSection || 'menu';
+
+        // Sub-tab management
+        window.setPOSTab = function(tab) {
+            window.erpState.tab = tab;
+            window.renderApp();
+        };
+
+        window.renderApp = function() {
+            window.renderSidebar('pos');
+            const container = document.getElementById('view-content');
+            
+            // Sync Header UI
+            const headerTitle = document.querySelector('header h2');
+            const subNav = document.getElementById('sub-nav-container');
+            
+            if (window.erpState.tab === 'clients') {
+                if (headerTitle) headerTitle.textContent = 'Client Intelligence';
+                if (subNav) subNav.classList.add('hidden');
+            } else if (window.erpState.tab === 'reports') {
+                if (headerTitle) headerTitle.textContent = 'Master Reports';
+                if (subNav) subNav.classList.add('hidden');
+            } else if (window.erpState.tab === 'settings') {
+                if (headerTitle) headerTitle.textContent = 'Master Settings';
+                if (subNav) {
+                    subNav.classList.remove('hidden');
+                    subNav.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <button onclick="window.erpState.activeSettingsSection='menu'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'menu' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">Overview</button>
+                            <button onclick="window.erpState.activeSettingsSection='printer'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'printer' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">Printer</button>
+                            <button onclick="window.erpState.activeSettingsSection='whatsapp'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'whatsapp' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">WhatsApp</button>
+                            <button onclick="window.erpState.activeSettingsSection='tax'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'tax' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">Tax</button>
+                            <button onclick="window.erpState.activeSettingsSection='discount'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'discount' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">Discounts</button>
+                        </div>
+                    `;
+                }
+            } else {
+                if (headerTitle) headerTitle.textContent = 'Retail Terminal';
+                if (subNav) {
+                    subNav.classList.remove('hidden');
+                    subNav.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <button onclick="window.setPOSTab('pos')" id="tab-pos" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Retail Terminal</button>
+                            <button onclick="window.setPOSTab('history')" id="tab-history" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Sales History</button>
+                            <button onclick="window.setPOSTab('dues')" id="tab-dues" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Pending Dues</button>
+                            <button onclick="window.setPOSTab('tickets')" id="tab-tickets" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Saved Tickets</button>
+                        </div>
+                    `;
+                }
+                
+                // Active sub-tab highlighting
+                const activeBtn = document.getElementById('tab-' + window.erpState.tab);
+                if (activeBtn) {
+                    activeBtn.classList.remove('border-transparent');
+                    activeBtn.classList.add('border-violet-600', 'text-violet-600');
+                }
+            }
+
+            if (window.renderPOS) {
+                container.innerHTML = window.renderPOS();
+                lucide.createIcons();
+            }
+        };
+
+        window.addEventListener('firebase-ready', () => {
+            window.FB.collection('items').onSnapshot((snap) => {
+                window.erpState.items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            window.FB.collection('sales').onSnapshot((snap) => {
+                window.erpState.sales = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            window.FB.collection('expenses').onSnapshot((snap) => {
+                window.erpState.expenses = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            window.FB.root('orders').onSnapshot((snap) => {
+                window.erpState.orders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            window.FB.collection('tickets').onSnapshot((snap) => {
+                window.erpState.tickets = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            window.FB.root('clients').onSnapshot((snap) => {
+                window.erpState.clients = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            window.FB.collection('expense_categories').onSnapshot((snap) => {
+                const cloudCats = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const defaults = [
+                    { name: 'Rent', requiresBill: false, icon: 'Home' },
+                    { name: 'Electricity', requiresBill: true, icon: 'Zap' },
+                    { name: 'Staff Salary', requiresBill: false, icon: 'Users' },
+                    { name: 'Materials', requiresBill: true, icon: 'ShoppingBag' },
+                    { name: 'Handwork Charge', requiresBill: true, icon: 'Scissors' },
+                    { name: 'Dye Charge', requiresBill: true, icon: 'Droplets' },
+                    { name: 'Marketing', requiresBill: false, icon: 'Target' }
+                ];
+                
+                // Merge cloud categories with defaults, cloud takes priority if names match
+                const merged = [...defaults];
+                cloudCats.forEach(cloudCat => {
+                    const idx = merged.findIndex(d => d.name.toLowerCase() === cloudCat.name.toLowerCase());
+                    if (idx !== -1) {
+                        merged[idx] = cloudCat;
+                    } else {
+                        merged.push(cloudCat);
+                    }
+                });
+
+                window.erpState.expenseCategories = merged;
+                window.renderApp();
+            });
+
+            // Listen to general settings
+            window.FB.collection('settings').doc('general').onSnapshot((doc) => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    window.erpState.printerWidth = data.printerWidth || '58';
+                    window.erpState.whatsappTemplates = data.whatsappTemplates;
+                    if (data.taxes) window.erpState.taxes = data.taxes;
+                    if (data.discounts) window.erpState.discounts = data.discounts;
+
+                    window.renderApp();
+                }
+            });
+
+            // Initial Tab Selection based on URL or Default
+            const urlParams = new URLSearchParams(window.location.search);
+            const initialTab = urlParams.get('tab') || 'pos';
+            window.setPOSTab(initialTab);
+        });
+
+        // Render immediately from cache while Firebase loads in background
+        window.renderApp();
+    </script>
+</body>
+</html>
