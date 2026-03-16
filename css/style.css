@@ -1,0 +1,192 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+* {
+    /* Prevent text selection flicker on rapid taps */
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Global Styles ── */
+html,
+body {
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+    touch-action: pan-x pan-y;
+    max-width: 100vw;
+}
+
+/* Scrollbar styles */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #475569; /* Darker slate color */
+    border-radius: 10px;
+}
+
+/* Animations */
+@keyframes popIn {
+    from {
+        transform: scale(0.97) translateY(6px);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+    }
+    to {
+        transform: translateY(0);
+    }
+}
+
+.animate-pop-in {
+    animation: popIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-slide-up {
+    animation: slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+/* POS Specific styles */
+#posGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 16px;
+    padding-bottom: 30px;
+}
+
+.pos-item-card {
+    background: white !important;
+    border: 1.5px solid #ececf4 !important;
+    border-radius: 14px;
+    padding: 10px;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+    text-align: left;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    width: 130px !important;
+    height: 130px !important;
+}
+
+/* ... more CSS from POS.html ... */
+/* Adding styles for TailorPOS as well */
+.app-wrapper {
+    max-width: 480px;
+    margin: 0 auto;
+    background: #FDFBFF;
+    min-height: 100vh;
+    box-shadow: 0 0 60px rgba(139, 92, 246, 0.15);
+    position: relative;
+    padding-bottom: 110px;
+    overflow: visible !important;
+}
+/* Tailoring Specific Styles */
+.urgent-card {
+    animation: urgent-pulse 2s infinite;
+    border: 2px solid #fee2e2 !important;
+}
+
+@keyframes urgent-pulse {
+    0% {
+        box-shadow: 0 0 0 0px rgba(239, 68, 68, 0.1);
+    }
+    100% {
+        box-shadow: 0 0 0 12px rgba(239, 68, 68, 0);
+    }
+}
+
+.toast-popup {
+    animation: slideUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 320px;
+    z-index: 1000;
+}
+
+.pin-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid #7c3aed;
+    transition: all 0.2s;
+}
+
+.pin-dot.filled {
+    background: #7c3aed;
+}
+
+.pin-key {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    font-size: 22px;
+    font-weight: 800;
+    background: white;
+    border: 2px solid #f1f5f9;
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.08);
+}
+
+.pin-key:active {
+    background: #7c3aed;
+    color: white;
+    transform: scale(0.93);
+}
+
+.btn-press:active {
+    transform: scale(0.96);
+    opacity: 0.9;
+}
+
+/* Modal specific inputs */
+.tailor-input, .tailor-select, .tailor-textarea {
+    background-color: #ffffff !important;
+    border: 1.5px solid #e2e8f0 !important;
+    outline: none;
+    padding: 12px 14px;
+    border-radius: 12px;
+    font-size: 14px;
+    width: 100%;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.tailor-input:focus, .tailor-select:focus {
+    border-color: #7c3aed !important;
+    background-color: #fdfaff !important;
+}
+
+/* Measurement grid */
+.measure-field-container {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.measure-label {
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #94a3b8;
+    letter-spacing: 0.025em;
+}

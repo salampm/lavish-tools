@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Lavish Lavender - Tailoring Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .sub-tab-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.375rem;
+            transition: all 0.2s;
+            color: #94a3b8;
+            flex: 1 1 0%;
+            padding-top: 0.75rem;
+            padding-bottom: 0.75rem;
+            border-left: 1px solid #f8fafc;
+        }
+        .sub-tab-btn.active {
+            color: #7c3aed;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 font-['Plus_Jakarta_Sans'] text-slate-900 antialiased selection:bg-violet-100 selection:text-violet-900 custom-scrollbar overflow-x-hidden">
+    <!-- PIN Screen (Optional but kept for parity) -->
+    <div id="pin-screen" class="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center hidden">
+        <h1 class="text-2xl font-black text-slate-900 mb-2">Lavish Lavender</h1>
+        <p class="text-[10px] font-bold text-violet-400 uppercase tracking-widest mb-10">Boutique Executive PIN</p>
+        <div class="flex gap-4 mb-10" id="pin-dots">
+            <div class="pin-dot" id="d0"></div>
+            <div class="pin-dot" id="d1"></div>
+            <div class="pin-dot" id="d2"></div>
+            <div class="pin-dot" id="d3"></div>
+        </div>
+        <p id="pin-error" class="text-[10px] font-black text-red-500 uppercase tracking-widest mb-6 opacity-0">Incorrect PIN</p>
+        <div class="grid grid-cols-3 gap-4">
+            <button class="pin-key btn-press" onclick="window.pinPress('1')">1</button>
+            <button class="pin-key btn-press" onclick="window.pinPress('2')">2</button>
+            <button class="pin-key btn-press" onclick="window.pinPress('3')">3</button>
+            <button class="pin-key btn-press" onclick="window.pinPress('4')">4</button>
+            <button class="pin-key btn-press" onclick="window.pinPress('5')">5</button>
+            <button class="pin-key btn-press" onclick="window.pinPress('6')">6</button>
+            <button class="pin-key btn-press" onclick="window.pinPress('7')">7</button>
+            <button class="pin-key btn-press" onclick="window.pinPress('8')">8</button>
+            <button class="pin-key btn-press" onclick="window.pinPress('9')">9</button>
+            <div></div>
+            <button class="pin-key btn-press" onclick="window.pinPress('0')">0</button>
+            <button class="pin-key btn-press text-xl" onclick="window.pinBack()">⌫</button>
+        </div>
+    </div>
+
+    <div id="app" class="h-screen flex flex-col md:flex-row overflow-hidden">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-72 bg-[#0f172a] border-r border-white/5 transition-transform duration-300 md:relative md:translate-x-0 -translate-x-full">
+            <!-- Injected by app.js -->
+        </aside>
+
+        <main class="flex-1 flex flex-col min-w-0 bg-slate-50 h-screen overflow-hidden">
+            <!-- Header -->
+            <header class="h-20 bg-white border-b border-slate-100 px-8 flex items-center justify-between z-40 sticky top-0">
+                <div class="flex items-center gap-4">
+                    <button onclick="document.getElementById('sidebar').classList.toggle('-translate-x-full')" class="p-2.5 bg-slate-50 rounded-xl text-slate-500 md:hidden hover:bg-slate-100 transition-colors">
+                        <i data-lucide="Menu" class="w-5 h-5"></i>
+                    </button>
+                    <h2 class="text-xl font-black text-slate-800 uppercase tracking-tight">Tailoring Workflow</h2>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="window.openOrderModal()" class="bg-violet-600 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-violet-100 btn-press flex items-center gap-2">
+                        <i data-lucide="Plus" class="w-4 h-4 text-white"></i>
+                        <span class="text-[10px] font-black uppercase tracking-wider">New Order</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Sub-Navigation (Tabs) -->
+            <div class="bg-white border-b border-slate-100 overflow-x-auto no-scrollbar">
+                <div class="flex min-w-max px-4">
+                    <button onclick="window.setTailorTab('tracker')" id="tab-tracker" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Tracker</button>
+                    <button onclick="window.setTailorTab('pending-due')" id="tab-pending-due" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-rose-500">Pending Due</button>
+                    <button onclick="window.setTailorTab('history')" id="tab-history" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">History</button>
+                </div>
+            </div>
+
+            <div id="view-content" class="flex-1 overflow-hidden relative">
+                <!-- Dynamically injected content -->
+                <div class="h-full flex items-center justify-center animate-pulse text-slate-300 font-black uppercase text-xs tracking-widest">
+                    Loading Workflow...
+                </div>
+            </div>
+            
+            <!-- Backup Reminder Slot -->
+            <div id="backup-reminder" class="hidden absolute bottom-4 left-4 right-4 bg-amber-50 border border-amber-200 p-4 rounded-2xl flex justify-between items-center z-50 animate-pop-in">
+                <div>
+                    <p class="text-[9px] font-black text-amber-600 uppercase tracking-widest">Weekly Backup Due</p>
+                    <p class="text-[10px] text-amber-500 mt-0.5">Export all orders to keep safe</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="window.exportAll()" class="bg-amber-500 text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase">Export</button>
+                    <button onclick="document.getElementById('backup-reminder').classList.add('hidden')" class="bg-amber-100 text-amber-400 px-3 py-2 rounded-xl text-[9px] font-black uppercase">Later</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals (Hidden by default) -->
+    
+    <!-- Toast Popup for WhatsApp/Success -->
+    <div id="toast-container" class="hidden"></div>
+    
+    <!-- Marketing Bar -->
+    <div id="marketing-bar" class="fixed bottom-24 left-1/2 -translate-x-1/2 w-[94%] max-w-[500px] bg-slate-900 text-white p-6 rounded-[36px] shadow-2xl z-[500] hidden animate-slide-up">
+        <div class="flex justify-between items-center mb-5">
+            <p class="text-[9px] font-black uppercase tracking-[0.3em] text-violet-400">Marketing Broadcast</p>
+            <button onclick="window.cancelBroadcast()" class="text-slate-500"><i data-lucide="X" class="w-5 h-5"></i></button>
+        </div>
+        <textarea id="marketing-msg" rows="3" class="w-full bg-slate-800 border-none rounded-2xl p-5 text-sm text-white outline-none mb-4" placeholder="Type message..."></textarea>
+        <div id="broadcast-status" class="hidden mb-4 p-4 rounded-2xl bg-violet-900/20 text-xs font-bold flex justify-between text-white">
+            <span>Sending to: <b id="broadcast-name">...</b></span> <span id="broadcast-index">1/1</span>
+        </div>
+        <button id="broadcast-btn" onclick="window.startBroadcast()" class="w-full bg-violet-500 text-white py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-2xl">Start Campaign</button>
+    </div>
+
+    <!-- Order Modal -->
+    <div id="order-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[200]">
+        <div class="bg-white w-full max-w-[480px] rounded-[36px] p-8 shadow-2xl overflow-y-auto max-h-[95vh] custom-scrollbar">
+            <form id="order-form" onsubmit="window.handleOrderSubmit(event)">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-black text-slate-900 tracking-tight">Create Order</h2>
+                    <button type="button" onclick="window.closeOrderModal()" class="bg-slate-50 p-2.5 rounded-full text-slate-400 hover:bg-slate-100 transition-colors">
+                        <i data-lucide="X" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Bill #</label>
+                        <input name="billNo" type="text" id="form-billNo" class="tailor-input" required>
+                    </div>
+                    <div>
+                        <label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Phone</label>
+                        <input name="phone" id="form-phone" oninput="window.handlePhoneLookup(this.value)" type="tel" placeholder="+91" class="tailor-input" required>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Customer Name</label>
+                    <input name="customerName" id="form-cust-name" list="existing-customers" oninput="window.handleNameAutoFill(this.value)" type="text" class="tailor-input" required autocomplete="off">
+                    <datalist id="existing-customers"></datalist>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Order Date</label>
+                        <input name="orderDate" id="form-orderDate" type="date" class="tailor-input">
+                    </div>
+                    <div>
+                        <label class="text-[9px] font-black text-violet-500 uppercase block mb-1.5 font-bold">Delivery Date</label>
+                        <input name="deliveryDate" id="form-deliveryDate" type="date" class="tailor-input">
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-3">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Garment Items</label>
+                        <button type="button" onclick="window.addItem()" class="text-violet-600 text-[10px] font-black uppercase hover:underline">+ Add Row</button>
+                    </div>
+                    <div id="items-container" class="space-y-3"></div>
+                </div>
+
+                <div class="bg-violet-50 p-5 rounded-3xl border border-violet-100 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <label class="text-[9px] font-black text-violet-400 uppercase block mb-1">Advance (₹)</label>
+                        <input name="advancePaid" type="number" id="advance-input" oninput="window.calcModalBal()" class="tailor-input !w-32 !py-2 text-right">
+                    </div>
+                    <div class="flex justify-between items-center pt-3 border-t border-violet-100/50">
+                        <span class="text-[10px] font-black text-violet-400 uppercase tracking-widest">Balance Due</span>
+                        <span id="modal-balance" class="text-2xl font-black text-violet-700">₹0</span>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <button type="button" onclick="window.openMeasurementModal('draft')" class="w-full bg-white text-slate-700 py-4 rounded-[20px] text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 hover:border-violet-300 hover:text-violet-600 transition-all group">
+                        <i data-lucide="ScanLine" class="w-4 h-4 group-hover:scale-110 transition-transform"></i> Add Measurements & Scan Form
+                    </button>
+                    <p id="draft-measurement-status" class="text-center text-[9px] font-black text-emerald-500 uppercase tracking-widest mt-2 hidden">✓ Measurements Attached</p>
+                </div>
+
+                <div class="mb-6">
+                    <label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Instructions</label>
+                    <textarea name="description" rows="2" class="tailor-textarea" placeholder="Garment specifics..."></textarea>
+                </div>
+                
+                <button type="submit" id="order-submit-btn" class="w-full bg-slate-900 text-white py-5 rounded-[24px] font-black uppercase text-[11px] tracking-[0.2em] btn-press shadow-xl shadow-slate-200">Save Order & Notify Client</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div id="detail-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[210]">
+        <div class="bg-white w-full max-w-[550px] rounded-[48px] p-10 pt-12 shadow-2xl relative overflow-y-auto max-h-[92vh] custom-scrollbar">
+            <button onclick="window.closeDetailModal()" class="absolute top-6 right-6 z-50 bg-slate-50 p-3 rounded-full text-slate-400 hover:text-slate-900 hover:bg-slate-200 transition-all shadow-sm"><i data-lucide="X" class="w-5 h-5"></i></button>
+            <div id="detail-content"></div>
+
+            <div id="fin-section" class="mt-10 pt-8 border-t border-slate-50">
+                <label class="text-[10px] font-black text-slate-400 uppercase block mb-5 tracking-widest">Financial Adjustments</label>
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="window.toggleCostForm()" class="bg-slate-50 p-5 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 border border-slate-100 hover:bg-slate-100 transition-colors">
+                        <i data-lucide="PlusCircle" class="w-4 h-4 text-violet-500"></i> Extra Charge
+                    </button>
+                    <button onclick="window.toggleAdvanceForm()" class="bg-slate-50 p-5 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 border border-slate-100 hover:bg-slate-100 transition-colors">
+                        <i data-lucide="Banknote" class="w-4 h-4 text-emerald-500"></i> Add Advance
+                    </button>
+                </div>
+                <div id="cost-form" class="hidden mt-6 bg-violet-50 p-6 rounded-[32px] space-y-4 border border-violet-100 animate-pop-in">
+                    <p class="text-[9px] font-black text-violet-400 uppercase tracking-widest">Extra Charge — adds to total bill</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <input type="number" id="cost-amt" placeholder="Amount ₹" class="tailor-input">
+                        <input type="text" id="cost-reason" placeholder="Reason (e.g. Button fix)" class="tailor-input">
+                    </div>
+                    <button onclick="window.applyAdj('cost')" class="w-full bg-violet-600 text-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest">Add to Bill</button>
+                </div>
+                <div id="advance-form" class="hidden mt-6 bg-emerald-50 p-6 rounded-[32px] space-y-4 border border-emerald-100 animate-pop-in">
+                    <p class="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Add Advance — reduces balance</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <input type="number" id="advance-amt" placeholder="Amount ₹" class="tailor-input">
+                        <input type="text" id="advance-reason" placeholder="Note (e.g. Second payment)" class="tailor-input">
+                    </div>
+                    <button onclick="window.applyAdj('advance')" class="w-full bg-emerald-600 text-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest">Record Payment</button>
+                </div>
+            </div>
+
+            <div id="history-actions" class="mt-8 pt-8 border-t border-slate-50 hidden">
+                <label class="text-[10px] font-black text-slate-400 uppercase block mb-4 tracking-widest">Archive Actions</label>
+                <button onclick="window.returnToQueue()" class="w-full bg-orange-50 text-orange-600 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 mb-3">
+                    <i data-lucide="RotateCcw" class="w-4 h-4"></i> Return to Queue for Alteration
+                </button>
+            </div>
+
+            <div class="mt-10">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-5">Activity Log</label>
+                <div id="notes-log" class="space-y-3"></div>
+            </div>
+
+            <div class="mt-12 pt-8 border-t flex gap-4">
+                <button onclick="window.openEditModal()" class="flex-1 py-4.5 bg-violet-50 text-violet-600 font-black uppercase text-[10px] rounded-2xl tracking-widest flex items-center justify-center gap-2">
+                    <i data-lucide="Pencil" class="w-4 h-4"></i> Edit
+                </button>
+                <button onclick="window.closeDetailModal()" class="flex-1 py-4.5 bg-slate-100 text-slate-500 font-black uppercase text-[10px] rounded-2xl tracking-widest">Close</button>
+                <button id="delete-btn-master" class="p-4.5 bg-red-50 text-red-500 font-black uppercase text-[10px] rounded-2xl">
+                    <i data-lucide="Trash2" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[220]">
+        <div class="bg-white w-full max-w-[480px] rounded-[36px] p-8 shadow-2xl overflow-y-auto max-h-[95vh] custom-scrollbar">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-black text-slate-900 tracking-tight">Edit Order</h2>
+                <button onclick="window.closeEditModal()" class="bg-slate-50 p-2.5 rounded-full text-slate-400 hover:bg-slate-100"><i data-lucide="X" class="w-5 h-5"></i></button>
+            </div>
+            <div class="space-y-5">
+                <div><label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Customer Name</label><input id="edit-name" type="text" class="tailor-input"></div>
+                <div><label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Phone</label><input id="edit-phone" type="tel" class="tailor-input"></div>
+                <div>
+                    <label class="text-[9px] font-black text-slate-400 uppercase block mb-2 font-bold">Items</label>
+                    <div id="edit-items-container" class="space-y-3 mb-3"></div>
+                    <button type="button" onclick="window.addEditItem()" class="w-full py-3 border-2 border-dashed border-violet-100 rounded-2xl text-[10px] font-black text-violet-400 uppercase tracking-widest hover:border-violet-200 hover:text-violet-500 Transition-all">+ Add Item</button>
+                </div>
+                <div><label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Delivery Date</label><input id="edit-delivery" type="date" class="tailor-input"></div>
+                <div><label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Instructions</label><textarea id="edit-instructions" rows="2" class="tailor-textarea"></textarea></div>
+                <button onclick="window.saveEditOrder()" class="w-full bg-slate-900 text-white py-5 rounded-[24px] font-black uppercase text-[11px] tracking-widest btn-press shadow-xl mt-4">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delivery Modal -->
+    <div id="delivery-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[220]">
+        <div class="bg-white w-full max-w-[400px] rounded-[48px] p-10 shadow-2xl text-center">
+            <h2 class="text-2xl font-black text-slate-900 mb-8 tracking-tight uppercase">Final Settlement</h2>
+            <div class="bg-slate-50 p-8 rounded-[36px] mb-8 border border-slate-100">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Balance to Pay</p>
+                <p id="del-pending" class="text-4xl font-black text-slate-900 leading-none">₹0</p>
+            </div>
+            <div class="space-y-5 text-left">
+                <div>
+                    <label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Amt Collected Now (₹)</label>
+                    <input type="number" id="del-received" oninput="window.recalcDel()" placeholder="0.00" class="tailor-input">
+                </div>
+                <div>
+                    <label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Tailor / Labor Cost (₹)</label>
+                    <input type="number" id="del-tailoring-cost" class="tailor-input bg-rose-50/30" placeholder="0.00">
+                </div>
+                <p id="del-discount-msg" class="text-[10px] font-black text-orange-500 uppercase italic text-center min-h-[1.5em]"></p>
+                <div class="pt-4 flex gap-4">
+                    <button onclick="window.closeDeliveryModal()" class="flex-1 py-4.5 bg-slate-100 text-slate-500 font-black uppercase text-[10px] rounded-2xl tracking-widest">Back</button>
+                    <button onclick="window.confirmDelivery()" class="flex-[1.5] py-4.5 bg-emerald-600 text-white font-black uppercase text-[10px] rounded-2xl shadow-xl shadow-emerald-100 tracking-widest">Complete Sale</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Measurement Modal -->
+    <div id="measurement-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[225]">
+        <div class="bg-white w-full max-w-[600px] rounded-[48px] p-10 shadow-2xl overflow-y-auto max-h-[95vh] custom-scrollbar" data-mode="existing">
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-900 tracking-tight">Measurements</h2>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Precise Garment Specs</p>
+                </div>
+                <button onclick="window.closeMeasurementModal()" class="bg-slate-50 p-3 rounded-full text-slate-400 hover:bg-slate-100 transition-colors">
+                    <i data-lucide="X" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <!-- OCR/AI Zone -->
+            <div class="mb-10 group bg-violet-50/50 p-8 rounded-[40px] border-3 border-dashed border-violet-100 flex flex-col items-center justify-center relative overflow-hidden transition-all hover:bg-violet-50 hover:border-violet-300">
+                <input type="file" id="ocr-upload" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer z-10" onchange="window.processMeasurementOCR(this.files[0])">
+                <div class="w-16 h-16 bg-white rounded-3xl shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <i data-lucide="ScanText" class="w-8 h-8 text-violet-500"></i>
+                </div>
+                <p class="text-[14px] font-black text-violet-900 uppercase tracking-widest text-center">Auto-Fill with AI</p>
+                <p class="text-[10px] font-bold text-violet-400 text-center mt-2 group-hover:text-violet-500">Tap here to scan handwritten form</p>
+                <p id="ocr-status" class="text-[10px] font-black text-slate-500 mt-4 hidden text-center px-6 leading-relaxed"></p>
+            </div>
+
+            <div class="space-y-8 mb-10">
+                <!-- Group: Style Info -->
+                <section>
+                    <h3 class="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                        <span class="w-6 h-[2px] bg-violet-500"></span> Style & Features
+                    </h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="measure-field-container">
+                            <label class="measure-label">Garment Style</label>
+                            <input id="measure-style" type="text" class="tailor-input text-xs" placeholder="e.g. A-Line Kurti">
+                        </div>
+                        <div class="measure-field-container">
+                            <label class="measure-label">Sleeve Pattern</label>
+                            <input id="measure-sleeve_pattern" type="text" class="tailor-input text-xs" placeholder="e.g. Puff Sleeve">
+                        </div>
+                        <div class="measure-field-container">
+                            <label class="measure-label">Pant Pattern</label>
+                            <input id="measure-pant_pattern" type="text" class="tailor-input text-xs" placeholder="e.g. Cigarette Pant">
+                        </div>
+                        <div class="measure-field-container">
+                            <label class="measure-label">Lining Type</label>
+                            <input id="measure-lining" type="text" class="tailor-input text-xs" placeholder="e.g. Cotton Soft">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Group: Top Measurements -->
+                <section>
+                    <h3 class="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                        <span class="w-6 h-[2px] bg-violet-500"></span> Upper Body (Inches)
+                    </h3>
+                    <div class="grid grid-cols-3 md:grid-cols-4 gap-4">
+                        <!-- Chest -->
+                        <div class="measure-field-container">
+                            <label class="measure-label">Chest</label>
+                            <input id="measure-chest" type="text" class="tailor-input text-sm text-center font-black">
+                        </div>
+                        <!-- Waist -->
+                        <div class="measure-field-container">
+                            <label class="measure-label">Waist</label>
+                            <input id="measure-waist" type="text" class="tailor-input text-sm text-center font-black">
+                        </div>
+                        <!-- Seat -->
+                        <div class="measure-field-container">
+                            <label class="measure-label">Seat/Hip</label>
+                            <input id="measure-seat" type="text" class="tailor-input text-sm text-center font-black">
+                        </div>
+                        <!-- Shoulder -->
+                        <div class="measure-field-container">
+                            <label class="measure-label">Shoulder</label>
+                            <input id="measure-shoulder" type="text" class="tailor-input text-sm text-center font-black">
+                        </div>
+                        <!-- Body Length -->
+                        <div class="measure-field-container">
+                            <label class="measure-label">Body Len</label>
+                            <input id="measure-body_length" type="text" class="tailor-input text-sm text-center font-black">
+                        </div>
+                        <!-- Full Length -->
+                        <div class="measure-field-container">
+                            <label class="measure-label">Full Len</label>
+                            <input id="measure-full_length" type="text" class="tailor-input text-sm text-center font-black">
+                        </div>
+                        <!-- Slit -->
+                        <div class="measure-field-container">
+                            <label class="measure-label">Slit Len</label>
+                            <input id="measure-slit" type="text" class="tailor-input text-sm text-center font-black">
+                        </div>
+                        <!-- Armhole -->
+                        <div class="measure-field-container">
+                            <label class="measure-label">Armhole</label>
+                            <input id="measure-armhole" type="text" class="tailor-input text-sm text-center font-black">
+                        </div>
+                        <!-- Sleeve Length -->
+                        <div class="measure-field-container">
+                            <label class="measure-label">Sleeve Len</label>
+                            <input id="measure-sleeve_length" type="text" class="tailor-input text-sm text-center font-black">
+                        </div>
+                        <!-- Sleeve Round -->
+                        <div class="measure-field-container">
+                            <label class="measure-label">Sleeve Rnd</label>
+                            <input id="measure-sleeve_round" type="text" class="tailor-input text-sm text-center font-black">
+                        </div>
+                        <!-- Front Neck -->
+                        <div class="measure-field-container">
+                            <label class="measure-label">Front Neck</label>
+                            <input id="measure-front_neck" type="text" class="tailor-input text-sm text-center font-black">
+                        </div>
+                        <!-- Back Neck -->
+                        <div class="measure-field-container">
+                            <label class="measure-label">Back Neck</label>
+                            <input id="measure-back_neck" type="text" class="tailor-input text-sm text-center font-black">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Group: Bottom Measurements -->
+                <section>
+                    <h3 class="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                        <span class="w-6 h-[2px] bg-violet-500"></span> Lower Body (Inches)
+                    </h3>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="measure-field-container">
+                            <label class="measure-label">Bottom Len</label>
+                            <input id="measure-bottom_length" type="text" class="tailor-input text-sm text-center font-black">
+                        </div>
+                        <div class="measure-field-container">
+                            <label class="measure-label">Bot. Waist</label>
+                            <input id="measure-bottom_waist" type="text" class="tailor-input text-sm text-center font-black">
+                        </div>
+                        <div class="measure-field-container">
+                            <label class="measure-label">Bot. Round</label>
+                            <input id="measure-bottom_round" type="text" class="tailor-input text-sm text-center font-black">
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="mb-8">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 font-bold">Additional Notes / Particulars</label>
+                <textarea id="measure-notes" rows="3" class="tailor-textarea text-xs !py-4" placeholder="Specific neck drops, piping details, lining specifics..."></textarea>
+            </div>
+
+            <div class="mb-10">
+                <div class="flex items-center justify-between mb-4">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest font-bold">Design Reference / Original Scan</label>
+                    <p class="text-[9px] text-slate-400 font-bold uppercase">(Max 3 Images)</p>
+                </div>
+                <input type="file" id="measure-images" accept="image/*" multiple max="3" class="w-full text-xs file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:bg-violet-50 file:text-violet-600 hover:file:bg-violet-100 transition-colors cursor-pointer">
+                <div id="measure-image-preview" class="grid grid-cols-3 gap-4 mt-6"></div>
+            </div>
+
+            <button onclick="window.saveMeasurement()" id="btn-save-measurements" class="w-full bg-slate-900 text-white py-5 rounded-[24px] font-black uppercase text-[11px] tracking-[0.2em] btn-press shadow-2xl">Confirm & Save Specs</button>
+        </div>
+    </div>
+
+    <!-- Client CRM / Profile Modal -->
+    <div id="client-profile-modal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[230] hidden group">
+        <div class="absolute inset-0" onclick="window.closeClientProfile()"></div>
+        <div class="absolute inset-y-0 right-0 w-full max-w-[500px] bg-white shadow-[-20px_0_60px_rgba(0,0,0,0.1)] flex flex-col p-0 overflow-hidden animate-slide-right md:rounded-l-[48px]">
+            <!-- Header Section -->
+            <div class="bg-violet-600 p-10 text-white relative">
+                <button onclick="window.closeClientProfile()" class="absolute top-8 right-8 text-white/50 hover:text-white transition-colors">
+                    <i data-lucide="X" class="w-6 h-6"></i>
+                </button>
+                <div class="flex gap-6 items-center mb-8">
+                    <div id="cp-avatar" class="w-20 h-20 rounded-3xl bg-white/10 backdrop-blur-md border border-white/20 text-white flex items-center justify-center font-black text-3xl uppercase shadow-xl">V</div>
+                    <div>
+                        <h2 id="cp-name" class="text-3xl font-black leading-none mb-2">Customer Name</h2>
+                        <a id="cp-phone-link" href="#" class="text-xs font-black text-violet-200 flex items-center gap-1.5 hover:text-white transition-colors">
+                            <i data-lucide="Phone" class="w-3 h-3"></i> <span id="cp-phone">Target</span>
+                        </a>
+                    </div>
+                </div>
+                <!-- Mini Stats Overlay -->
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
+                        <p class="text-[8px] font-black uppercase text-violet-200 tracking-widest mb-1">Orders</p>
+                        <p id="cp-total-orders" class="text-xl font-black">0</p>
+                    </div>
+                    <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
+                        <p class="text-[8px] font-black uppercase text-violet-200 tracking-widest mb-1">Total Spent</p>
+                        <p id="cp-total-spent" class="text-xl font-black">₹0</p>
+                    </div>
+                    <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
+                        <p class="text-[8px] font-black uppercase text-violet-200 tracking-widest mb-1">Balance</p>
+                        <p id="cp-balance" class="text-xl font-black text-orange-300">₹0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Navigation -->
+            <div class="flex px-4 py-2 bg-slate-50 border-b border-slate-100">
+                <button onclick="window.switchClientTab('overview')" id="cp-tab-overview" class="flex-1 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Overview</button>
+                <button onclick="window.switchClientTab('history')" id="cp-tab-history" class="flex-1 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Order History</button>
+                <button onclick="window.switchClientTab('edit')" id="cp-tab-edit" class="flex-1 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Manage Data</button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-8">
+                <!-- Tab: Overview -->
+                <div id="cp-content-overview" class="space-y-8 animate-pop-in">
+                    <div id="cp-measurements-layer"></div>
+                    <div class="bg-slate-50 p-6 rounded-[32px] border border-slate-100">
+                        <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex justify-between items-center">
+                            Private Notes <i data-lucide="FileText" class="w-3 h-3"></i>
+                        </h4>
+                        <p id="cp-notes-display" class="text-sm font-medium text-slate-700 leading-relaxed whitespace-pre-wrap italic">No observations recorded...</p>
+                    </div>
+                    <button onclick="window.openOrderFromClient()" class="w-full bg-violet-600 text-white py-5 rounded-[24px] font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-violet-100">
+                        <i data-lucide="Plus" class="w-5 h-5"></i> Start New Order
+                    </button>
+                </div>
+
+                <!-- Tab: History -->
+                <div id="cp-content-history" class="hidden space-y-3 animate-pop-in">
+                    <div id="cp-order-list" class="space-y-4"></div>
+                </div>
+
+                <!-- Tab: Edit -->
+                <div id="cp-content-edit" class="hidden space-y-6 animate-pop-in pb-20">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Full Name</label>
+                            <input id="cp-edit-name" type="text" class="tailor-input">
+                        </div>
+                        <div>
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Phone Number</label>
+                            <input id="cp-edit-phone" type="text" class="tailor-input bg-slate-50" readonly>
+                        </div>
+                        <div>
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Email (Optional)</label>
+                            <input id="cp-edit-email" type="email" class="tailor-input">
+                        </div>
+                        <div>
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Residential Address</label>
+                            <textarea id="cp-edit-address" rows="3" class="tailor-textarea text-sm"></textarea>
+                        </div>
+                        <div>
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 font-bold text-violet-500">Business Notes / CRM Tracking</label>
+                            <textarea id="cp-edit-notes" rows="4" class="tailor-textarea text-sm" placeholder="Birthday, fabric preferences, billing quirks..."></textarea>
+                        </div>
+                    </div>
+                    <button onclick="window.saveClientProfile()" id="btn-save-client-profile" class="w-full bg-slate-900 text-white py-5 rounded-[24px] font-black uppercase text-[11px] tracking-[0.2em] shadow-xl">Update Profile</button>
+                    <div class="pt-10 flex justify-center">
+                        <button id="cp-delete-btn" class="text-[10px] font-black uppercase text-red-400 hover:text-red-600 transition-colors flex items-center gap-2">
+                             <i data-lucide="Trash2" class="w-4 h-4"></i> Delete Client Permanently
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Client Add Modal -->
+    <div id="client-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[230]">
+        <div class="bg-white w-full max-w-[400px] rounded-[48px] p-10 shadow-2xl overflow-hidden animate-pop-in">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-2xl font-black text-slate-900 tracking-tight">Add Client</h2>
+                <button onclick="window.closeClientModal()" class="bg-slate-50 p-2.5 rounded-full text-slate-400 hover:bg-slate-100 transition-colors">
+                    <i data-lucide="X" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="space-y-5">
+                <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase block mb-1.5">Client Full Name</label>
+                    <input id="client-name" type="text" placeholder="e.g. Maryam Khan" class="tailor-input">
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase block mb-1.5">Mobile Number</label>
+                    <input id="client-phone" type="tel" placeholder="+91" class="tailor-input">
+                </div>
+                <button onclick="window.saveClient()" class="w-full bg-violet-600 text-white py-5 rounded-[24px] font-black uppercase text-[11px] tracking-widest shadow-xl shadow-violet-100 mt-4 btn-press">Register Client</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Daily Report Modal (Simple Overlay) -->
+    <div id="report-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[300]">
+        <div class="bg-white w-full max-w-[450px] rounded-[48px] p-10 shadow-2xl relative overflow-hidden">
+             <button onclick="document.getElementById('report-modal').classList.add('hidden')" class="absolute top-8 right-8 text-slate-300 hover:text-slate-500 transition-colors"><i data-lucide="X" class="w-6 h-6"></i></button>
+             <h2 class="text-2xl font-black text-slate-900 mb-2 tracking-tight">Analytics Summary</h2>
+             <p id="report-date" class="text-[10px] font-black text-violet-500 uppercase tracking-widest mb-8">Generated: Today</p>
+             
+             <div class="space-y-4" id="report-body">
+                 <!-- Filled by JS -->
+             </div>
+             
+             <button onclick="document.getElementById('report-modal').classList.add('hidden')" class="w-full mt-8 py-5 bg-slate-100 text-slate-900 font-black uppercase text-[11px] rounded-[24px] tracking-widest">Close Dashboard</button>
+        </div>
+    </div>
+
+    <!-- Core Scripts -->
+    <script src="js/app.js"></script>
+    <script src="js/firebase.js"></script>
+    <script src="js/tailoring.js"></script>
+    
+    <script>
+        // Tab management within tailoring page
+        const urlParams = new URLSearchParams(window.location.search);
+        window.currentTailorTab = urlParams.get('tab') || 'tracker';
+        
+        window.setTailorTab = function(tab) {
+            window.currentTailorTab = tab;
+            // Update UI
+            document.querySelectorAll('[id^="tab-"]').forEach(btn => {
+                btn.classList.remove('border-violet-600', 'text-violet-600');
+                btn.classList.add('border-transparent');
+            });
+            const activeBtn = document.getElementById('tab-' + tab);
+            if (activeBtn) {
+                activeBtn.classList.remove('border-transparent');
+                activeBtn.classList.add('border-violet-600', 'text-violet-600');
+            }
+            window.renderApp();
+        };
+
+        window.renderApp = function() {
+            window.renderSidebar('tailoring');
+            const container = document.getElementById('view-content');
+            if (window.renderTailoringView) {
+                container.innerHTML = window.renderTailoringView(window.currentTailorTab);
+                lucide.createIcons();
+            }
+        };
+
+        window.addEventListener('firebase-ready', () => {
+            // Unified listeners using FB.root to sync with the live live web database
+            window.FB.root('orders').onSnapshot((snap) => {
+                window.erpState.orders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+            window.FB.root('clients').onSnapshot((snap) => {
+                window.erpState.clients = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            window.FB.collection('sales').onSnapshot((snap) => {
+                window.erpState.sales = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            window.FB.collection('items').onSnapshot((snap) => {
+                window.erpState.items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            window.FB.collection('expenses').onSnapshot((snap) => {
+                window.erpState.expenses = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            // Listen to general settings
+            window.FB.collection('settings').doc('general').onSnapshot((doc) => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    window.erpState.printerWidth = data.printerWidth || '58';
+                    window.erpState.whatsappTemplates = data.whatsappTemplates;
+                    if (data.taxes) window.erpState.taxes = data.taxes;
+                    if (data.discounts) window.erpState.discounts = data.discounts;
+
+                    window.renderApp();
+                }
+            });
+            
+            // Initial render
+            window.setTailorTab(window.currentTailorTab);
+        });
+
+        // Render from cache immediately
+        window.renderApp();
+    </script>
+</body>
+</html>

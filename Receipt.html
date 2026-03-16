@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receipt - Lavish Lavender</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        /* Specific receipt overrides if needed, but mostly in style.css */
+        body { background: #f8f5ff; display: flex; align-items: center; justify-content: center; padding: 24px; }
+        .receipt { background: white; width: 100%; max-width: 400px; border-radius: 32px; overflow: hidden; box-shadow: 0 20px 60px rgba(110, 74, 138, 0.15); }
+    </style>
+</head>
+<body>
+    <div class="receipt">
+        <div class="header" style="background: linear-gradient(135deg, #6E4A8A 0%, #9B6BC3 100%); padding: 24px 20px 18px; text-align: center; color: white;">
+            <div class="boutique-name" style="font-family: 'Cormorant Garamond', serif; font-size: 28px;">Lavish Lavender</div>
+            <div class="boutique-tagline" style="font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase;">Bridal Boutique</div>
+            <div class="receipt-badge" style="display: inline-block; background: rgba(255, 255, 255, 0.15); font-size: 8px; padding: 6px 16px; border-radius: 100px; margin-top: 16px;">Official Receipt</div>
+        </div>
+        <div id="receipt-body">
+            <div class="loading" style="text-align: center; padding: 60px;">Loading your receipt...</div>
+        </div>
+    </div>
+    <script type="module" src="js/firebase.js"></script>
+    <script type="module" src="js/receipt.js"></script>
+    <script type="module">
+        window.loadReceipt();
+    </script>
+</body>
+</html>
