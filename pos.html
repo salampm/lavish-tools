@@ -95,12 +95,13 @@
                     subNav.innerHTML = `
                         <div class="flex items-center gap-2">
                             <button onclick="window.erpState.activeSettingsSection='menu'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'menu' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">Overview</button>
+                            <button onclick="window.erpState.activeSettingsSection='dashboard'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'dashboard' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">Dashboard</button>
                             <button onclick="window.erpState.activeSettingsSection='printer'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'printer' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">Printer</button>
                             <button onclick="window.erpState.activeSettingsSection='whatsapp'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'whatsapp' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">WhatsApp</button>
                             <button onclick="window.erpState.activeSettingsSection='tax'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'tax' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">Tax</button>
                             <button onclick="window.erpState.activeSettingsSection='discount'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'discount' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">Discounts</button>
                             <button onclick="window.erpState.activeSettingsSection='loyalty'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'loyalty' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">Loyalty</button>
-                            <button onclick="window.erpState.activeSettingsSection='security'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'security' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">Security</button>
+                            <button onclick="window.erpState.activeSettingsSection='admin'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'admin' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">Admin</button>
                         </div>
                     `;
                 }
@@ -125,9 +126,22 @@
                 }
             }
 
+            // Preserve search focus
+            const activeId = document.activeElement ? document.activeElement.id : null;
+            const selectionStart = document.activeElement ? document.activeElement.selectionStart : null;
+
             if (window.renderPOS) {
                 container.innerHTML = window.renderPOS();
                 lucide.createIcons();
+            }
+
+            // Restore search focus
+            if (activeId === 'pos-search-input') {
+                const searchInput = document.getElementById(activeId);
+                if (searchInput) {
+                    searchInput.focus();
+                    if (selectionStart !== null) searchInput.setSelectionRange(selectionStart, selectionStart);
+                }
             }
         };
 
@@ -204,6 +218,9 @@
                     if (data.taxes) window.erpState.taxes = data.taxes;
                     if (data.discounts) window.erpState.discounts = data.discounts;
                     if (data.loyalty) window.erpState.loyalty = data.loyalty;
+                    if (data.passwords) window.erpState.passwords = data.passwords;
+                    if (data.staff) window.erpState.staff = data.staff;
+                    if (data.printerConfig) window.erpState.printerConfig = data.printerConfig;
 
                     window.renderApp();
                 }

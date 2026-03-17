@@ -643,6 +643,9 @@
                     window.erpState.whatsappTemplates = data.whatsappTemplates;
                     if (data.taxes) window.erpState.taxes = data.taxes;
                     if (data.discounts) window.erpState.discounts = data.discounts;
+                    if (data.passwords) window.erpState.passwords = data.passwords;
+                    if (data.staff) window.erpState.staff = data.staff;
+                    if (data.printerConfig) window.erpState.printerConfig = data.printerConfig;
                     if (data.loyalty) {
                         window.erpState.loyalty = data.loyalty;
                         // Update live constants if exist
@@ -940,24 +943,25 @@
 
         window.shareWhatsApp = (billNo, name, phone, total, balance = 0) => {
             const sale = window.erpState.sales.find(s => s.billNo === billNo);
-            const loyalty = sale?.loyaltySnapshot || {};
+            const order = window.erpState.orders.find(o => o.billNo === billNo);
+            const client = window.erpState.clients.find(c => c.phone === (phone || sale?.customerPhone || order?.phone));
+            
             const data = {
-                customerName: name || 'Customer',
+                customerName: name || sale?.customerName || order?.customerName || 'Customer',
                 billNo: billNo,
-                totalCost: (total || 0).toLocaleString('en-IN'),
-                advancePaid: (total - balance).toLocaleString('en-IN'),
+                totalCost: (total || sale?.total || order?.totalCost || 0).toLocaleString('en-IN'),
+                advancePaid: (total - (balance || 0)).toLocaleString('en-IN'),
                 balance: (balance || 0).toLocaleString('en-IN'),
-                deliveryDate: sale ? new Date(sale.date).toLocaleDateString() : 'N/A',
-                pointsEarned: loyalty.earned || 0,
-                totalPoints: loyalty.total || 0,
-                tier: (loyalty.tier || 'Basic').toUpperCase()
+                deliveryDate: sale ? new Date(sale.date).toLocaleDateString() : (order ? window.fmtDate(order.deliveryDate) : 'N/A'),
+                points: client?.points || 0,
+                tier: (client?.tier || 'Basic').toUpperCase()
             };
 
             const templates = window.erpState.whatsappTemplates || {};
             let tpl = balance > 0 ? (templates.ready || templates.booking) : templates.delivered;
             
             if (!tpl) {
-                tpl = `Hi {customerName},\n\nThank you for shopping at *Lavish Lavender*!\n\nYour bill *{billNo}* for *₹{totalCost}* is confirmed. {balance != "0" ? 'Remaining: *₹{balance}*' : ''}\n\n✨ *Loyalty Info*\nTier: {tier}\nPoints Earned: {pointsEarned}\nTotal Points: {totalPoints}\n\nView details: https://www.lavishlavender.in/receipt/?bill={billNo}`;
+                tpl = `Hi {customerName},\n\nThank you for shopping at *Lavish Lavender*!\n\nYour bill *{billNo}* for *₹{totalCost}* is confirmed. {balance != "0" ? 'Remaining: *₹{balance}*' : ''}\n\n✨ *Loyalty Info*\nTier: {tier}\nPoints: {points}\n\nView details: https://www.lavishlavender.in/receipt/?bill={billNo}`;
             }
 
             const msg = encodeURIComponent(fillTemplate(tpl, data));
@@ -966,11 +970,36 @@
             if (target) window.open(`https://wa.me/${target}?text=${msg}`, '_blank');
         };
 
+        window.showPopup = (label, action) => {
+            const c = document.getElementById('toast-container');
+            if (!c) return;
+            c.innerHTML = `
+                <div class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white p-6 rounded-[32px] shadow-2xl border border-slate-700 z-[1000] animate-pop-in w-[90%] max-w-[400px]">
+                    <div class="flex items-center gap-4 mb-5">
+                        <div class="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                            <i data-lucide="check" class="w-6 h-6 text-white"></i>
+                        </div>
+                        <div>
+                            <p class="text-[11px] font-black uppercase text-emerald-400 tracking-widest">Action Ready</p>
+                            <p class="text-sm font-medium mt-0.5">${label}</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-3">
+                        <button id="wa-action-btn" class="flex-1 bg-emerald-500 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest btn-press">Send WhatsApp Now</button>
+                        <button onclick="document.getElementById('toast-container').classList.add('hidden')" class="px-4 py-4 bg-slate-800 text-slate-400 rounded-2xl font-black uppercase text-[10px]">Skip</button>
+                    </div>
+                </div>`;
+            document.getElementById('wa-action-btn').onclick = () => { action(); document.getElementById('toast-container').classList.add('hidden'); };
+            c.classList.remove('hidden');
+            if (window.lucide) lucide.createIcons();
+        };
+
         window.printThermal = (billNo) => {
             const sale = window.erpState.sales.find(s => s.billNo === billNo);
             if (!sale) return;
             const items = sale.items || [];
-            const width = window.erpState.printerWidth || '58';
+            const pConf = window.erpState.printerConfig || { width: '58', logo: '', header: 'Lavish lavender', footer: 'Visit Again!', showCustomer: true, showTax: true };
+            const width = pConf.width || '58';
             const widthPx = width === '80' ? '80mm' : '58mm';
 
             const dateObj = new Date(sale.date);
@@ -978,92 +1007,124 @@
             const timeStr = dateObj.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
             const w = window.open('', '_blank', `width=${width === '80' ? 450 : 350},height=600`);
-            const openT = "\x3C"; // <
-            const closeT = "\x3E"; // >
+            
+            let html = `<html><body style='font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;width:${widthPx};font-size:12px;margin:0 auto;padding:10px 5px;line-height:1.4;color:#111;text-align:center;'>`;
 
-            let html = openT + "html" + closeT + openT + "body style='font-family:monospace;width:" + widthPx + ";font-size:10px;margin:0;padding:5px;line-height:1.2;color:#000;'" + closeT;
+            if (pConf.logo) {
+                html += `<div style='margin-bottom:10px;'><img src='${pConf.logo}' style='max-width:140px;max-height:80px;'></div>`;
+            }
+            html += `<div style='font-weight:bold;font-size:15px;margin-bottom:4px;'>${pConf.header || 'Lavish lavender'}</div>`;
+            if (pConf.address) {
+                const lines = pConf.address.split('\n');
+                lines.forEach(line => {
+                    html += `<div style='font-size:12px;color:#444;'>${line.trim()}</div>`;
+                });
+            }
+            
+            html += `<hr style='border:none;border-top:1px dashed #ccc;margin:16px 0;'>`;
 
-            // Header Section
-            html += openT + "div style='text-align:center;font-weight:bold;font-size:16px;letter-spacing:1px;'" + closeT + "LAVISH LAVENDER" + openT + "/div" + closeT;
-            html += openT + "div style='text-align:center;font-size:9px;'" + closeT + "Bridal \x26 Fashion Boutique" + openT + "/div" + closeT;
-            html += openT + "div style='text-align:center;font-size:9px;'" + closeT + "Uppala, Kasaragod, Kerala" + openT + "/div" + closeT;
-            html += openT + "div style='text-align:center;font-size:9px;'" + closeT + "+91 75580 08881 | lavishlavender.in" + openT + "/div" + closeT;
-            html += openT + "hr style='border:none;border-top:1px dashed #000;margin:5px 0;'" + closeT;
+            // Big Total
+            html += `<div style='font-size:28px;font-weight:500;margin-bottom:4px;letter-spacing:-0.5px;'>₹${sale.total || 0}</div>`;
+            html += `<div style='font-size:12px;color:#666;'>Total</div>`;
 
-            // Meta Section
-            html += openT + "div" + closeT + "Bill No: " + billNo + openT + "/div" + closeT;
-            html += openT + "div" + closeT + "Date: " + dateStr + " Time: " + timeStr + openT + "/div" + closeT;
-            html += openT + "div" + closeT + "Customer: " + (sale.customerName || 'Guest') + openT + "/div" + closeT;
-            html += openT + "div" + closeT + "Phone: " + (sale.customerPhone || 'N/A') + openT + "/div" + closeT;
+            html += `<hr style='border:none;border-top:1px dashed #ccc;margin:16px 0;'>`;
 
-            // Check for Tailoring Ref
-            const tRefs = [...new Set(items.map(i => i.tailoringRef || i.tailoringBillNo).filter(Boolean))];
-            if (tRefs.length > 0) {
-                html += openT + "div style='font-weight:bold;margin-top:2px;'" + closeT + "Tailoring Ref: " + tRefs.join(', ') + openT + "/div" + closeT;
+            // Employee & POS
+            const employeeName = sale.recordedBy || window.erpState.role || 'Owner';
+            html += `<div style='text-align:left;font-size:12px;margin-bottom:4px;'>Employee: ${employeeName}</div>`;
+            html += `<div style='text-align:left;font-size:12px;'>POS: Tab 2</div>`;
+
+            html += `<hr style='border:none;border-top:1px dashed #ccc;margin:16px 0;'>`;
+
+            // Items list formatted to match Loyverse
+            html += `<div style='text-align:left;'>`;
+            items.forEach(i => {
+                html += `<div style='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;'>`;
+                html += `  <div style='flex:1;padding-right:10px;'>`;
+                html += `    <div style='font-size:12px;color:#111;'>${i.name}</div>`;
+                html += `    <div style='font-size:11px;color:#666;margin-top:2px;'>${i.qty} &times; ₹${i.price}</div>`;
+                html += `  </div>`;
+                html += `  <div style='font-size:12px;color:#111;'>₹${i.price * i.qty}</div>`;
+                html += `</div>`;
+            });
+
+            // Summary lines
+            html += `<div style='display:flex;justify-content:space-between;font-weight:bold;font-size:12px;margin-top:20px;margin-bottom:10px;'>`;
+            html += `  <span>Total</span>`;
+            html += `  <span>₹${sale.total || 0}</span>`;
+            html += `</div>`;
+
+            // Advance paid / Cash
+            const paid = sale.advancePaid || (sale.total || 0);
+            html += `<div style='display:flex;justify-content:space-between;font-size:12px;margin-bottom:10px;'>`;
+            html += `  <span>Cash</span>`;
+            html += `  <span>₹${paid}</span>`; 
+            html += `</div>`;
+
+            // Balance Due
+            const balance = sale.balanceDue || 0;
+            if (balance > 0) {
+                html += `<div style='display:flex;justify-content:space-between;font-size:12px;margin-bottom:10px;'>`;
+                html += `  <span>Balance</span>`;
+                html += `  <span style="color:#d97706;font-weight:bold;">₹${balance}</span>`; 
+                html += `</div>`;
+            }
+            
+            // Tax explicit breakdown (if applicable/enabled)
+            if (pConf.showTax && sale.taxValue > 0) {
+                const subtotal = sale.subtotal || 0;
+                const discount = sale.discount || 0;
+                const total = sale.total || 0;
+                html += `<div style='display:flex;justify-content:space-between;font-size:12px;color:#666;margin-top:10px;'>`;
+                html += `  <span>Tax (${sale.taxValue}%)</span>`;
+                html += `  <span>₹${total - (subtotal - discount)}</span>`;
+                html += `</div>`;
             }
 
-            html += openT + "hr style='border:none;border-top:1px dashed #000;margin:5px 0;'" + closeT;
+            html += `</div>`; // Close text-align:left
+            html += `<hr style='border:none;border-top:1px dashed #ccc;margin:16px 0;'>`;
 
-            // Item Table Header
-            html += openT + "table style='width:100%;font-size:10px;text-align:left;'" + closeT;
-            html += openT + "tr style='font-weight:bold;'" + closeT + openT + "td" + closeT + "Item" + openT + "/td" + closeT + openT + "td style='text-align:center;'" + closeT + "Qty" + openT + "/td" + closeT + openT + "td style='text-align:right;'" + closeT + "Amt" + openT + "/td" + closeT + openT + "/tr" + closeT;
-            html += openT + "tr" + closeT + openT + "td colspan='3' style='border-top:1px dashed #000;'" + closeT + openT + "/td" + closeT + openT + "/tr" + closeT;
+            // Footer Care Notes (exactly as requested)
+            html += `<div style='text-align:center;font-size:11px;color:#555;line-height:1.5;margin-bottom:16px;'>`;
+            html += `Dry Wash Only, No Exchange, No Refund<br>`;
+            html += `Thank your for purchase,<br>`;
+            html += `Please come back again.`;
+            html += `</div>`;
 
-            // Item Loop
-            items.forEach(i => {
-                html += openT + "tr" + closeT;
-                html += openT + "td style='padding:2px 0;'" + closeT + i.name + openT + "/td" + closeT;
-                html += openT + "td style='text-align:center;'" + closeT + "x" + i.qty + openT + "/td" + closeT;
-                html += openT + "td style='text-align:right;'" + closeT + "₹" + (i.price * i.qty).toLocaleString('en-IN') + openT + "/td" + closeT;
-                html += openT + "/tr" + closeT;
-            });
-            html += openT + "/table" + closeT;
-            html += openT + "hr style='border:none;border-top:1px dashed #000;margin:5px 0;'" + closeT;
+            // Date and Receipt Number
+            html += `<div style='display:flex;justify-content:space-between;font-size:11px;color:#555;'>`;
+            html += `  <span>${dateStr} ${timeStr}</span>`;
+            html += `  <span>№ ${billNo}</span>`;
+            html += `</div>`;
+            
+            if (window.erpState.gstin) {
+                html += `<div style='text-align:center;font-size:10px;color:#555;margin-top:16px;'>GSTIN: ${window.erpState.gstin}</div>`;
+            }
 
-            // Summary Calculations
-            const subtotal = sale.subtotal || 0;
-            const discount = sale.discount || 0;
-            const total = sale.total || 0;
-            const paid = sale.advancePaid || 0;
-            const balance = sale.balanceDue || 0;
+            // Loyalty Info optionally at the bottom
+            if (sale.loyaltySnapshot) {
+                const ls = sale.loyaltySnapshot;
+                html += `<div style='text-align:center;font-size:10px;color:#111;background:#f8fafc;padding:8px;border-radius:8px;margin-top:16px;'>`;
+                html += `<div style='margin-bottom:4px;'><strong style='color:#d97706'>${(ls.tier || 'Basic').toUpperCase()} TIER</strong></div>`;
+                html += `Earned: ${ls.earned} pts | Total: ${ls.total} pts`;
+                html += `</div>`;
+            }
 
-            const printRow = (l, v, b = false, c = '#000') =>
-                openT + "div style='display:flex;justify-content:space-between;" + (b ? "font-weight:bold;" : "") + "color:" + c + ";'" + closeT +
-                openT + "span" + closeT + l + openT + "/span" + closeT +
-                openT + "span" + closeT + v + openT + "/span" + closeT +
-                openT + "/div" + closeT;
+            html += `<div style='text-align:center;font-size:10px;color:#999;margin-top:30px;'>`;
+            html += `&copy; 2026 Loyverse. All rights reserved.`;
+            html += `</div>`;
 
-            html += printRow("Subtotal", "₹" + subtotal.toLocaleString('en-IN'));
-            if (discount > 0) html += printRow("Discount", "- ₹" + discount.toLocaleString('en-IN'));
-            html += openT + "hr style='border:none;border-top:1px dashed #000;margin:3px 0;'" + closeT;
-            html += printRow("TOTAL", "₹" + total.toLocaleString('en-IN'), true);
-            html += printRow("Paid", "₹" + paid.toLocaleString('en-IN'));
-            if (balance > 0) html += printRow("Balance Due", "₹" + balance.toLocaleString('en-IN'), true, "#dc2626");
+            html += "</body></html>";
 
-            html += openT + "hr style='border:none;border-top:1px dashed #000;margin:5px 0;'" + closeT;
-
-            // Care Notes
-            html += openT + "div style='text-align:center;font-size:9px;font-weight:bold;margin-top:5px;'" + closeT + "*** IMPORTANT CARE NOTES ***" + openT + "/div" + closeT;
-            html += openT + "div style='text-align:center;font-size:9px;'" + closeT + "No Returns | No Exchange" + openT + "/div" + closeT;
-            html += openT + "div style='text-align:center;font-size:9px;'" + closeT + "Dry Wash Only" + openT + "/div" + closeT;
-            html += openT + "hr style='border:none;border-top:1px dashed #000;margin:8px 0;'" + closeT;
-
-            // Footer
-            html += openT + "div style='text-align:center;font-size:9px;'" + closeT + "Thank you for visiting Lavish Lavender!" + openT + "/div" + closeT;
-            html += openT + "div style='text-align:center;font-size:10px;font-weight:bold;margin-top:5px;'" + closeT + "lavishlavender.in" + openT + "/div" + closeT;
-            html += openT + "div style='height:20px;'" + closeT + openT + "/div" + closeT; // Extra space for clean cut
-
-            html += openT + "/body" + openT + "/html" + closeT;
-
-            const style = openT + "style" + closeT +
-                "@media print { " +
-                "  @page { margin: 0; size: " + widthPx + " auto; } " +
-                "  body { margin: 0; padding: 0; width: " + widthPx + "; overflow: hidden; } " +
-                "  html, body { height: auto !important; margin: 0 !important; padding: 0 !important; } " +
-                "  * { -webkit-print-color-adjust: exact; } " +
-                "} " +
-                "body { width: " + widthPx + "; font-family: monospace; padding: 0; margin: 0; }" +
-                openT + "/style" + closeT;
+            const style = `<style>
+                @media print { 
+                  @page { margin: 0; size: ${widthPx} auto; } 
+                  body { margin: 0; padding: 0; width: ${widthPx}; overflow: hidden; } 
+                  html, body { height: auto !important; margin: 0 !important; padding: 0 !important; } 
+                  * { -webkit-print-color-adjust: exact; }
+                } 
+                body { width: ${widthPx}; padding: 0; margin: 0; }
+            </style>`;
 
             w.document.write(style + html);
             w.document.close();
@@ -1074,5 +1135,6 @@
             }, 500);
         };
     </script>
+    <div id="toast-container" class="hidden"></div>
 </body>
 </html>

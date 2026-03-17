@@ -13,6 +13,10 @@
         const o = window.erpState.orders.find(x => x.id === id);
         if (!o) return;
 
+        const client = (window.erpState.clients || []).find(c => c.phone === o.phone);
+        const pts = client?.points || 0;
+        const tier = (client?.tier || 'Basic').toUpperCase();
+
         const target = o.phone.replace(/\D/g, '');
         const templates = window.erpState.whatsappTemplates || {};
         const bal = (o.totalCost || 0) - (o.deliveryDiscount || 0) - (o.advancePaid || 0);
@@ -23,7 +27,13 @@
         else if (type === 3) template = templates.delivered;
         else if (type === 4) template = templates.reminder;
 
-        if (!template) return;
+        if (!template) {
+            // Fallback templates if not defined in settings
+            if (type === 1) template = "Hi {customerName}, your order {billNo} is confirmed. Total: ₹{totalCost}, Advance: ₹{advancePaid}. Expected Delivery: {deliveryDate}. Loyalty: {tier} ({points} pts).";
+            else if (type === 2) template = "Hi {customerName}, your order {billNo} is ready! Balance: ₹{balance}. Visit us soon. Loyalty: {tier} ({points} pts).";
+            else if (type === 3) template = "Hi {customerName}, your order {billNo} is delivered! Hope you love it. Loyalty: {tier} ({points} pts). Receipt: https://lavishlavender.in/receipt/?bill={billNo}";
+            else if (type === 4) template = "Hi {customerName}, friendly reminder for order {billNo}. Balance: ₹{balance}. Loyalty: {tier} ({points} pts).";
+        }
 
         const msgText = template
             .replace(/{customerName}/g, o.customerName)
@@ -31,6 +41,8 @@
             .replace(/{totalCost}/g, o.totalCost)
             .replace(/{advancePaid}/g, o.advancePaid || 0)
             .replace(/{balance}/g, bal)
+            .replace(/{points}/g, pts)
+            .replace(/{tier}/g, tier)
             .replace(/{deliveryDate}/g, window.fmtDate(o.deliveryDate));
 
         window.open(`https://wa.me/${target.length === 10 ? '91' + target : target}?text=${encodeURIComponent(msgText)}`, '_blank');
@@ -145,14 +157,45 @@
     }
 
     // --- TRACKER VIEW ---
+    window.toggleTrackerSort = function(key) {
+        if (window.erpState.trackerSortKey === key) {
+            window.erpState.trackerSortDir = window.erpState.trackerSortDir === 'desc' ? 'asc' : 'desc';
+        } else {
+            window.erpState.trackerSortKey = key;
+            window.erpState.trackerSortDir = 'desc';
+        }
+        window.renderApp();
+    };
+
     function renderTracker(orders) {
-        const active = orders.filter(o => o.status !== 'Delivered').sort((a,b) => (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
+        const key = window.erpState.trackerSortKey || 'deliveryDate';
+        const dir = window.erpState.trackerSortDir || 'desc';
+
+        const active = orders.filter(o => o.status !== 'Delivered').sort((a,b) => {
+            let valA = a[key] || '';
+            let valB = b[key] || '';
+            if (key === 'billNo') {
+                valA = parseInt(valA.replace(/\D/g,'')) || 0;
+                valB = parseInt(valB.replace(/\D/g,'')) || 0;
+            }
+            if (dir === 'desc') return valB < valA ? -1 : 1;
+            return valA < valB ? -1 : 1;
+        });
+
         return `
         <div class="p-8 h-full flex flex-col overflow-hidden">
-            <div class="mb-6 flex gap-4">
+            <div class="mb-6 flex flex-col md:flex-row gap-4">
                 <div class="relative flex-1">
                     <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4"></i>
                     <input type="text" id="tracker-search" placeholder="Search by name or bill..." class="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold" oninput="window.filterTracker(this.value)">
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="window.toggleTrackerSort('billNo')" class="bg-white border border-slate-200 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${key === 'billNo' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
+                        <i data-lucide="hash" class="w-4 h-4"></i> Bill ${key === 'billNo' ? (dir === 'desc' ? '↓' : '↑') : ''}
+                    </button>
+                    <button onclick="window.toggleTrackerSort('deliveryDate')" class="bg-white border border-slate-200 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${key === 'deliveryDate' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
+                        <i data-lucide="calendar" class="w-4 h-4"></i> Date ${key === 'deliveryDate' ? (dir === 'desc' ? '↓' : '↑') : ''}
+                    </button>
                 </div>
             </div>
             <div id="tracker-list" class="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2">
@@ -211,7 +254,6 @@
     function renderPendingDue(orders) {
         const now = new Date();
         const dues = orders
-            .filter(o => o.status !== 'Delivered')
             .map(o => {
                 const bal = Math.max(0, (o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0));
                 return { ...o, bal };
@@ -298,11 +340,13 @@
 
     function renderHistory(orders) {
         window.erpState.historySort = window.erpState.historySort || 'desc';
-        const delivered = orders.filter(o => o.status === 'Delivered').sort((a,b) => {
-            const da = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp || 0);
-            const db = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp || 0);
-            return window.erpState.historySort === 'desc' ? db - da : da - db;
-        });
+        const delivered = orders
+            .filter(o => o.status === 'Delivered' && ((o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0)) <= 0)
+            .sort((a,b) => {
+                const da = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp || 0);
+                const db = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp || 0);
+                return window.erpState.historySort === 'desc' ? db - da : da - db;
+            });
         return `
         <div class="p-8 h-full flex flex-col overflow-hidden bg-slate-50">
             <div class="mb-8 flex justify-between items-center bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
@@ -540,7 +584,7 @@
         if (!phone || phone.length < 4) return;
         const client = (window.erpState.clients || []).find(c => c.phone.includes(phone) || phone.includes(c.phone));
         if (client) {
-            const nameEl = document.getElementById('form-name');
+            const nameEl = document.getElementById('form-cust-name');
             if (nameEl && !nameEl.value) {
                 nameEl.value = client.name;
                 const status = document.getElementById('phone-lookup-status');
@@ -728,11 +772,14 @@
 
     // --- STATUS UPDATES ---
     window.updateOrderStatus = async function(id, status) {
+        if (status === 'Delivered') {
+            window.openDeliveryModal(id);
+            return;
+        }
+
         if(!confirm(`Move to ${status}?`)) return;
         try {
             const o = window.erpState.orders.find(x => x.id === id);
-            const isReturningToQueue = status === 'Stitching' && o && o.status === 'Delivered';
-            
             let log = o ? (o.notesLog || []) : [];
             log.push({ text: `Status updated to ${status}`, timestamp: new Date().toLocaleString() });
 
@@ -742,6 +789,7 @@
             if (status === 'Order Confirmed') window.showPopup("Confirmation Ready", () => window.sendWA(id, 1));
             
             window.renderApp();
+            if (window.selectedOrderId === id) window.openOrderDetails(id);
         } catch (e) { alert("Update failed"); }
     };
 
@@ -997,6 +1045,12 @@
                 cash: (existingBreakdown.cash || 0) + cash,
                 upi: (existingBreakdown.upi || 0) + upi
             };
+            
+            // If Delivered and now settled, record delivery date
+            const newBal = (o.totalCost || 0) - updates.advancePaid;
+            if (o.status === 'Delivered' && newBal <= 0) {
+                updates.actualDeliveryDate = Date.now();
+            }
         }
 
         await ORDERS_COL().doc(o.id).update(updates);
@@ -1061,81 +1115,93 @@
     };
 
     // --- DELIVERY LOGIC ---
+    window.openDeliveryModal = (id) => {
+        const o = window.erpState.orders.find(x => x.id === (id || window.selectedOrderId));
+        if (!o) return;
+        window.selectedOrderId = o.id;
+        const bal = (o.totalCost || 0) - (o.advancePaid || 0);
+        
+        document.getElementById('del-pending').innerText = "₹" + bal;
+        document.getElementById('del-received').value = bal;
+        document.getElementById('del-bill-no').innerText = o.billNo;
+        document.getElementById('del-discount').value = 0;
+        document.getElementById('del-tailoring-cost').value = o.tailoringCost || 0;
+        document.getElementById('del-status-box').classList.add('hidden');
+        
+        document.getElementById('delivery-modal').classList.remove('hidden');
+    };
+
     window.recalcDel = () => {
         const o = window.erpState.orders.find(x => x.id === window.selectedOrderId);
         const bal = (o.totalCost || 0) - (o.advancePaid || 0);
         const rec = parseFloat(document.getElementById('del-received').value) || 0;
+        const disc = parseFloat(document.getElementById('del-discount').value) || 0;
+        const box = document.getElementById('del-status-box');
         const msg = document.getElementById('del-discount-msg');
-        if (rec < bal) msg.innerText = `₹${bal - rec} DISCOUNT UNACCOUNTED`;
-        else msg.innerText = "";
+        
+        box.classList.remove('hidden');
+        if (rec + disc < bal) {
+            msg.innerText = `REMAINING: ₹${bal - rec - disc} (Saving to Dues)`;
+            msg.className = "text-[10px] font-black uppercase text-amber-600";
+            box.className = "py-3 px-4 rounded-xl text-center bg-amber-50 border border-amber-100";
+        } else if (rec + disc > bal) {
+            msg.innerText = `OVERPAYMENT: ₹${rec + disc - bal}`;
+            msg.className = "text-[10px] font-black uppercase text-indigo-600";
+            box.className = "py-3 px-4 rounded-xl text-center bg-indigo-50 border border-indigo-100";
+        } else {
+            msg.innerText = disc > 0 ? `SETTLED WITH ₹${disc} DISCOUNT` : "SETTLED IN FULL";
+            msg.className = "text-[10px] font-black uppercase text-emerald-600";
+            box.className = "py-3 px-4 rounded-xl text-center bg-emerald-50 border border-emerald-100";
+        }
     };
 
     window.confirmDelivery = async () => {
         const o = window.erpState.orders.find(x => x.id === window.selectedOrderId);
         const bal = (o.totalCost || 0) - (o.advancePaid || 0);
         const rec = parseFloat(document.getElementById('del-received').value) || 0;
+        const disc = parseFloat(document.getElementById('del-discount').value) || 0;
         const labor = parseFloat(document.getElementById('del-tailoring-cost').value) || 0;
         const method = document.getElementById('del-method').value;
-        const disc = Math.max(0, bal - rec);
 
         let cash = 0, upi = 0;
         if (method === 'Mixed') {
-            cash = parseFloat(document.getElementById('del-cash').value) || 0;
-            upi = parseFloat(document.getElementById('del-upi').value) || 0;
+            cash = parseFloat(document.getElementById('del-mixed-cash').value) || 0;
+            upi = parseFloat(document.getElementById('del-mixed-upi').value) || 0;
         } else if (method === 'Cash') cash = rec;
         else if (method === 'UPI') upi = rec;
 
+        const isPartial = (rec + disc < bal);
+        const logMsg = isPartial 
+            ? `[PARTIAL DELIVERY] Received ₹${rec} via ${method}. Discount ₹${disc}. Balance ₹${bal - rec - disc} moved to pending.`
+            : `[FULL DELIVERY] Order settled. Received ₹${rec} via ${method}. Discount ₹${disc}.`;
+
         const log = o.notesLog || [];
-        log.push({ 
-            text: `[DELIVERY] Order settled. Received ₹${rec} via ${method} ${method === 'Mixed' ? `(Cash: ₹${cash}, UPI: ₹${upi})` : ''}. Discount: ₹${disc}`, 
-            timestamp: new Date().toLocaleString() 
-        });
+        log.push({ text: logMsg, timestamp: new Date().toLocaleString() });
 
         const existingBreakdown = o.advanceBreakdown || { cash: 0, upi: 0 };
+        const newStatus = 'Delivered';
+        const remark = isPartial ? "Delivered - Pending" : "";
 
         await ORDERS_COL().doc(o.id).update({
-            status: 'Delivered',
-            deliveryDiscount: disc,
+            status: newStatus,
+            deliveryDiscount: (o.deliveryDiscount || 0) + disc,
             advancePaid: (o.advancePaid || 0) + rec,
             advanceBreakdown: {
                 cash: (existingBreakdown.cash || 0) + cash,
                 upi: (existingBreakdown.upi || 0) + upi
             },
             tailoringCost: labor,
-            profit: (o.totalCost - disc) - labor,
-            actualDeliveryDate: Date.now(),
-            notesLog: log
+            profit: (o.totalCost - (o.deliveryDiscount || 0) - disc) - labor,
+            actualDeliveryDate: (rec + disc >= bal) ? Date.now() : (o.actualDeliveryDate || null),
+            notesLog: log,
+            deliveryRemark: remark
         });
+
+        // Trigger Loyalty Update if any payment received
+        if (rec > 0) window.updateClientLoyalty(o.phone);
 
         document.getElementById('delivery-modal').classList.add('hidden');
-        window.showPopup("Delivery Confirmation / Review Ready", () => window.sendWA(o.id, 3));
-    };
-
-    // --- CLIENT HANDLING ---
-    window.filterClients = (q) => {
-        const v = q.toLowerCase();
-        document.querySelectorAll('#customer-grid > div').forEach(c => {
-            c.style.display = c.innerText.toLowerCase().includes(v) ? '' : 'none';
-        });
-    };
-
-    window.openAddClient = () => {
-        const phone = prompt("Enter Client Phone Number:");
-        if (!phone) return;
-        const name = prompt("Enter Client Full Name:");
-        if (!name) return;
-        
-        CLIENTS_COL().add({
-            name, phone, 
-            createdAt: Date.now(),
-            source: 'tailoring'
-        }).then(() => alert("Client Profile Created."));
-    };
-
-    window.openClientProfile = (id) => {
-        const c = window.erpState.clients.find(x => x.id === id);
-        if (!c) return;
-        alert(`Client: ${c.name}\nPhone: ${c.phone}\nJoin Date: ${new Date(c.createdAt).toLocaleDateString()}`);
+        window.showPopup(isPartial ? "Order Delivered (Pending Dues)" : "Order Delivered & Settled", () => window.sendWA(o.id, 3));
     };
 
     window.exportAll = () => {

@@ -84,6 +84,7 @@
                 <div class="flex min-w-max px-4">
                     <button onclick="window.setTailorTab('tracker')" id="tab-tracker" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Tracker</button>
                     <button onclick="window.setTailorTab('pending-due')" id="tab-pending-due" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-rose-500">Pending Due</button>
+
                 </div>
             </div>
 
@@ -127,8 +128,9 @@
     </div>
 
     <!-- Order Modal -->
-    <div id="order-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[200]">
-        <div class="bg-white w-full max-w-[480px] rounded-[36px] p-8 shadow-2xl overflow-y-auto max-h-[95vh] custom-scrollbar">
+    <div id="order-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 z-[200]">
+        <div class="bg-white w-full sm:max-w-[480px] sm:rounded-[40px] rounded-t-[32px] p-6 sm:p-8 shadow-2xl overflow-y-auto max-h-[85vh] sm:max-h-[95vh] custom-scrollbar">
+            <div class="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-6 sm:hidden"></div>
             <form id="order-form" onsubmit="window.handleOrderSubmit(event)">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-black text-slate-900 tracking-tight">Create Order</h2>
@@ -214,9 +216,10 @@
     </div>
 
     <!-- Detail Modal -->
-    <div id="detail-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[210]">
-        <div class="bg-white w-full max-w-[550px] rounded-[48px] p-10 pt-12 shadow-2xl relative overflow-y-auto max-h-[92vh] custom-scrollbar">
-            <button onclick="window.closeDetailModal()" class="absolute top-6 right-6 z-50 bg-slate-50 p-3 rounded-full text-slate-400 hover:text-slate-900 hover:bg-slate-200 transition-all shadow-sm"><i data-lucide="X" class="w-5 h-5"></i></button>
+    <div id="detail-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 z-[210]">
+        <div class="bg-white w-full sm:max-w-[440px] sm:rounded-[36px] rounded-t-[32px] p-6 sm:p-8 pt-6 shadow-2xl relative overflow-y-auto max-h-[75vh] sm:max-h-[85vh] custom-scrollbar pb-6">
+            <div class="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5 sm:hidden"></div>
+            <button onclick="window.closeDetailModal()" class="absolute top-5 right-5 z-50 bg-slate-50 p-2.5 rounded-full text-slate-400 hover:text-slate-900 hover:bg-slate-200 transition-all shadow-sm"><i data-lucide="X" class="w-5 h-5"></i></button>
             <div id="detail-content"></div>
 
             <div id="fin-section" class="mt-10 pt-8 border-t border-slate-50">
@@ -280,8 +283,9 @@
     </div>
 
     <!-- Edit Modal -->
-    <div id="edit-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[220]">
-        <div class="bg-white w-full max-w-[480px] rounded-[36px] p-8 shadow-2xl overflow-y-auto max-h-[95vh] custom-scrollbar">
+    <div id="edit-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 z-[220]">
+        <div class="bg-white w-full sm:max-w-[480px] sm:rounded-[40px] rounded-t-[32px] p-6 sm:p-8 shadow-2xl overflow-y-auto max-h-[85vh] sm:max-h-[95vh] custom-scrollbar">
+            <div class="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-6 sm:hidden"></div>
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-2xl font-black text-slate-900 tracking-tight">Edit Order</h2>
                 <button onclick="window.closeEditModal()" class="bg-slate-50 p-2.5 rounded-full text-slate-400 hover:bg-slate-100"><i data-lucide="X" class="w-5 h-5"></i></button>
@@ -302,26 +306,39 @@
     </div>
 
     <!-- Delivery Modal -->
-    <div id="delivery-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[220]">
-        <div class="bg-white w-full max-w-[400px] rounded-[48px] p-10 shadow-2xl text-center">
-            <h2 class="text-2xl font-black text-slate-900 mb-8 tracking-tight uppercase">Final Settlement</h2>
-            <div class="bg-slate-50 p-8 rounded-[36px] mb-8 border border-slate-100">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Balance to Pay</p>
-                <p id="del-pending" class="text-4xl font-black text-slate-900 leading-none">₹0</p>
+    <div id="delivery-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 z-[220]">
+        <div class="bg-white w-full sm:max-w-[420px] sm:rounded-[48px] rounded-t-[40px] p-8 sm:p-10 shadow-2xl text-center overflow-y-auto max-h-[90vh] sm:max-h-none">
+            <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6 sm:hidden"></div>
+            <h2 class="text-2xl font-black text-slate-800 mb-6 tracking-tight uppercase">Order Settlement</h2>
+            
+            <div class="bg-slate-50 p-6 rounded-[32px] mb-6 border border-slate-100 flex justify-between items-center">
+                <div class="text-left">
+                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Balance</p>
+                    <p id="del-pending" class="text-3xl font-black text-slate-900 leading-none">₹0</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Current Bill</p>
+                    <p id="del-bill-no" class="text-sm font-black text-violet-600 font-mono">B-000</p>
+                </div>
             </div>
-            <div class="space-y-5 text-left">
+
+            <div class="space-y-4 text-left">
                 <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Collected Now (₹)</label>
-                        <input type="number" id="del-received" oninput="window.recalcDel()" placeholder="0.00" class="tailor-input font-black text-emerald-600">
+                    <div class="col-span-2">
+                        <label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5 ml-2">Amount Collected Now (₹)</label>
+                        <input type="number" id="del-received" oninput="window.recalcDel()" placeholder="0.00" class="w-full px-6 py-4 bg-emerald-50 border-none rounded-2xl font-black text-2xl text-emerald-600 outline-none focus:ring-2 focus:ring-emerald-400 shadow-inner">
                     </div>
                     <div>
-                        <label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Method</label>
+                        <label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5 ml-2">Method</label>
                         <select id="del-method" onchange="document.getElementById('del-mixed-inputs').classList.toggle('hidden', this.value !== 'Mixed')" class="tailor-input text-[10px] font-black uppercase tracking-widest">
                             <option value="Cash">Cash</option>
-                            <option value="UPI">UPI</option>
+                            <option value="UPI">UPI / GPay</option>
                             <option value="Mixed">Mixed</option>
                         </select>
+                    </div>
+                    <div>
+                        <label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5 ml-2">Discount (₹)</label>
+                        <input type="number" id="del-discount" oninput="window.recalcDel()" placeholder="0" class="tailor-input font-bold text-rose-500">
                     </div>
                 </div>
                 
@@ -330,22 +347,32 @@
                     <input id="del-mixed-upi" type="number" placeholder="UPI ₹" class="tailor-input text-xs">
                 </div>
 
-                <div>
-                    <label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Tailor / Labor Cost (₹)</label>
-                    <input type="number" id="del-tailoring-cost" class="tailor-input bg-rose-50/30 font-bold" placeholder="0.00">
+                <div class="bg-rose-50/50 p-4 rounded-2xl border border-rose-100/50">
+                    <label class="text-[9px] font-black text-rose-400 uppercase block mb-1 tracking-widest">Tailor / Labor Cost (₹)</label>
+                    <input type="number" id="del-tailoring-cost" class="w-full bg-transparent border-none p-0 font-black text-slate-800 text-lg outline-none" placeholder="0.00">
                 </div>
-                <p id="del-discount-msg" class="text-[10px] font-black text-orange-500 uppercase italic text-center min-h-[1.5em] tracking-tighter opacity-70"></p>
-                <div class="pt-4 flex gap-4">
-                    <button onclick="window.closeDeliveryModal()" class="flex-1 py-4.5 bg-slate-100 text-slate-500 font-black uppercase text-[10px] rounded-2xl tracking-widest">Back</button>
-                    <button onclick="window.confirmDelivery()" class="flex-[1.5] py-5 bg-emerald-600 text-white font-black uppercase text-[11px] rounded-[24px] shadow-xl shadow-emerald-100 tracking-[0.2em] active:scale-95 transition-all">Settle & Deliver</button>
+
+                <div id="del-status-box" class="py-3 px-4 rounded-xl text-center hidden">
+                    <p id="del-discount-msg" class="text-[10px] font-black uppercase tracking-tight"></p>
+                </div>
+
+                <div class="pt-4 flex flex-col gap-3">
+                    <div class="flex gap-3">
+                        <button onclick="window.closeDeliveryModal()" class="flex-1 py-4 bg-slate-100 text-slate-500 font-black uppercase text-[10px] rounded-2xl tracking-widest">Cancel</button>
+                        <button onclick="window.confirmDelivery()" class="flex-[2] py-5 bg-slate-900 text-white font-black uppercase text-[11px] rounded-[24px] shadow-xl tracking-[0.15em] active:scale-95 transition-all">Settle & Mark Delivered</button>
+                    </div>
+                    <button onclick="window.printOrderReceipt()" class="w-full py-4 border-2 border-dashed border-slate-200 text-slate-400 rounded-2xl font-black uppercase text-[9px] tracking-[0.2em] flex items-center justify-center gap-2 hover:border-violet-300 hover:text-violet-500 transition-all">
+                        <i data-lucide="printer" class="w-4 h-4"></i> Thermal Print Receipt
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Measurement Modal -->
-    <div id="measurement-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[225]">
-        <div class="bg-white w-full max-w-[600px] rounded-[48px] p-10 shadow-2xl overflow-y-auto max-h-[95vh] custom-scrollbar" data-mode="existing">
+    <div id="measurement-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 z-[225]">
+        <div class="bg-white w-full sm:max-w-[600px] sm:rounded-[48px] rounded-t-[40px] p-6 sm:p-10 shadow-2xl overflow-y-auto max-h-[90vh] sm:max-h-[95vh] custom-scrollbar" data-mode="existing">
+            <div class="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-6 sm:hidden"></div>
             <div class="flex justify-between items-center mb-8">
                 <div>
                     <h2 class="text-2xl font-black text-slate-900 tracking-tight">Measurements</h2>
@@ -714,6 +741,9 @@
                     window.erpState.whatsappTemplates = data.whatsappTemplates;
                     if (data.taxes) window.erpState.taxes = data.taxes;
                     if (data.discounts) window.erpState.discounts = data.discounts;
+                    if (data.passwords) window.erpState.passwords = data.passwords;
+                    if (data.staff) window.erpState.staff = data.staff;
+                    if (data.printerConfig) window.erpState.printerConfig = data.printerConfig;
 
                     window.renderApp();
                 }
@@ -726,5 +756,7 @@
         // Render from cache immediately
         window.renderApp();
     </script>
+    <!-- Global Action Popups -->
+    <div id="toast-container" class="hidden"></div>
 </body>
 </html>

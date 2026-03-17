@@ -1,5 +1,5 @@
 // Shared Application State and Logic
-window.APP_VERSION = "v1.0.29";
+window.APP_VERSION = "v2.0.01";
 
 // Force Unregister old Service Workers to fix "not loading new version" issue
 if ('serviceWorker' in navigator) {
@@ -28,6 +28,7 @@ window.erpState = {
     search: '', user: null, categoryFilter: '',
     expenseSearch: '', ticketSearch: '',
     historySearch: '', historySort: 'desc', historyFilter: 'all',
+    trackerSortKey: 'billNo', trackerSortDir: 'desc',
     taxes: [{ label: 'No Tax', val: 0 }, { label: '5%', val: 5 }, { label: '12%', val: 12 }, { label: '18%', val: 18 }],
     discounts: [{ label: 'Wedding Special', val: 500, type: 'cash' }, { label: '10% Off', val: 10, type: 'pct' }],
     activeTax: 0, taxNo: 'GSTIN123456789',
@@ -35,10 +36,10 @@ window.erpState = {
     loyalty: { enabled: true, pointsPer100: 5, eliteThreshold: 10000, goldThreshold: 50000 },
     activeSettingsSection: 'menu',
     whatsappTemplates: {
-        booking: '*Lavish Lavender Bridal Boutique*\n\nHello *{customerName}*,\n\nYour order has been successfully booked.\n\n*Bill No:* {billNo}\n*Total Amount:* Rs.{totalCost}\n*Advance Received:* Rs.{advancePaid}\n*Balance:* Rs.{balance}\n\n*Expected Delivery:* {deliveryDate}\n\nPlease keep this bill number for reference. We appreciate your trust in Lavish Lavender.',
-        ready: '*Lavish Lavender Bridal Boutique*\n\nHello *{customerName}*,\n\nGood news! Your order is ready for pickup.\n\n*Bill No:* {billNo}\n*Balance Payable:* Rs.{balance}\n\nPlease visit our boutique to collect your order.\n\n*Location:*\nhttps://share.google/iR4s2zrLMHoiTTZ66\n\nWe look forward to seeing you.',
-        delivered: '*Lavish Lavender Bridal Boutique*\n\nHello *{customerName}*,\n\nYour order has been successfully delivered.\n\n*Your Receipt:*\nhttps://www.lavishlavender.in/receipt/?bill={billNo}\n\nThank you for choosing Lavish Lavender. \n\nIf you were happy with our service, please leave us a 5-star review:\nhttps://g.page/r/CSDbXBIvElTEEBM/review\n\nVisit again soon!',
-        reminder: 'Hi {customerName}, This is a friendly reminder from *Lavish Lavender* regarding your bill *{billNo}*.\n\nThere is a pending balance of *{balance}*. You can view your receipt details here: https://www.lavishlavender.in/receipt/?bill={billNo}\n\nWe appreciate your support!\n\nVisit again soon!'
+        booking: '*Lavish Lavender Bridal Boutique*\n\nHello *{customerName}*,\n\nYour order has been successfully booked.\n\n*Bill No:* {billNo}\n*Total Amount:* Rs.{totalCost}\n*Advance Received:* Rs.{advancePaid}\n*Balance:* Rs.{balance}\n\n*Expected Delivery:* {deliveryDate}\n\n*Loyalty Status:*\nPoints: {points}\nTier: {tier}\n\nWe appreciate your trust in Lavish Lavender.\n\nVisit again soon!',
+        ready: '*Lavish Lavender Bridal Boutique*\n\nHello *{customerName}*,\n\nGood news! Your order is ready for pickup.\n\n*Bill No:* {billNo}\n*Balance Payable:* Rs.{balance}\n\n*Loyalty Status:*\nPoints: {points}\nTier: {tier}\n\n*Location:*\nhttps://share.google/iR4s2zrLMHoiTTZ66\n\nWe look forward to seeing you.',
+        delivered: '*Lavish Lavender Bridal Boutique*\n\nHello *{customerName}*,\n\nYour order has been successfully delivered.\n\n*Your Receipt:*\nhttps://www.lavishlavender.in/receipt/?bill={billNo}\n\n*Loyalty Status:*\nPoints: {points}\nTier: {tier}\n\nThank you for choosing Lavish Lavender. \n\nIf you were happy with our service, please leave us a 5-star review:\nhttps://g.page/r/CSDbXBIvElTEEBM/review\n\nVisit again soon!',
+        reminder: 'Hi {customerName}, This is a friendly reminder from *Lavish Lavender* regarding your bill *{billNo}*.\n\nThere is a pending balance of *{balance}*. \n\n*Loyalty Status:*\nPoints: {points}\nTier: {tier}\n\nYou can view your receipt details here: https://www.lavishlavender.in/receipt/?bill={billNo}\n\nWe appreciate your support!\n\nVisit again soon!'
     },
     menuItems: [
         { id: 'dashboard', icon: 'LayoutDashboard', label: 'Dashboard', url: 'index.html' },
@@ -96,8 +97,11 @@ window.showLoginModal = () => {
     const tryLogin = () => {
         const val = passInput.value;
         const creds = window.erpState.passwords || { staff: 'Lavish1234', owner: 'Swali4783' };
+        const staffList = window.erpState.staff || [];
         
-        if (val === creds.staff) {
+        const isStaffPin = staffList.some(s => s.code === val);
+        
+        if (val === creds.staff || isStaffPin) {
             sessionStorage.setItem('lavish_user_role', 'Staff');
             window.erpState.role = 'Staff';
             overlay.remove();
@@ -137,13 +141,7 @@ window.logout = () => {
 
 window.switchRole = (target) => {
     if (window.erpState.role === target) return;
-    if (target === 'Owner') {
-        window.showLoginModal();
-    } else {
-        sessionStorage.setItem('lavish_user_role', 'Staff');
-        window.erpState.role = 'Staff';
-        if (window.renderApp) window.renderApp();
-    }
+    window.showLoginModal();
 };
 
 // Offline First Cache System
