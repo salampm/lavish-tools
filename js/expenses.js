@@ -1,5 +1,27 @@
-
 // Expenses Logic & Terminal (Fixed for Compat Mode)
+window.handleExpMethodChange = (val) => {
+    const inputs = document.getElementById('exp_mixed_inputs');
+    const amtField = document.getElementById('exp_amount');
+    if (inputs) inputs.classList.toggle('hidden', val !== 'Mixed');
+    if (amtField) {
+        if (val === 'Mixed') {
+             amtField.readOnly = true;
+             amtField.classList.add('bg-slate-100', 'opacity-70');
+             window.autoSumExpMixed();
+        } else {
+             amtField.readOnly = false;
+             amtField.classList.remove('bg-slate-100', 'opacity-70');
+        }
+    }
+};
+
+window.autoSumExpMixed = () => {
+    const cash = parseFloat(document.getElementById('exp_mixed_cash')?.value || 0);
+    const upi = parseFloat(document.getElementById('exp_mixed_upi')?.value || 0);
+    const amtField = document.getElementById('exp_amount');
+    if (amtField) amtField.value = (cash + upi).toFixed(2);
+};
+
 (function() {
     const fmt = window.fmt;
     
@@ -94,7 +116,7 @@
                 <div class="flex items-center gap-3">
                     <div class="relative">
                         <i data-lucide="Search" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
-                        <input type="text" oninput="window.erpState.expenseSearch=this.value; window.renderApp()" value="${window.erpState.expenseSearch || ''}" placeholder="Search History..." class="pl-11 pr-4 py-2.5 bg-slate-50 border-none rounded-xl text-xs font-bold w-64 outline-none focus:ring-2 focus:ring-violet-400">
+                        <input type="text" oninput="window.erpState.expenseSearch=this.value; window.renderApp();" value="${window.erpState.expenseSearch || ''}" placeholder="Search History..." class="pl-11 pr-4 py-2.5 bg-slate-50 border-none rounded-xl text-xs font-bold w-64 outline-none focus:ring-2 focus:ring-violet-400">
                     </div>
                 </div>
             </header>
@@ -178,12 +200,18 @@
                         </div>
                         <div class="space-y-1">
                             <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1">Payment via</label>
-                            <select id="exp_method" class="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl font-black text-[10px] uppercase tracking-widest outline-none shadow-inner">
+                            <select id="exp_method" onchange="window.handleExpMethodChange(this.value)" class="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl font-black text-[10px] uppercase tracking-widest outline-none shadow-inner">
                                 <option value="Cash" ${existingExp && existingExp.paymentMethod === 'Cash' ? 'selected' : ''}>Cash</option>
                                 <option value="UPI" ${existingExp && existingExp.paymentMethod === 'UPI' ? 'selected' : ''}>UPI / Online</option>
                                 <option value="Bank" ${existingExp && existingExp.paymentMethod === 'Bank' ? 'selected' : ''}>Bank Transfer</option>
+                                <option value="Mixed" ${existingExp && String(existingExp.paymentMethod).startsWith('Mixed') ? 'selected' : ''}>Mixed (Cash & UPI)</option>
                             </select>
                         </div>
+                    </div>
+                    
+                    <div id="exp_mixed_inputs" class="${existingExp && String(existingExp.paymentMethod).startsWith('Mixed') ? '' : 'hidden'} grid grid-cols-2 gap-4">
+                        <div><input id="exp_mixed_cash" type="number" oninput="window.autoSumExpMixed()" placeholder="Cash ₹" class="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl font-bold text-xs outline-none focus:ring-2 focus:ring-violet-400"></div>
+                        <div><input id="exp_mixed_upi" type="number" oninput="window.autoSumExpMixed()" placeholder="UPI ₹" class="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl font-bold text-xs outline-none focus:ring-2 focus:ring-violet-400"></div>
                     </div>
 
                     <div class="flex gap-4 pt-4">
@@ -205,6 +233,17 @@
             const desc = document.getElementById("exp_desc").value.trim() || "Unspecified Expenditure";
             const dateStr = document.getElementById("exp_date").value;
             const method = document.getElementById("exp_method").value;
+            let cash = 0, upi = 0;
+            
+            if (method === 'Mixed') {
+                cash = parseFloat(document.getElementById('exp_mixed_cash').value) || 0;
+                upi = parseFloat(document.getElementById('exp_mixed_upi').value) || 0;
+            } else if (method === 'Cash') {
+                cash = amt;
+            } else if (method === 'UPI') {
+                upi = amt;
+            }
+
             const btn = document.getElementById("exp_save");
             btn.innerText = "SAVING..."; btn.disabled = true;
 
@@ -215,6 +254,7 @@
                 billNo: billNo,
                 description: desc,
                 paymentMethod: method,
+                paymentBreakdown: { cash, upi },
                 createdAt: Date.now()
             };
 

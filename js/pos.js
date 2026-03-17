@@ -10,6 +10,33 @@
         return window.FB.collection(col);
     };
 
+    // --- LOYALTY SYSTEM CONSTANTS ---
+    window.LOYALTY = {
+        TIERS: {
+            basic:   { label: 'Basic',   min: 0,      pct: 0.02, color: 'slate' },
+            silver:  { label: 'Silver',  min: 25000,  pct: 0.03, color: 'indigo' },
+            gold:    { label: 'Gold',    min: 50000,  pct: 0.05, color: 'amber' },
+            premium: { label: 'Premium', min: 100000, pct: 0.05, color: 'rose' }
+        },
+        MIN_REDEMPTION: 500,
+        BONUS_THRESHOLD: 10000,
+        BONUS_POINTS: 200
+    };
+
+    window.getLoyaltyTier = (spent) => {
+        if (spent >= LOYALTY.TIERS.premium.min) return 'premium';
+        if (spent >= LOYALTY.TIERS.gold.min) return 'gold';
+        if (spent >= LOYALTY.TIERS.silver.min) return 'silver';
+        return 'basic';
+    };
+
+    window.calcPoints = (amount, tierKey) => {
+        const tier = LOYALTY.TIERS[tierKey] || LOYALTY.TIERS.basic;
+        let points = Math.floor(amount * tier.pct);
+        if (amount >= LOYALTY.BONUS_THRESHOLD) points += LOYALTY.BONUS_POINTS;
+        return points;
+    };
+
     // --- POS RENDERER ---
     window.renderPOS = function () {
         const cartSubtotal = window.erpState.cart.reduce((a, b) => a + (b.price * b.qty), 0);
@@ -19,6 +46,7 @@
         let content = '';
         switch(window.erpState.tab) {
             case 'pos': content = renderPOSTerminal(); break;
+            case 'receipts':
             case 'history': content = renderHistory(); break;
             case 'dues': content = renderPendingDues(); break;
             case 'tickets': content = renderTickets(); break;
@@ -59,7 +87,7 @@
                     <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4"></i>
                     <input type="text" 
                         oninput="window.erpState.search=this.value; window.scheduleRender()" 
-                        placeholder="Search products by name or SKU..." 
+                        placeholder="Search products by name or description..." 
                         class="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 shadow-sm"
                         value="${window.erpState.search || ''}">
                 </div>
@@ -76,7 +104,7 @@
                     .filter(i => {
                         const s = (window.erpState.search || '').toLowerCase();
                         const cat = window.erpState.categoryFilter;
-                        return (!s || i.name.toLowerCase().includes(s) || (i.sku && i.sku.toLowerCase().includes(s))) && 
+                        return (!s || i.name.toLowerCase().includes(s)) && 
                                (!cat || i.category === cat);
                     })
                     .map(it => `
@@ -84,7 +112,7 @@
                         <div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity hidden md:block">
                             <i data-lucide="plus-circle" class="w-5 h-5 text-violet-500"></i>
                         </div>
-                        <span class="text-[9px] md:text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">${it.sku || 'ITEM'}</span>
+                        <span class="text-[9px] md:text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">${it.category || 'GENERAL'}</span>
                         <h3 class="font-bold text-slate-800 text-xs md:text-sm mb-auto line-clamp-2 leading-tight">${it.name}</h3>
                         <div class="mt-2 text-right md:text-left">
                             <p class="text-violet-600 font-black text-base md:text-lg">${fmt(it.sellingPrice)}</p>
@@ -260,99 +288,158 @@
     // --- REVENUE TRACKERS --- (Imported from POS.html)
 
     function renderHistory() {
-        const historySearch = (window.erpState.historySearch || '').toLowerCase();
-        let list = (window.erpState.sales || []).sort((a,b) => (b.date || 0) - (a.date || 0));
+        const salesList = (window.erpState.sales || []).map(s => {
+            const dt = s.createdAt?.toMillis ? s.createdAt.toMillis() : (typeof s.createdAt === 'number' ? s.createdAt : new Date(s.date || Date.now()).getTime());
+            return {
+                ...s,
+                _type: 'sale',
+                _sortDate: dt,
+                _displayDate: window.fmtDate(dt),
+                _orderDate: s.date ? window.fmtDate(s.date) : window.fmtDate(dt)
+            };
+        });
+
+        const ordersList = (window.erpState.orders || []).map(o => {
+            const dt = o.createdAt?.toMillis ? o.createdAt.toMillis() : (typeof o.createdAt === 'number' ? o.createdAt : (o.timestamp || Date.now()));
+            return {
+                ...o,
+                _type: 'order',
+                _sortDate: dt,
+                _displayDate: o.deliveryDate ? window.fmtDate(o.deliveryDate) : '-',
+                _orderDate: window.fmtDate(o.orderDate || dt),
+                customerPhone: o.phone
+            };
+        });
+
+        const sortOrder = window.erpState.historySort || 'desc';
+        let list = [...salesList, ...ordersList].sort((a,b) => {
+            return sortOrder === 'desc' ? b._sortDate - a._sortDate : a._sortDate - b._sortDate;
+        });
         
         // Date filters
         const now = new Date();
-        const todayStart = new Date().setHours(0,0,0,0);
-        let start = 0;
-        
+        const startOfToday = new Date().setHours(0,0,0,0);
         const filter = window.erpState.historyFilter || 'all';
-
-        if(filter === 'today') start = todayStart;
-        else if(filter === 'week') start = now.getTime() - (7 * 24 * 60 * 60 * 1000);
-        else if(filter === 'month') start = now.getTime() - (30 * 24 * 60 * 60 * 1000);
-        else if(filter === 'custom' && window.erpState.historyCustomStart) {
-            start = new Date(window.erpState.historyCustomStart).getTime();
+        
+        if (filter === 'today') {
+            list = list.filter(l => l._sortDate >= startOfToday);
+        } else if (filter === 'week') {
+            const weekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+            list = list.filter(l => l._sortDate >= weekAgo);
+        } else if (filter === 'month') {
+            const monthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+            list = list.filter(l => l._sortDate >= monthAgo);
+        } else if (filter === 'custom') {
+            const start = window.erpState.historyCustomStart ? new Date(window.erpState.historyCustomStart).getTime() : 0;
+            const end = window.erpState.historyCustomEnd ? new Date(window.erpState.historyCustomEnd).setHours(23,59,59,999) : Infinity;
+            list = list.filter(l => l._sortDate >= start && l._sortDate <= end);
         }
 
-        list = list.filter(s => s.date >= start);
-        if(window.erpState.historyCustomEnd && filter === 'custom') {
-            const end = new Date(window.erpState.historyCustomEnd).setHours(23,59,59,999);
-            list = list.filter(s => s.date <= end);
-        }
-
-        if(historySearch){
-            list = list.filter(s => 
-                (s.billNo || '').toLowerCase().includes(historySearch) || 
-                (s.customerPhone || '').includes(historySearch) || 
-                (s.customerName || '').toLowerCase().includes(historySearch)
+        if (window.erpState.historySearch) {
+            const q = window.erpState.historySearch.toLowerCase();
+            list = list.filter(l => 
+                (l.billNo || '').toLowerCase().includes(q) || 
+                (l.customerName || '').toLowerCase().includes(q) || 
+                (l.customerPhone || '').toLowerCase().includes(q)
             );
         }
 
         return `
         <div class="flex flex-col h-full bg-slate-50">
-            <div class="sticky top-0 z-10 bg-white/80 backdrop-blur-md p-6 border-b border-slate-200">
-                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 max-w-[1400px] mx-auto">
-                    <div>
-                        <h2 class="text-2xl font-black text-slate-800 tracking-tighter uppercase mb-1">Sales Ledger <span class="text-violet-600">v2.0</span></h2>
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${list.length} Records Found</p>
+            <header class="h-20 bg-white border-b border-slate-100 px-8 flex items-center justify-between z-40 sticky top-0">
+                <div>
+                    <h2 class="text-xl font-black text-slate-800 uppercase tracking-tight">Receipts Ledger <span class="text-violet-600">v2.0</span></h2>
+                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Unified Sales & Tailoring Archive</p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="relative">
+                        <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                        <input type="text" oninput="window.erpState.historySearch=this.value; window.scheduleRender()" value="${window.erpState.historySearch || ''}" placeholder="Filter by Bill, Name, Phone..." class="pl-11 pr-4 py-2.5 bg-slate-50 border-none rounded-xl text-xs font-bold w-64 outline-none focus:ring-2 focus:ring-violet-400 transition-all">
+                    </div>
+                </div>
+            </header>
+
+            <div class="bg-white border-b border-slate-100 px-8 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-center gap-4 overflow-x-auto no-scrollbar">
+                    <div class="flex bg-slate-100 p-1 rounded-2xl shrink-0">
+                        ${['all', 'today', 'week', 'month', 'custom'].map(f => `
+                            <button onclick="window.erpState.historyFilter='${f}'; window.renderApp();" class="px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-white text-violet-600 shadow-md ring-1 ring-black/5' : 'text-slate-400 hover:text-slate-600'}">${f}</button>
+                        `).join('')}
                     </div>
 
-                    <div class="flex flex-wrap items-center gap-4">
-                        <div class="relative min-w-[280px]">
-                            <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4"></i>
-                            <input type="text" placeholder="Search Bill No / Phone / Name..." value="${window.erpState.historySearch || ''}" class="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-violet-500/20 shadow-sm" oninput="window.erpState.historySearch=this.value; window.scheduleRender()">
-                        </div>
+                    <button onclick="window.toggleHistorySort()" class="px-5 py-3 bg-white border border-slate-200 rounded-2xl flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm shrink-0">
+                        <i data-lucide="${window.erpState.historySort === 'desc' ? 'sort-desc' : 'sort-asc'}" class="w-4 h-4 text-violet-600"></i>
+                        <span class="text-[10px] font-black uppercase tracking-widest text-slate-600">${window.erpState.historySort === 'desc' ? 'Newest' : 'Oldest'}</span>
+                    </button>
 
-                        <div class="flex bg-slate-100 p-1 rounded-2xl">
-                            ${['all', 'today', 'week', 'month', 'custom'].map(f => `
-                                <button onclick="window.erpState.historyFilter='${f}'; window.renderApp();" class="px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-white text-violet-600 shadow-md ring-1 ring-black/5' : 'text-slate-400 hover:text-slate-600'}">${f}</button>
-                            `).join('')}
+                    ${filter === 'custom' ? `
+                        <div class="flex items-center gap-2 animate-pop-in shrink-0">
+                            <input type="date" value="${window.erpState.historyCustomStart || ''}" onchange="window.erpState.historyCustomStart=this.value; window.renderApp();" class="px-3 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold outline-none">
+                            <span class="text-slate-300 font-black">TO</span>
+                            <input type="date" value="${window.erpState.historyCustomEnd || ''}" onchange="window.erpState.historyCustomEnd=this.value; window.renderApp();" class="px-3 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold outline-none">
                         </div>
-
-                        ${filter === 'custom' ? `
-                            <div class="flex items-center gap-2 animate-pop-in">
-                                <input type="date" value="${window.erpState.historyCustomStart || ''}" onchange="window.erpState.historyCustomStart=this.value; window.renderApp();" class="px-3 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold outline-none">
-                                <span class="text-slate-300 font-black">TO</span>
-                                <input type="date" value="${window.erpState.historyCustomEnd || ''}" onchange="window.erpState.historyCustomEnd=this.value; window.renderApp();" class="px-3 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold outline-none">
-                            </div>
-                        ` : ''}
-                    </div>
+                    ` : ''}
                 </div>
             </div>
 
-            <div class="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
+            <div class="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
                 <div class="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col max-w-[1400px] mx-auto">
-                    <div class="bg-slate-50/50 border-b border-slate-100 px-8 py-4 hidden md:grid grid-cols-[180px_1fr_100px_120px_120px] gap-4 items-center uppercase tracking-[0.2em] text-[10px] font-black text-slate-400">
-                        <div>Bill & Date</div>
-                        <div>Customer Name</div>
-                        <div>Items</div>
-                        <div class="text-right">Final Total</div>
-                        <div class="text-right">Balance Due</div>
+                    <div class="bg-slate-50/50 border-b border-slate-100 px-8 py-4 hidden md:grid grid-cols-[140px_120px_1fr_250px_90px_90px] gap-4 items-center uppercase tracking-[0.2em] text-[10px] font-black text-slate-400">
+                        <div>Bill & Group</div>
+                        <div>Ord Date</div>
+                        <div>Customer Info</div>
+                        <div>Items Produced</div>
+                        <div class="text-right">Total</div>
+                        <div class="text-right">Balance</div>
                     </div>
 
                     <div class="divide-y divide-slate-50">
-                        ${list.length === 0 ? `<div class="py-24 text-center text-slate-300 font-bold italic">No receipts found.</div>` :
-                            list.map(s => `
-                                <div onclick="window.openReceipt('${s.id}')" class="px-8 py-5 grid grid-cols-2 md:grid-cols-[180px_1fr_100px_120px_120px] gap-x-4 gap-y-2 items-center hover:bg-slate-50/50 cursor-pointer transition-colors group">
+                        ${list.length === 0 ? `<div class="py-24 text-center text-slate-300 font-bold italic uppercase tracking-widest text-[10px]">No records match your filters</div>` :
+                            list.map(s => {
+                                const isRefund = s.refunded || (s.refundLog && s.refundLog.length > 0);
+                                const itemNames = (s.items || []).map(i => i.name).join(", ");
+                                const bal = s.balanceDue || (Math.max(0, (s.totalCost || 0) - (s.advancePaid || 0) - (s.deliveryDiscount || 0)));
+                                const delDate = s._type === 'order' ? s._displayDate : '-';
+                                return `
+                                <div onclick="${s._type === 'sale' ? `window.openReceipt('${s.id}')` : `location.href='tailoring.html?viewOrder=${s.id}'`}" class="px-8 py-5 grid grid-cols-2 md:grid-cols-[140px_120px_1fr_250px_90px_90px] gap-x-4 gap-y-2 items-center hover:bg-slate-50/50 cursor-pointer transition-colors group">
                                     <div>
-                                        <p class="text-base font-black text-slate-800 leading-tight group-hover:text-violet-600 transition-colors">${s.billNo}</p>
-                                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">${new Date(s.date).toLocaleDateString()}</p>
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <p class="text-base font-black text-slate-800 leading-tight group-hover:text-violet-600 transition-all">${s.billNo || 'INV-000'}</p>
+                                            <span class="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${s._type === 'sale' ? 'bg-indigo-50 text-indigo-500' : 'bg-emerald-50 text-emerald-600'}">
+                                                ${s._type === 'sale' ? 'POS' : 'TLR'}
+                                            </span>
+                                        </div>
+                                        ${isRefund ? '<span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[7px] font-black uppercase tracking-tighter">Refunded Item</span>' : ''}
                                     </div>
                                     <div>
-                                        <p class="text-sm font-black text-slate-700 capitalize">${s.customerName || 'Walk-in'}</p>
-                                        <p class="text-[10px] font-bold text-slate-400 truncate">${s.customerPhone || ''}</p>
+                                        <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">${s._orderDate}</p>
                                     </div>
-                                    <div class="flex flex-col gap-1">
-                                        <span class="px-2 py-1 bg-violet-50 text-violet-600 rounded-lg text-[9px] font-black uppercase tracking-wider w-fit">${(s.items || []).length} items</span>
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-black text-slate-700 capitalize truncate">${s.customerName || 'Walk-in'}</p>
+                                        <div class="flex items-center gap-2">
+                                            <p class="text-[9px] font-bold text-slate-400 truncate tracking-tight">${s.customerPhone || '-'}</p>
+                                            ${s.loyaltySnapshot?.tier ? `
+                                                <span class="px-1.5 py-0.5 rounded-[4px] text-[7px] font-black uppercase tracking-widest bg-${window.LOYALTY.TIERS[s.loyaltySnapshot.tier]?.color || 'slate'}-50 text-${window.LOYALTY.TIERS[s.loyaltySnapshot.tier]?.color || 'slate'}-500">
+                                                    ${s.loyaltySnapshot.tier}
+                                                </span>
+                                            ` : ''}
+                                        </div>
                                     </div>
-                                    <div class="text-base font-black text-slate-900 text-right">${fmt(s.total)}</div>
-                                    <div class="text-base font-black ${s.balanceDue > 0 ? 'text-rose-500' : 'text-emerald-500'} text-right">
-                                        ${s.balanceDue > 0 ? fmt(s.balanceDue) : '<span class="px-2 py-1 bg-emerald-50 rounded-lg text-[10px]">PAID</span>'}
+                                    <div class="min-w-0">
+                                        <p class="text-[10px] font-bold text-slate-600 line-clamp-2 leading-tight uppercase">${itemNames || 'Service Load'}</p>
+                                        <p class="text-[8px] font-black text-slate-300 uppercase tracking-widest mt-0.5">${(s.items || []).length} items ${s._type === 'order' ? `• Dlv: ${s._displayDate}` : ''}</p>
                                     </div>
-                                </div>`).join('')
+                                    <div class="text-right">
+                                        <p class="text-sm font-black text-slate-800">${fmt(s.total || s.totalCost)}</p>
+                                    </div>
+                                    <div class="text-right">
+                                        ${bal > 0 
+                                            ? `<span class="text-sm font-black text-rose-500 tracking-tighter">${fmt(bal)}</span>` 
+                                            : `<span class="text-[8px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md uppercase tracking-widest">Settled</span>`
+                                        }
+                                    </div>
+                                </div>`;
+                            }).join('')
                         }
                     </div>
                 </div>
@@ -647,7 +734,9 @@
                 { id: 'printer', label: 'Printer Setup', icon: 'printer', color: 'indigo', sub: 'Width & Formatting' },
                 { id: 'whatsapp', label: 'WA Templates', icon: 'message-square', color: 'emerald', sub: 'Message Content' },
                 { id: 'tax', label: 'Tax Rules', icon: 'hash', color: 'violet', sub: 'GST & Local Taxes' },
-                { id: 'discount', label: 'Discounts', icon: 'tag', color: 'rose', sub: 'Global Offers' }
+                { id: 'discount', label: 'Discounts', icon: 'tag', color: 'rose', sub: 'Global Offers' },
+                { id: 'loyalty', label: 'Loyalty', icon: 'star', color: 'amber', sub: 'Rewards & Tiers' },
+                { id: 'security', label: 'Security', icon: 'shield-check', color: 'slate', sub: 'System Passwords' }
             ];
 
             return `
@@ -720,7 +809,7 @@
                     <div class="bg-indigo-600 p-8 rounded-[40px] text-white/90 shadow-xl shadow-indigo-100">
                         <h4 class="text-[10px] font-black uppercase tracking-[0.2em] mb-4 text-white">Injection Tokens (Placeholders)</h4>
                         <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            ${['customerName', 'billNo', 'totalCost', 'advancePaid', 'balance', 'deliveryDate'].map(t => `
+                            ${['customerName', 'billNo', 'totalCost', 'advancePaid', 'balance', 'deliveryDate', 'pointsEarned', 'totalPoints', 'tier'].map(t => `
                                 <div class="bg-white/10 px-4 py-2 rounded-xl text-[10px] font-mono font-bold">{${t}}</div>
                             `).join('')}
                         </div>
@@ -804,6 +893,121 @@
                 </div>
             </div>`;
         }
+
+        // LOYALTY SECTION
+        if (section === 'loyalty') {
+            const loyalty = window.erpState.loyalty || { enabled: true, pointsPer100: 5, eliteThreshold: 10000, goldThreshold: 50000 };
+            return `
+            <div class="flex-1 overflow-y-auto p-10 bg-slate-50">
+                <div class="max-w-2xl mx-auto space-y-8 animate-pop-in">
+                    <div class="bg-white p-10 rounded-[48px] shadow-sm">
+                        <div class="flex items-center gap-3 mb-8">
+                            <div class="w-12 h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center font-black">
+                                <i data-lucide="star" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-black text-slate-900 tracking-tighter uppercase mb-0.5">Loyalty Settings</h3>
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Reward Points & Tiers</p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-6 mb-10">
+                            <div class="flex items-center justify-between bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                                <div>
+                                    <h4 class="font-black text-sm uppercase text-slate-800">Enable Program</h4>
+                                    <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Activate loyalty points</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                  <input type="checkbox" id="loyalty_enabled" class="sr-only peer" ${loyalty.enabled ? 'checked' : ''}>
+                                  <div class="w-14 h-7 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-amber-500"></div>
+                                </label>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Basic Pct (%)</label>
+                                    <input id="loy_pct_basic" type="number" value="${(loyalty.tiers?.basic?.pct || 0.02) * 100}" class="w-full bg-white border-none rounded-xl px-4 py-2 font-black text-slate-800">
+                                </div>
+                                <div class="bg-indigo-50 p-6 rounded-3xl border border-indigo-100">
+                                    <label class="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-2">Silver (₹25k+) Pct (%)</label>
+                                    <input id="loy_pct_silver" type="number" value="${(loyalty.tiers?.silver?.pct || 0.03) * 100}" class="w-full bg-white border-none rounded-xl px-4 py-2 font-black text-indigo-600">
+                                </div>
+                                <div class="bg-amber-50 p-6 rounded-3xl border border-amber-100">
+                                    <label class="text-[10px] font-black text-amber-500 uppercase tracking-widest block mb-2">Gold (₹50k+) Pct (%)</label>
+                                    <input id="loy_pct_gold" type="number" value="${(loyalty.tiers?.gold?.pct || 0.05) * 100}" class="w-full bg-white border-none rounded-xl px-4 py-2 font-black text-amber-600">
+                                </div>
+                                <div class="bg-rose-50 p-6 rounded-3xl border border-rose-100">
+                                    <label class="text-[10px] font-black text-rose-400 uppercase tracking-widest block mb-2">Premium (₹100k+) Pct (%)</label>
+                                    <input id="loy_pct_premium" type="number" value="${(loyalty.tiers?.premium?.pct || 0.05) * 100}" class="w-full bg-white border-none rounded-xl px-4 py-2 font-black text-rose-600">
+                                </div>
+                            </div>
+
+                            <div class="p-6 bg-slate-50 rounded-3xl border border-slate-100 italic">
+                               <p class="text-[10px] font-bold text-slate-400 leading-relaxed uppercase tracking-tight">
+                                 Note: Bonus +200 points automatically applied for orders over ₹10,000.
+                                 Redemption unlocked at 500 points (1 Pt = ₹1).
+                               </p>
+                            </div>
+                        </div>
+
+                        <button onclick="window.saveLoyaltySettings()" class="w-full py-6 bg-slate-900 text-white rounded-[28px] font-black uppercase text-xs tracking-[0.2em] shadow-xl hover:bg-black transition-all active:scale-95 flex items-center justify-center gap-3">
+                            <i data-lucide="save" class="w-4 h-4"></i>
+                            Save Loyalty Config
+                        </button>
+                    </div>
+
+                    <div class="bg-indigo-50 border border-indigo-100 p-8 rounded-[40px] text-center">
+                        <p class="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-4">Maintenance Zone</p>
+                        <h4 class="text-sm font-black text-indigo-900 mb-6 uppercase">Sync Points for all existing sales</h4>
+                        <button onclick="window.syncLegacyLoyalty(event)" class="w-full py-5 bg-white border-2 border-indigo-200 text-indigo-600 rounded-[28px] font-black uppercase text-[10px] tracking-[0.2em] shadow-lg hover:bg-indigo-600 hover:text-white transition-all active:scale-95">
+                            Recalculate & Migrate Data
+                        </button>
+                        <p class="text-[9px] text-indigo-400 font-bold mt-4 uppercase tracking-widest px-4 leading-relaxed">This will scan all previous POS & Tailoring orders to correctly set tiers and points for all customers.</p>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        // SECURITY SECTION
+        if (section === 'security') {
+            const creds = window.erpState.passwords || { staff: 'Lavish1234', owner: 'Swali4783' };
+            return `
+            <div class="flex-1 overflow-y-auto p-10 bg-slate-50">
+                <div class="max-w-xl mx-auto space-y-8 animate-pop-in">
+                    <div class="bg-white p-10 rounded-[48px] shadow-sm border border-slate-100">
+                        <div class="flex items-center gap-3 mb-8">
+                            <div class="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black">
+                                <i data-lucide="shield-check" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-black text-slate-900 tracking-tighter uppercase mb-0.5">Security Logic</h3>
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Update Master Credentials</p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-6 mb-10">
+                            <div>
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Staff Password</label>
+                                <input id="pass_staff" type="text" value="${creds.staff}" class="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-base text-slate-800 outline-none focus:border-indigo-500 transition-all shadow-inner">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Owner Password</label>
+                                <input id="pass_owner" type="text" value="${creds.owner}" class="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-base text-slate-800 outline-none focus:border-indigo-500 transition-all shadow-inner">
+                            </div>
+                        </div>
+
+                        <button onclick="window.updatePasswords()" class="w-full py-6 bg-slate-900 text-white rounded-[28px] font-black uppercase text-xs tracking-[0.2em] shadow-xl hover:bg-black transition-all active:scale-95 flex items-center justify-center gap-3 group">
+                            <i data-lucide="key" class="w-4 h-4 group-hover:rotate-12 transition-transform"></i>
+                            Update Credentials
+                        </button>
+                        
+                        <p class="mt-6 text-[10px] text-slate-400 font-bold text-center bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-200">
+                            ⚠️ Note: Changes take effect across all terminals immediately after save.
+                        </p>
+                    </div>
+                </div>
+            </div>`;
+        }
     }
 
     // --- Settings Logics ---
@@ -862,6 +1066,10 @@
                     </button>
                 </div>
 
+                <div id="cm_loyalty_preview" class="hidden mb-6 p-4 bg-slate-900 border border-slate-800 rounded-[32px] animate-pop-in">
+                    <!-- Injected by lookup -->
+                </div>
+
                 <div class="space-y-5 mb-8 relative">
                     <div class="space-y-1.5">
                         <input id="cm_client_phone" oninput="window.lookupClient(this.value)" type="tel" placeholder="Phone Number" class="w-full px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-4 focus:ring-violet-500/10 shadow-inner">
@@ -885,16 +1093,32 @@
 
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Advance Paid ₹</label>
+                                    <div class="flex items-center justify-between mb-2">
+                                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Amount Paid ₹</label>
+                                        <label class="flex items-center gap-1 cursor-pointer">
+                                            <input type="checkbox" id="cm_is_advance" class="w-2.5 h-2.5 rounded border-slate-300">
+                                            <span class="text-[8px] font-black text-violet-500 uppercase tracking-tighter">Is Advance?</span>
+                                        </label>
+                                    </div>
                                     <input id="cm_advance" type="number" placeholder="0" class="w-full px-4 py-3 bg-white border border-slate-100 rounded-xl font-black text-emerald-600 text-lg outline-none focus:ring-2 focus:ring-emerald-500/20">
                                 </div>
                                 <div>
                                     <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Method</label>
-                                    <select id="cm_payment_method" class="w-full px-4 py-3 bg-white border border-slate-100 rounded-xl font-bold text-xs outline-none">
+                                    <select id="cm_payment_method" onchange="document.getElementById('cm_mixed_inputs').classList.toggle('hidden', this.value !== 'Mixed')" class="w-full px-4 py-3 bg-white border border-slate-100 rounded-xl font-bold text-xs outline-none">
                                         <option value="Cash">Cash</option>
-                                        <option value="Digital (UPI)">UPI / Digital</option>
-                                        <option value="Card Linked">Card Payment</option>
+                                        <option value="UPI">UPI / GPay</option>
+                                        <option value="Mixed">Mixed (Cash & UPI)</option>
                                     </select>
+                                </div>
+                            </div>
+                            <div id="cm_mixed_inputs" class="hidden grid grid-cols-2 gap-4 bg-slate-900/5 p-3 rounded-2xl border border-slate-900/10">
+                                <div>
+                                     <label class="text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 block pl-2">Cash Split</label>
+                                     <input id="cm_mixed_cash" type="number" oninput="window.autoCalcMixed('cash')" placeholder="₹" class="w-full px-4 py-3 bg-white border-none rounded-xl font-bold text-xs outline-none shadow-sm">
+                                </div>
+                                <div>
+                                     <label class="text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 block pl-2">UPI Split</label>
+                                     <input id="cm_mixed_upi" type="number" oninput="window.autoCalcMixed('upi')" placeholder="₹" class="w-full px-4 py-3 bg-white border-none rounded-xl font-bold text-xs outline-none shadow-sm">
                                 </div>
                             </div>
                         </div>
@@ -927,7 +1151,47 @@
                 window.erpState.activeDiscountLabel = label;
                 window.erpState.activeDiscountAmt = d.type === 'pct' ? (sub * d.val / 100) : d.val;
             }
-            document.getElementById('cm_final').innerText = fmt(sub - (window.erpState.activeDiscountAmt || 0));
+            window.updateCMFinal(sub);
+        };
+
+        window.autoCalcMixed = (source) => {
+            const adv = parseFloat(document.getElementById('cm_advance').value || 0);
+            const sub = window.erpState.cart.reduce((a, b) => a + (b.price * b.qty), 0);
+            const disc = window.erpState.activeDiscountAmt || 0;
+            const redeem = parseFloat(document.getElementById('cm_redeem_amt')?.value || 0);
+            const total = Math.max(0, sub - disc - redeem);
+            const isAdv = document.getElementById('cm_is_advance').checked;
+            const targetPay = isAdv ? adv : total;
+
+            const cashEl = document.getElementById('cm_mixed_cash');
+            const upiEl = document.getElementById('cm_mixed_upi');
+
+            if (source === 'cash') {
+                const val = parseFloat(cashEl.value || 0);
+                upiEl.value = Math.max(0, targetPay - val);
+            } else {
+                const val = parseFloat(upiEl.value || 0);
+                cashEl.value = Math.max(0, targetPay - val);
+            }
+        };
+
+        window.updateCMFinal = (sub) => {
+            const disc = window.erpState.activeDiscountAmt || 0;
+            const redeem = parseFloat(document.getElementById('cm_redeem_amt')?.value || 0);
+            const total = Math.max(0, sub - disc - redeem);
+            document.getElementById('cm_final').innerText = fmt(total);
+
+            // Update points earned preview if loyalty visible
+            if (!document.getElementById('cm_loyalty_preview').classList.contains('hidden')) {
+                const phone = document.getElementById('cm_client_phone').value;
+                const c = window.erpState.clients.find(x => x.phone === phone);
+                if (c) {
+                    const tier = window.getLoyaltyTier(c.totalSpent || 0);
+                    const earned = window.calcPoints(total, tier);
+                    const earnedEl = document.getElementById('cm_earned_pts');
+                    if (earnedEl) earnedEl.innerText = '+' + earned;
+                }
+            }
         };
     };
 
@@ -937,6 +1201,7 @@
         const advance = parseFloat(document.getElementById('cm_advance').value || 0);
         const method = document.getElementById('cm_payment_method') ? document.getElementById('cm_payment_method').value : document.getElementById('cm_method').value;
         const discountAmt = window.erpState.activeDiscountAmt || 0;
+        const redeemAmt = parseFloat(document.getElementById('cm_redeem_amt')?.value || 0);
 
         if(!phone || phone.length < 10) return alert("Valid phone number required");
         if(!name) return alert("Customer name required");
@@ -948,14 +1213,37 @@
 
         try {
             const subtotal = window.erpState.cart.reduce((a, b) => a + (b.price * b.qty), 0);
-            const total = subtotal - discountAmt;
+            const total = Math.max(0, subtotal - discountAmt - redeemAmt);
             const counter = (window.erpState.counter || 2499) + 1;
-            const billNo = "INV-" + counter;
+            const billNo = "4-" + counter;
 
-            // Business Logic from POSv1: 0 advance or full advance means Paid In Full
-            const balanceDue = (advance === 0 || advance >= total) ? 0 : total - advance;
-            const finalPaid = (advance === 0 || advance >= total) ? total : advance;
+            const isAdvance = document.getElementById('cm_is_advance').checked;
+            const amtEntered = advance;
+            
+            // Core Logic: If 'isAdvance' is checked, it's a partial payment. Otherwise it's full.
+            let finalPaid = total;
+            let balanceDue = 0;
 
+            if (isAdvance) {
+                finalPaid = amtEntered;
+                balanceDue = Math.max(0, total - amtEntered);
+            }
+
+            let cash = 0, upi = 0;
+            if (method === 'Mixed') {
+                cash = parseFloat(document.getElementById('cm_mixed_cash').value) || 0;
+                upi = parseFloat(document.getElementById('cm_mixed_upi').value) || 0;
+            } else if (method === 'Cash') {
+                cash = finalPaid;
+            } else if (method === 'UPI') {
+                upi = finalPaid;
+            }
+
+            const client = window.erpState.clients.find(c => c.phone === phone);
+            const oldSpent = client ? (client.totalSpent || 0) : 0;
+            const oldTier = window.getLoyaltyTier(oldSpent);
+            const pointsEarned = window.calcPoints(total, oldTier);
+            
             const saleData = {
                 billNo,
                 customerName: name,
@@ -965,17 +1253,52 @@
                 items: JSON.parse(JSON.stringify(window.erpState.cart)),
                 subtotal, 
                 discount: discountAmt,
+                redeemedPoints: redeemAmt,
                 total, 
                 advancePaid: finalPaid,
                 balanceDue: balanceDue,
+                isPartial: isAdvance,
                 paymentMode: method,
-                counter
+                paymentBreakdown: { cash, upi },
+                counter: 2499,
+                loyaltySnapshot: {
+                    earned: pointsEarned,
+                    total: (client ? (client.loyaltyPoints || 0) : 0) - redeemAmt + pointsEarned,
+                    tier: window.getLoyaltyTier(oldSpent + total)
+                }
             };
 
             await DATA_PATH('sales').add(saleData);
             
-            if(!window.erpState.clients.find(c => c.phone === phone)){
-                await window.FB.collection('clients').add({ name, phone, createdAt: Date.now() });
+            if(!client){
+                const newSpent = total;
+                const newTier = window.getLoyaltyTier(newSpent);
+                await window.FB.collection('clients').add({ 
+                    name, phone, 
+                    createdAt: Date.now(), 
+                    loyaltyPoints: pointsEarned, 
+                    totalSpent: newSpent,
+                    tier: newTier
+                });
+            } else {
+                const newSpent = (client.totalSpent || 0) + total;
+                const newPoints = (client.loyaltyPoints || 0) - redeemAmt + pointsEarned;
+                const newTier = window.getLoyaltyTier(newSpent);
+                
+                await window.FB.collection('clients').doc(client.id).update({
+                    loyaltyPoints: newPoints,
+                    totalSpent: newSpent,
+                    tier: newTier,
+                    lastVisit: Date.now()
+                });
+
+                if (newTier !== oldTier) {
+                    setTimeout(() => alert(`Congratulations! ${name} upgraded to ${newTier.toUpperCase()} tier! 🎉`), 500);
+                }
+            }
+
+            if (pointsEarned > 0) {
+                setTimeout(() => alert(`Success! You earned ${pointsEarned} points 🎉`), 200);
             }
 
             document.getElementById('charge-modal-overlay').remove();
@@ -1355,6 +1678,16 @@
         if (balance > 0) html += printRow("Balance Due", "₹" + balance.toLocaleString('en-IN'), true, "#dc2626");
 
         html += "<hr style='border:none;border-top:1px dashed #000;margin:5px 0;'>";
+        
+        if (sale.loyaltySnapshot) {
+            const ls = sale.loyaltySnapshot;
+            html += "<div style='text-align:center;font-size:9px;margin-bottom:5px;'>";
+            html += "Earned: " + ls.earned + " pts | Total: " + ls.total + " pts<br>";
+            html += "Current Tier: " + (ls.tier || 'Basic').toUpperCase();
+            html += "</div>";
+            html += "<hr style='border:none;border-top:1px dashed #000;margin:5px 0;'>";
+        }
+
         html += "<div style='text-align:center;font-size:9px;font-weight:bold;margin-top:5px;'>*** IMPORTANT CARE NOTES ***</div>";
         html += "<div style='text-align:center;font-size:9px;'>No Returns | No Exchange</div>";
         html += "<div style='text-align:center;font-size:9px;'>Dry Wash Only</div>";
@@ -1394,25 +1727,75 @@
                 nameEl.value = c.name;
                 nameEl.classList.add('text-violet-600');
             }
+
+            const loyPreview = document.getElementById('cm_loyalty_preview');
+            if (loyPreview) {
+                const tierKey = window.getLoyaltyTier(c.totalSpent || 0);
+                const tier = LOYALTY.TIERS[tierKey];
+                const points = c.loyaltyPoints || 0;
+                const subtotal = window.erpState.cart.reduce((a, b) => a + (b.price * b.qty), 0);
+                const disc = window.erpState.activeDiscountAmt || 0;
+                const total = subtotal - disc;
+                const potential = window.calcPoints(total, tierKey);
+
+                loyPreview.classList.remove('hidden');
+                loyPreview.innerHTML = `
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-${tier.color}-500/20 rounded-xl flex items-center justify-center text-${tier.color}-400">
+                                <i data-lucide="star" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <p class="text-[10px] font-black text-white uppercase tracking-widest">${tier.label} Member</p>
+                                <p class="text-[9px] font-bold text-slate-500 uppercase mt-0.5">Current Balance: ${points} pts</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p id="cm_earned_pts" class="text-emerald-400 font-black text-lg">+${potential}</p>
+                            <p class="text-[8px] font-bold text-slate-500 uppercase">Points to Earn</p>
+                        </div>
+                    </div>
+                    
+                    ${points >= LOYALTY.MIN_REDEMPTION ? `
+                        <div class="pt-4 border-t border-slate-800 flex items-center justify-between">
+                            <div class="flex flex-col">
+                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Redemption Available</span>
+                                <span class="text-[7px] text-slate-500 font-bold uppercase mt-0.5">1 Point = ₹1</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="number" id="cm_redeem_amt" max="${points}" oninput="window.updateCMFinal(${subtotal})" placeholder="0" class="w-20 px-3 py-1.5 bg-slate-800 border-none rounded-lg text-white font-black text-xs outline-none focus:ring-1 focus:ring-violet-500">
+                                <span class="text-[10px] font-black text-slate-400 uppercase">PTS</span>
+                            </div>
+                        </div>
+                    ` : `
+                        <p class="text-[7px] font-black text-slate-600 uppercase tracking-widest text-center mt-2 italic">Need ${LOYALTY.MIN_REDEMPTION - points} more pts to unlock redemption</p>
+                    `}
+                `;
+                if (window.lucide) lucide.createIcons();
+            }
         }
     };
 
     window.shareWhatsApp = (billNo, name, phone, total, balance = 0) => {
         const sale = window.erpState.sales.find(s => s.billNo === billNo);
+        const loyalty = sale?.loyaltySnapshot || {};
         const data = {
             customerName: name || 'Customer',
             billNo: billNo,
             totalCost: (total || 0).toLocaleString('en-IN'),
             advancePaid: (total - balance).toLocaleString('en-IN'),
             balance: (balance || 0).toLocaleString('en-IN'),
-            deliveryDate: sale ? new Date(sale.date).toLocaleDateString() : 'N/A'
+            deliveryDate: sale ? new Date(sale.date).toLocaleDateString() : 'N/A',
+            pointsEarned: loyalty.earned || 0,
+            totalPoints: loyalty.total || 0,
+            tier: (loyalty.tier || 'Basic').toUpperCase()
         };
 
         const templates = window.erpState.whatsappTemplates || {};
         let tpl = balance > 0 ? (templates.ready || templates.booking) : templates.delivered;
         
         if (!tpl) {
-            tpl = `Hi {customerName},\n\nThank you for shopping at *Lavish Lavender*!\n\nYour bill *{billNo}* for *₹{totalCost}* is paid. {balance != "0" ? 'Remaining balance: *₹{balance}*' : ''}\n\nView details: https://www.lavishlavender.in/receipt/?bill={billNo}`;
+            tpl = `Hi {customerName},\n\nThank you for shopping at *Lavish Lavender*!\n\nYour bill *{billNo}* for *₹{totalCost}* is confirmed. {balance != "0" ? 'Remaining: *₹{balance}*' : ''}\n\n✨ *Loyalty Info*\nTier: {tier}\nPoints Earned: {pointsEarned}\nTotal Points: {totalPoints}\n\nView details: https://www.lavishlavender.in/receipt/?bill={billNo}`;
         }
 
         const msg = encodeURIComponent(fillTemplate(tpl, data));
@@ -1444,11 +1827,41 @@
                 taxes: window.erpState.taxes,
                 discounts: window.erpState.discounts,
                 menuOrder: (window.erpState.menuItems || []).map(i => i.id),
+                passwords: window.erpState.passwords,
+                loyalty: window.erpState.loyalty,
                 updatedAt: Date.now()
             }, { merge: true });
         } catch (e) {
             console.error("Failed to save settings:", e);
         }
+    };
+
+    window.saveLoyaltySettings = () => {
+        const enabled = document.getElementById('loyalty_enabled').checked;
+        const pts = parseFloat(document.getElementById('loyalty_pts').value) || 5;
+        const elite = parseFloat(document.getElementById('loyalty_elite').value) || 10000;
+        const gold = parseFloat(document.getElementById('loyalty_gold').value) || 50000;
+
+        window.erpState.loyalty = {
+            enabled: enabled,
+            pointsPer100: pts,
+            eliteThreshold: elite,
+            goldThreshold: gold
+        };
+        
+        window.saveGeneralSettings();
+        alert("Loyalty parameters updated.");
+    };
+
+    window.updatePasswords = () => {
+        const staff = document.getElementById('pass_staff').value.trim();
+        const owner = document.getElementById('pass_owner').value.trim();
+        if(!staff || !owner) return alert("Passwords cannot be empty");
+        
+        window.erpState.passwords = { staff, owner };
+        window.saveGeneralSettings();
+        alert("Security Credentials Updated Successfully!");
+        window.renderApp();
     };
 
     window.addTaxRule = () => {
@@ -1502,14 +1915,25 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-8 mb-12 relative">
-                    <div class="p-6 bg-slate-50 rounded-[32px] border border-slate-100">
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Member Since</p>
-                        <p class="font-black text-slate-800 uppercase tracking-tight">${new Date(c.createdAt || Date.now()).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</p>
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-12 relative">
+                    <div class="p-6 bg-slate-50 rounded-[32px] border border-slate-100 bg-white/50">
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Current Tier</p>
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="star" class="w-4 h-4 text-${window.LOYALTY?.TIERS[c.tier || 'basic']?.color || 'slate'}-500"></i>
+                            <p class="font-black text-slate-800 uppercase tracking-tight text-sm">${window.LOYALTY?.TIERS[c.tier || 'basic']?.label || 'Basic'}</p>
+                        </div>
                     </div>
-                    <div class="p-6 bg-slate-50 rounded-[32px] border border-slate-100">
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Account Logic</p>
-                        <p class="font-black text-emerald-600 uppercase tracking-tight">Active Partner</p>
+                    <div class="p-6 bg-slate-50 rounded-[32px] border border-slate-100 bg-white/50">
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Total Points</p>
+                        <p class="font-black text-indigo-600 uppercase tracking-tight text-lg">${c.loyaltyPoints || 0}</p>
+                    </div>
+                    <div class="p-6 bg-slate-50 rounded-[32px] border border-slate-100 bg-white/50">
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Total Spent</p>
+                        <p class="font-black text-slate-800 uppercase tracking-tight text-sm">${window.fmt(c.totalSpent || 0)}</p>
+                    </div>
+                    <div class="p-6 bg-slate-50 rounded-[32px] border border-slate-100 bg-white/50">
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Member Since</p>
+                        <p class="font-black text-slate-500 uppercase tracking-tight text-[10px]">${new Date(c.createdAt || Date.now()).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}</p>
                     </div>
                 </div>
 
@@ -1770,9 +2194,23 @@
 
         async function fetchLastB() {
             try {
-                const nums = (window.erpState.orders || []).map(d => parseInt(d.billNo?.replace(/\\D/g, '') || 0)).filter(n => n > 0);
+                const orders = window.erpState.orders || [];
+                const sortedOrders = [...orders].filter(o => o.createdAt).sort((a,b) => {
+                    const timeA = typeof a.createdAt === 'number' ? a.createdAt : (a.createdAt?.toMillis ? a.createdAt.toMillis() : 0);
+                    const timeB = typeof b.createdAt === 'number' ? b.createdAt : (b.createdAt?.toMillis ? b.createdAt.toMillis() : 0);
+                    return timeB - timeA;
+                });
+                
+                let lastNum = 100;
+                if (sortedOrders.length > 0) {
+                    const latestBillNo = sortedOrders[0].billNo || "";
+                    const match = latestBillNo.match(/\d+/);
+                    if (match) lastNum = parseInt(match[0]);
+                }
+                
                 const cartNums = window.erpState.cart.map(c => parseInt(c.tailoringRef?.replace(/\\D/g, '') || 0)).filter(n => n > 0);
-                const next = Math.max(100, ...nums, ...cartNums) + 1;
+                const next = Math.max(lastNum, ...cartNums) + 1;
+                
                 const el = document.getElementById('stitch_bill_num');
                 if (el) { el.value = next; checkBillAvailability(next); }
             } catch (e) { console.error(e); }
@@ -1827,5 +2265,107 @@
                 btn.innerText = "Link Order"; btn.disabled = false;
             }
         };
+    };
+
+    window.toggleHistorySort = function() {
+        window.erpState.historySort = window.erpState.historySort === 'desc' ? 'asc' : 'desc';
+        window.scheduleRender();
+    };
+
+    window.saveLoyaltySettings = async () => {
+        const config = {
+            enabled: document.getElementById('loyalty_enabled').checked,
+            tiers: {
+                basic: { pct: parseFloat(document.getElementById('loy_pct_basic').value || 2) / 100 },
+                silver: { pct: parseFloat(document.getElementById('loy_pct_silver').value || 3) / 100 },
+                gold: { pct: parseFloat(document.getElementById('loy_pct_gold').value || 5) / 100 },
+                premium: { pct: parseFloat(document.getElementById('loy_pct_premium').value || 5) / 100 }
+            }
+        };
+        window.erpState.loyalty = config;
+        // Update live constants
+        window.LOYALTY.TIERS.basic.pct = config.tiers.basic.pct;
+        window.LOYALTY.TIERS.silver.pct = config.tiers.silver.pct;
+        window.LOYALTY.TIERS.gold.pct = config.tiers.gold.pct;
+        window.LOYALTY.TIERS.premium.pct = config.tiers.premium.pct;
+
+        window.renderApp();
+        try {
+            await window.FB.collection('settings').doc('general').set({ loyalty: config }, { merge: true });
+            alert("Loyalty Configuration Synchronized.");
+        } catch(e) { console.error(e); }
+    };
+
+    window.syncLegacyLoyalty = async (e) => {
+        if (!confirm("This will scan ALL historic sales and tailoring orders to recalculate loyalty points and tiers for every client. Proceed?")) return;
+        
+        const btn = e.target;
+        const orig = btn.innerText;
+        btn.innerText = "Processing Logic..."; btn.disabled = true;
+
+        try {
+            // 1. Collect all transactions
+            const sales = (window.erpState.sales || []).map(s => ({ 
+                phone: s.customerPhone, 
+                amount: s.total || 0, 
+                date: s.date || 0
+            }));
+            
+            const orders = (window.erpState.orders || []).map(o => {
+                const d = o.createdAt?.toMillis ? o.createdAt.toMillis() : (o.createdAt?.toDate ? o.createdAt.toDate().getTime() : (o.timestamp || 0));
+                return {
+                    phone: o.phone,
+                    amount: o.totalCost || 0,
+                    date: d
+                };
+            });
+
+            const allTx = [...sales, ...orders].filter(t => t.phone && t.phone.toString().replace(/\D/g, '').length >= 10);
+            allTx.sort((a,b) => (a.date || 0) - (b.date || 0));
+
+            // 2. Group and Calculate
+            const groups = {};
+            allTx.forEach(t => {
+                if (!groups[t.phone]) groups[t.phone] = [];
+                groups[t.phone].push(t);
+            });
+
+            const db = window.FB.db;
+            const batch = db.batch();
+            const clientCol = window.FB.root('clients');
+            let count = 0;
+
+            for (const phone in groups) {
+                let currentSpent = 0;
+                let currentPoints = 0;
+                
+                groups[phone].forEach(tx => {
+                    const tier = window.getLoyaltyTier(currentSpent);
+                    currentPoints += window.calcPoints(tx.amount, tier);
+                    currentSpent += tx.amount;
+                });
+
+                const finalTier = window.getLoyaltyTier(currentSpent);
+                const client = window.erpState.clients.find(c => c.phone === phone);
+                
+                if (client) {
+                    batch.update(clientCol.doc(client.id), {
+                        loyaltyPoints: currentPoints,
+                        totalSpent: currentSpent,
+                        tier: finalTier,
+                        loyaltyMigrated: true
+                    });
+                    count++;
+                }
+            }
+
+            await batch.commit();
+            alert(`Succesfully migrated ${count} clients. Tiers and points are now up-to-date!`);
+        } catch(err) {
+            console.error(err);
+            alert("Migration Error: " + err.message);
+        } finally {
+            btn.innerText = orig; btn.disabled = false;
+        }
     };
 })();

@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=27">
 </head>
 <body class="bg-slate-50 font-['DM_Sans'] text-slate-900 antialiased selection:bg-violet-100 selection:text-violet-900 custom-scrollbar overflow-x-hidden">
     <div id="app" class="h-screen flex flex-col md:flex-row overflow-hidden">
@@ -52,9 +52,10 @@
     </div>
 
     <!-- Core Scripts -->
-    <script src="js/app.js"></script>
-    <script src="js/firebase.js"></script>
-    <script src="js/pos.js"></script>
+    <script src="js/app.js?v=27"></script>
+    <script src="js/firebase.js?v=26"></script>
+    <script src="js/pos.js?v=27"></script>
+    <script src="js/expenses.js?v=26"></script>
     
     <script>
         // Initialize POS-specific state defaults
@@ -84,6 +85,9 @@
             } else if (window.erpState.tab === 'reports') {
                 if (headerTitle) headerTitle.textContent = 'Master Reports';
                 if (subNav) subNav.classList.add('hidden');
+            } else if (window.erpState.tab === 'receipts') {
+                if (headerTitle) headerTitle.textContent = 'Receipts Ledger';
+                if (subNav) subNav.classList.add('hidden');
             } else if (window.erpState.tab === 'settings') {
                 if (headerTitle) headerTitle.textContent = 'Master Settings';
                 if (subNav) {
@@ -95,6 +99,8 @@
                             <button onclick="window.erpState.activeSettingsSection='whatsapp'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'whatsapp' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">WhatsApp</button>
                             <button onclick="window.erpState.activeSettingsSection='tax'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'tax' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">Tax</button>
                             <button onclick="window.erpState.activeSettingsSection='discount'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'discount' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">Discounts</button>
+                            <button onclick="window.erpState.activeSettingsSection='loyalty'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'loyalty' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">Loyalty</button>
+                            <button onclick="window.erpState.activeSettingsSection='security'; window.renderApp();" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.activeSettingsSection === 'security' ? 'border-violet-600 text-violet-600' : 'border-transparent'}">Security</button>
                         </div>
                     `;
                 }
@@ -105,7 +111,6 @@
                     subNav.innerHTML = `
                         <div class="flex items-center gap-2">
                             <button onclick="window.setPOSTab('pos')" id="tab-pos" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Retail Terminal</button>
-                            <button onclick="window.setPOSTab('history')" id="tab-history" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Sales History</button>
                             <button onclick="window.setPOSTab('dues')" id="tab-dues" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Pending Dues</button>
                             <button onclick="window.setPOSTab('tickets')" id="tab-tickets" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Saved Tickets</button>
                         </div>
@@ -134,6 +139,12 @@
 
             window.FB.collection('sales').onSnapshot((snap) => {
                 window.erpState.sales = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                if (window.erpState.sales.length) {
+                    const max = Math.max(2499, ...window.erpState.sales.map(x => x.counter || 0));
+                    window.erpState.counter = max;
+                } else {
+                    window.erpState.counter = 2499;
+                }
                 window.renderApp();
             });
 
@@ -192,6 +203,7 @@
                     window.erpState.whatsappTemplates = data.whatsappTemplates;
                     if (data.taxes) window.erpState.taxes = data.taxes;
                     if (data.discounts) window.erpState.discounts = data.discounts;
+                    if (data.loyalty) window.erpState.loyalty = data.loyalty;
 
                     window.renderApp();
                 }

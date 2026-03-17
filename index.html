@@ -8,7 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=28">
 </head>
 <body class="bg-slate-50 text-slate-900 font-['Plus_Jakarta_Sans'] antialiased">
     <div class="flex h-screen overflow-hidden">
@@ -26,7 +26,7 @@
                     </button>
                     <div>
                         <h2 class="text-xl font-black text-slate-900 tracking-tight uppercase">Control Center</h2>
-                        <p class="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Business Intelligence v2.0</p>
+                        <p class="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Business Intelligence ${window.APP_VERSION}</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-4">
@@ -75,6 +75,48 @@
                         </div>
                     </div>
  
+                    <!-- Financial Daily Progress (Ledger) -->
+                    <div id="financial-ledger" class="mb-10 bg-slate-900 rounded-[48px] p-10 shadow-2xl relative overflow-hidden">
+                         <div class="absolute -right-20 -top-20 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl"></div>
+                         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-10 relative z-10">
+                             <div class="flex-1">
+                                 <h3 class="text-xl font-black text-white tracking-tight uppercase mb-2">Daily Liquidity Ledger</h3>
+                                 <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Opening Balances + Real-time Inflow/Outflow</p>
+                             </div>
+                             
+                             <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 flex-[2]">
+                                 <!-- Cash Opening -->
+                                 <div class="bg-white/5 p-5 rounded-3xl border border-white/5 group hover:border-emerald-500/30 transition-all">
+                                     <p class="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-3">Opening Cash</p>
+                                     <div class="flex items-center gap-2">
+                                         <span class="text-white font-black text-lg">₹</span>
+                                         <input id="open_cash" type="number" onchange="window.saveOpeningBal()" placeholder="0" class="w-full bg-transparent border-none text-white font-black text-2xl outline-none focus:ring-0">
+                                     </div>
+                                 </div>
+                                 <!-- UPI Opening -->
+                                 <div class="bg-white/5 p-5 rounded-3xl border border-white/5 group hover:border-indigo-500/30 transition-all">
+                                     <p class="text-[8px] font-black text-indigo-400 uppercase tracking-widest mb-3">Opening UPI</p>
+                                     <div class="flex items-center gap-2">
+                                         <span class="text-white font-black text-lg">₹</span>
+                                         <input id="open_upi" type="number" onchange="window.saveOpeningBal()" placeholder="0" class="w-full bg-transparent border-none text-white font-black text-2xl outline-none focus:ring-0">
+                                     </div>
+                                 </div>
+                                 <!-- Net Cash -->
+                                 <div class="bg-emerald-500/10 p-5 rounded-3xl border border-emerald-500/20">
+                                     <p class="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-3">Net Cash Now</p>
+                                     <p id="net_cash" class="text-2xl font-black text-emerald-400 tracking-tight">₹0</p>
+                                     <p id="cash_delta" class="text-[8px] font-bold text-slate-500 mt-1 uppercase tracking-tighter">In: ₹0 | Out: ₹0</p>
+                                 </div>
+                                 <!-- Net UPI -->
+                                 <div class="bg-indigo-500/10 p-5 rounded-3xl border border-indigo-500/20">
+                                     <p class="text-[8px] font-black text-indigo-400 uppercase tracking-widest mb-3">Net UPI Now</p>
+                                     <p id="net_upi" class="text-2xl font-black text-indigo-400 tracking-tight">₹0</p>
+                                     <p id="upi_delta" class="text-[8px] font-bold text-slate-500 mt-1 uppercase tracking-tighter">In: ₹0 | Out: ₹0</p>
+                                 </div>
+                             </div>
+                         </div>
+                    </div>
+
                     <!-- Stats Grid -->
                     <div id="stats-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
                          <!-- Dynamically Injected -->
@@ -212,8 +254,9 @@
         </main>
     </div>
 
-    <script src="js/app.js"></script>
-    <script src="js/firebase.js"></script>
+    <script src="js/app.js?v=28"></script>
+    <script src="js/firebase.js?v=26"></script>
+    <script src="js/pos.js?v=28"></script>
     <script>
         window.toggleHistOps = function() {
             const ops = document.getElementById('hist-ops');
@@ -297,7 +340,58 @@
             const activeOrders = tailoringOrders.filter(o => o.status !== 'Delivered').length;
             const urgentOrders = tailoringOrders.filter(o => o.status !== 'Delivered' && o.deliveryDate && (new Date(o.deliveryDate) - now) < (48 * 60 * 60 * 1000) && (new Date(o.deliveryDate) - now) >= 0).length;
             const overdueOrders = tailoringOrders.filter(o => o.status !== 'Delivered' && o.deliveryDate && (new Date(o.deliveryDate) < today)).length;
-            
+            // --- LIQUIDITY CALCULATIONS ---
+            let cashIn = 0, upiIn = 0;
+            let cashOut = 0, upiOut = 0;
+
+            // Selling (POS)
+            sales.forEach(s => {
+                const b = s.paymentBreakdown || {};
+                cashIn += (b.cash || 0);
+                upiIn += (b.upi || 0);
+                // Backfill for old records
+                if (!s.paymentBreakdown) {
+                    if (s.paymentMode === 'Cash') cashIn += (s.advancePaid || s.total || 0);
+                    else if (s.paymentMode === 'UPI') upiIn += (s.advancePaid || s.total || 0);
+                }
+            });
+
+            // Tailoring (Advances & Settlements)
+            (window.erpState.orders || []).forEach(o => {
+                const d = o.createdAt?.toDate ? o.createdAt.toDate().getTime() : (o.orderDate ? new Date(o.orderDate).getTime() : 0);
+                if (d >= start && d <= end) {
+                    const b = o.advanceBreakdown || {};
+                    cashIn += (b.cash || 0);
+                    upiIn += (b.upi || 0);
+                }
+            });
+
+            // Expenses (Operation Burn)
+            expenses.forEach(e => {
+                const b = e.paymentBreakdown || {};
+                cashOut += (b.cash || 0);
+                upiOut += (b.upi || 0);
+                if (!e.paymentBreakdown) {
+                    if (e.paymentMethod === 'Cash') cashOut += (e.amount || 0);
+                    else if (e.paymentMethod === 'UPI') upiOut += (e.amount || 0);
+                }
+            });
+
+            const ledgerEl = document.getElementById('financial-ledger');
+            if (filter === 'today') {
+                const openCash = parseFloat(window.erpState.openingCash || 0);
+                const openUPI = parseFloat(window.erpState.openingUPI || 0);
+                
+                document.getElementById('open_cash').value = openCash;
+                document.getElementById('open_upi').value = openUPI;
+                
+                document.getElementById('net_cash').innerText = window.fmt(openCash + cashIn - cashOut);
+                document.getElementById('net_upi').innerText = window.fmt(openUPI + upiIn - upiOut);
+                
+                document.getElementById('cash_delta').innerText = `In: ₹${window.fmt(cashIn)} | Out: ₹${window.fmt(cashOut)}`;
+                document.getElementById('upi_delta').innerText = `In: ₹${window.fmt(upiIn)} | Out: ₹${window.fmt(upiOut)}`;
+            }
+
             const expTotal = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
             const lowStock = (window.erpState.items || []).filter(i => (i.stock || 0) < 5).length;
 
@@ -311,18 +405,40 @@
             const totalClients = (window.erpState.clients || []).length;
 
             stats.innerHTML = `
-                <!-- Block 1: Revenue Matrix -->
+                <!-- Block 1: Total Inflow -->
                 <div class="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm relative overflow-hidden group">
                     <div class="absolute -right-4 -top-4 w-20 h-20 bg-indigo-50 rounded-full group-hover:scale-150 transition-transform duration-700 opacity-50"></div>
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Total Revenue</p>
-                    <h3 class="text-4xl font-black text-slate-900 relative z-10 text-center">${window.fmt(revTotal)}</h3>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Total Inflow</p>
+                    <h3 class="text-4xl font-black text-slate-900 relative z-10 text-center">${window.fmt(cashIn + upiIn)}</h3>
                     <div class="flex items-center justify-center gap-2 mt-3 relative z-10">
                         <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                        <p class="text-[9px] font-bold text-slate-500 uppercase">Retail: ${window.fmt(revRetail)} | Tailor: ${window.fmt(revTailoring)}</p>
+                        <p class="text-[9px] font-bold text-slate-500 uppercase">Cash: ${window.fmt(cashIn)} | UPI: ${window.fmt(upiIn)}</p>
                     </div>
                 </div>
 
-                <!-- Block 2: Active Queue -->
+                <!-- Block 2: Total Outflow -->
+                <div class="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm relative overflow-hidden group">
+                    <div class="absolute -right-4 -top-4 w-20 h-20 bg-rose-50 rounded-full group-hover:scale-150 transition-transform duration-700 opacity-50"></div>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Total Outflow</p>
+                    <h3 class="text-4xl font-black text-rose-600 relative z-10 text-center">${window.fmt(cashOut + upiOut)}</h3>
+                    <div class="flex items-center justify-center gap-2 mt-3 relative z-10">
+                        <span class="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
+                        <p class="text-[9px] font-bold text-slate-500 uppercase">Cash: ${window.fmt(cashOut)} | UPI: ${window.fmt(upiOut)}</p>
+                    </div>
+                </div>
+
+                <!-- Block 3: Net Revenue -->
+                <div class="bg-slate-900 p-8 rounded-[48px] shadow-2xl relative overflow-hidden group">
+                    <div class="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
+                    <p class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Net Revenue</p>
+                    <h3 class="text-4xl font-black text-white relative z-10 text-center">${window.fmt(revTotal - expTotal)}</h3>
+                    <div class="flex items-center justify-center gap-2 mt-3 relative z-10">
+                        <span class="w-1.5 h-1.5 bg-violet-400 rounded-full"></span>
+                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Retail: ${window.fmt(revRetail)} | Tailor: ${window.fmt(revTailoring)}</p>
+                    </div>
+                </div>
+
+                <!-- Block 4: Active Queue -->
                 <div onclick="location.href='tailoring.html?tab=tracker'" class="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm relative overflow-hidden group cursor-pointer hover:border-violet-200 transition-all">
                     <div class="absolute -right-4 -top-4 w-20 h-20 bg-violet-50 rounded-full group-hover:scale-150 transition-transform duration-700 opacity-50"></div>
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Active Queue</p>
@@ -333,18 +449,18 @@
                     </div>
                 </div>
 
-                <!-- Block 3: Overdue Alerts -->
+                <!-- Block 5: Overdue Alerts -->
                 <div onclick="location.href='tailoring.html?tab=tracker'" class="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm relative overflow-hidden group cursor-pointer hover:border-rose-200 transition-all">
                     <div class="absolute -right-4 -top-4 w-20 h-20 bg-rose-50 rounded-full group-hover:scale-150 transition-transform duration-700 opacity-50"></div>
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Overdue Orders</p>
                     <h3 class="text-4xl font-black ${overdueOrders > 0 ? 'text-rose-600 animate-pulse' : 'text-slate-900'} relative z-10 text-center">${overdueOrders}</h3>
                     <div class="flex items-center justify-center gap-2 mt-3 relative z-10">
                         <span class="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
-                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Expired Deadlines</p>
+                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Expired</p>
                     </div>
                 </div>
 
-                <!-- Block 4: Urgent Orders -->
+                <!-- Block 6: Urgent Orders -->
                 <div onclick="location.href='tailoring.html?tab=tracker'" class="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm relative overflow-hidden group cursor-pointer hover:border-orange-200 transition-all">
                     <div class="absolute -right-4 -top-4 w-20 h-20 bg-orange-50 rounded-full group-hover:scale-150 transition-transform duration-700 opacity-50"></div>
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Urgent Orders</p>
@@ -355,7 +471,7 @@
                     </div>
                 </div>
 
-                <!-- Block 5: Ready for Pickup -->
+                <!-- Block 7: Ready for Pickup -->
                 <div onclick="location.href='tailoring.html?tab=tracker'" class="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm relative overflow-hidden group cursor-pointer hover:border-emerald-200 transition-all">
                     <div class="absolute -right-4 -top-4 w-20 h-20 bg-emerald-50 rounded-full group-hover:scale-150 transition-transform duration-700 opacity-50"></div>
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Ready Pick</p>
@@ -366,35 +482,13 @@
                     </div>
                 </div>
 
-                <!-- Block 6: Cash Receivables -->
-                <div class="bg-emerald-900 p-8 rounded-[48px] shadow-2xl relative overflow-hidden group">
+                <!-- Block 8: Balances Due -->
+                <div onclick="location.href='pos.html?tab=receipts'" class="bg-emerald-900 p-8 rounded-[48px] shadow-2xl relative overflow-hidden group cursor-pointer">
                     <div class="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
-                    <p class="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Receivables</p>
+                    <p class="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Balances Due</p>
                     <h3 class="text-4xl font-black text-white relative z-10 text-center">${window.fmt(totalDues)}</h3>
                     <div class="flex items-center justify-center gap-2 mt-3 relative z-10">
-                        <p class="text-[9px] font-bold text-emerald-300/60 uppercase">Market Dues Stream</p>
-                    </div>
-                </div>
-
-                <!-- Block 7: Operation Burn -->
-                <div class="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm relative overflow-hidden group">
-                    <div class="absolute -right-4 -top-4 w-20 h-20 bg-rose-50 rounded-full group-hover:scale-150 transition-transform duration-700 opacity-50"></div>
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Operation Burn</p>
-                    <h3 class="text-4xl font-black text-rose-600 relative z-10 text-center">${window.fmt(expTotal)}</h3>
-                    <div class="flex items-center justify-center gap-2 mt-3 relative z-10">
-                        <span class="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
-                        <p class="text-[9px] font-bold text-slate-400 uppercase">Business Outflow</p>
-                    </div>
-                </div>
-
-                <!-- Block 8: Net Yield -->
-                <div class="bg-slate-900 p-8 rounded-[48px] shadow-2xl relative overflow-hidden group">
-                    <div class="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
-                    <p class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Net Yield</p>
-                    <h3 class="text-4xl font-black text-white relative z-10 text-center">${window.fmt(revTotal - expTotal)}</h3>
-                    <div class="flex items-center justify-center gap-2 mt-3 relative z-10">
-                        <span class="w-1.5 h-1.5 bg-violet-400 rounded-full"></span>
-                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Profit Vector</p>
+                        <p class="text-[9px] font-bold text-emerald-300/60 uppercase">Future Liquidities</p>
                     </div>
                 </div>
             `;
@@ -493,6 +587,12 @@
         window.addEventListener('firebase-ready', () => {
             window.FB.collection('sales').onSnapshot(snap => {
                 window.erpState.sales = snap.docs.map(doc => ({id: doc.id, ...doc.data()}));
+                if (window.erpState.sales.length) {
+                    const max = Math.max(2499, ...window.erpState.sales.map(x => x.counter || 0));
+                    window.erpState.counter = max;
+                } else {
+                    window.erpState.counter = 2499;
+                }
                 window.renderApp();
                 updateChart();
             });
@@ -543,11 +643,41 @@
                     window.erpState.whatsappTemplates = data.whatsappTemplates;
                     if (data.taxes) window.erpState.taxes = data.taxes;
                     if (data.discounts) window.erpState.discounts = data.discounts;
+                    if (data.loyalty) {
+                        window.erpState.loyalty = data.loyalty;
+                        // Update live constants if exist
+                        if (window.LOYALTY && data.loyalty.tiers) {
+                            if (data.loyalty.tiers.basic) window.LOYALTY.TIERS.basic.pct = data.loyalty.tiers.basic.pct;
+                            if (data.loyalty.tiers.silver) window.LOYALTY.TIERS.silver.pct = data.loyalty.tiers.silver.pct;
+                            if (data.loyalty.tiers.gold) window.LOYALTY.TIERS.gold.pct = data.loyalty.tiers.gold.pct;
+                            if (data.loyalty.tiers.premium) window.LOYALTY.TIERS.premium.pct = data.loyalty.tiers.premium.pct;
+                        }
+                    }
 
                     window.renderApp();
                 }
             });
+
+            // Daily Ledger Logic
+            const date = new Date().toISOString().split('T')[0];
+            window.FB.collection('daily_ledger').doc(date).onSnapshot(doc => {
+                if(doc.exists) {
+                    window.erpState.openingCash = doc.data().openCash || 0;
+                    window.erpState.openingUPI = doc.data().openUPI || 0;
+                } else {
+                    window.erpState.openingCash = 0;
+                    window.erpState.openingUPI = 0;
+                }
+                window.renderApp();
+            });
         });
+
+        window.saveOpeningBal = async () => {
+            const date = new Date().toISOString().split('T')[0];
+            const openCash = parseFloat(document.getElementById('open_cash').value) || 0;
+            const openUPI = parseFloat(document.getElementById('open_upi').value) || 0;
+            await window.FB.collection('daily_ledger').doc(date).set({ openCash, openUPI }, { merge: true });
+        };
 
         const ctx = document.getElementById('revenueChart').getContext('2d');
         const revenueChart = new Chart(ctx, {
@@ -810,20 +940,24 @@
 
         window.shareWhatsApp = (billNo, name, phone, total, balance = 0) => {
             const sale = window.erpState.sales.find(s => s.billNo === billNo);
+            const loyalty = sale?.loyaltySnapshot || {};
             const data = {
                 customerName: name || 'Customer',
                 billNo: billNo,
                 totalCost: (total || 0).toLocaleString('en-IN'),
                 advancePaid: (total - balance).toLocaleString('en-IN'),
                 balance: (balance || 0).toLocaleString('en-IN'),
-                deliveryDate: sale ? new Date(sale.date).toLocaleDateString() : 'N/A'
+                deliveryDate: sale ? new Date(sale.date).toLocaleDateString() : 'N/A',
+                pointsEarned: loyalty.earned || 0,
+                totalPoints: loyalty.total || 0,
+                tier: (loyalty.tier || 'Basic').toUpperCase()
             };
 
             const templates = window.erpState.whatsappTemplates || {};
             let tpl = balance > 0 ? (templates.ready || templates.booking) : templates.delivered;
             
             if (!tpl) {
-                tpl = `Hi {customerName},\n\nThank you for shopping at *Lavish Lavender*!\n\nYour bill *{billNo}* for *₹{totalCost}* is confirmed. {balance != "0" ? 'Remaining: *₹{balance}*' : ''}\n\nView details: https://www.lavishlavender.in/receipt/?bill={billNo}`;
+                tpl = `Hi {customerName},\n\nThank you for shopping at *Lavish Lavender*!\n\nYour bill *{billNo}* for *₹{totalCost}* is confirmed. {balance != "0" ? 'Remaining: *₹{balance}*' : ''}\n\n✨ *Loyalty Info*\nTier: {tier}\nPoints Earned: {pointsEarned}\nTotal Points: {totalPoints}\n\nView details: https://www.lavishlavender.in/receipt/?bill={billNo}`;
             }
 
             const msg = encodeURIComponent(fillTemplate(tpl, data));

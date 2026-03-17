@@ -1,4 +1,13 @@
 // Shared Application State and Logic
+window.APP_VERSION = "v1.0.29";
+
+// Force Unregister old Service Workers to fix "not loading new version" issue
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+        for (let registration of registrations) registration.unregister();
+    });
+}
+
 window.erpState = {
     counter: 2499, tab: 'pos', role: null,
     items: [], sales: [], orders: [], clients: [], suppliers: [], cart: [], tickets: [],
@@ -18,21 +27,24 @@ window.erpState = {
     isSidebarOpen: false, isItemsOpen: false, mobileCartOpen: false,
     search: '', user: null, categoryFilter: '',
     expenseSearch: '', ticketSearch: '',
+    historySearch: '', historySort: 'desc', historyFilter: 'all',
     taxes: [{ label: 'No Tax', val: 0 }, { label: '5%', val: 5 }, { label: '12%', val: 12 }, { label: '18%', val: 18 }],
     discounts: [{ label: 'Wedding Special', val: 500, type: 'cash' }, { label: '10% Off', val: 10, type: 'pct' }],
     activeTax: 0, taxNo: 'GSTIN123456789',
     printerWidth: '58',
+    loyalty: { enabled: true, pointsPer100: 5, eliteThreshold: 10000, goldThreshold: 50000 },
     activeSettingsSection: 'menu',
     whatsappTemplates: {
-        booking: '*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nYour order has been successfully booked.\n\n*Bill No:* {billNo}\n*Total Amount:* Rs.{totalCost}\n*Advance Received:* Rs.{advancePaid}\n*Balance:* Rs.{balance}\n\n*Expected Delivery:* {deliveryDate}\n\nPlease keep this bill number for reference. We appreciate your trust in Lavish Lavender. 🙏',
-        ready: '*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nGood news! Your order is ready for pickup. ✅\n\n*Bill No:* {billNo}\n*Balance Payable:* Rs.{balance}\n\nPlease visit our boutique to collect your order.\n\n*Location:* 📍\nhttps://share.google/iR4s2zrLMHoiTTZ66\n\nWe look forward to seeing you.',
-        delivered: '*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nYour order has been successfully delivered. ✅\n\n*Your Receipt:* 📄\nhttps://www.lavishlavender.in/receipt/?bill={billNo}\n\nThank you for choosing Lavish Lavender. 🙏\n\nIf you were happy with our service, please leave us a 5-star review: ⭐\nhttps://g.page/r/CSDbXBIvElTEEBM/review\n\nVisit again soon!',
-        reminder: 'Hi {customerName}, 🌸 This is a friendly reminder from *Lavish Lavender* regarding your bill *{billNo}*.\n\nThere is a pending balance of *{balance}*. You can view your receipt details here: https://www.lavishlavender.in/receipt/?bill={billNo}\n\nWe appreciate your support! 🙏\n\nVisit again soon! 🌸'
+        booking: '*Lavish Lavender Bridal Boutique*\n\nHello *{customerName}*,\n\nYour order has been successfully booked.\n\n*Bill No:* {billNo}\n*Total Amount:* Rs.{totalCost}\n*Advance Received:* Rs.{advancePaid}\n*Balance:* Rs.{balance}\n\n*Expected Delivery:* {deliveryDate}\n\nPlease keep this bill number for reference. We appreciate your trust in Lavish Lavender.',
+        ready: '*Lavish Lavender Bridal Boutique*\n\nHello *{customerName}*,\n\nGood news! Your order is ready for pickup.\n\n*Bill No:* {billNo}\n*Balance Payable:* Rs.{balance}\n\nPlease visit our boutique to collect your order.\n\n*Location:*\nhttps://share.google/iR4s2zrLMHoiTTZ66\n\nWe look forward to seeing you.',
+        delivered: '*Lavish Lavender Bridal Boutique*\n\nHello *{customerName}*,\n\nYour order has been successfully delivered.\n\n*Your Receipt:*\nhttps://www.lavishlavender.in/receipt/?bill={billNo}\n\nThank you for choosing Lavish Lavender. \n\nIf you were happy with our service, please leave us a 5-star review:\nhttps://g.page/r/CSDbXBIvElTEEBM/review\n\nVisit again soon!',
+        reminder: 'Hi {customerName}, This is a friendly reminder from *Lavish Lavender* regarding your bill *{billNo}*.\n\nThere is a pending balance of *{balance}*. You can view your receipt details here: https://www.lavishlavender.in/receipt/?bill={billNo}\n\nWe appreciate your support!\n\nVisit again soon!'
     },
     menuItems: [
         { id: 'dashboard', icon: 'LayoutDashboard', label: 'Dashboard', url: 'index.html' },
         { id: 'pos', icon: 'HandCoins', label: 'Retail POS', url: 'pos.html' },
         { id: 'tailoring', icon: 'Scissors', label: 'Tailoring', url: 'tailoring.html' },
+        { id: 'receipts', icon: 'Receipt', label: 'Receipts Ledger', url: 'pos.html?tab=receipts' },
         { id: 'expenses', icon: 'Wallet', label: 'Expense Tracker', url: 'expenses.html' },
         { id: 'inventory', icon: 'Package', label: 'Inventory', url: 'inventory.html' },
         { id: 'clients', icon: 'Users', label: 'Clients', url: 'pos.html?tab=clients' },
@@ -40,7 +52,8 @@ window.erpState = {
         { id: 'settings', icon: 'Settings', label: 'Master Settings', url: 'pos.html?tab=settings' }
     ],
     isOnline: navigator.onLine,
-    pendingSyncCount: 0
+    pendingSyncCount: 0,
+    passwords: { staff: 'Lavish1234', owner: 'Swali4783' }
 };
 
 // --- AUTH SYSTEM ---
@@ -70,7 +83,7 @@ window.showLoginModal = () => {
             </div>
 
             <div style="margin-top: 40px; padding-top: 32px; border-top: 1px solid #f1f5f9;">
-                <p style="font-size: 9px; font-weight: 900; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.2em; margin: 0;">Lavish Lavender OS v2.0</p>
+                <p style="font-size: 9px; font-weight: 900; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.2em; margin: 0;">Lavish Lavender OS ${window.APP_VERSION}</p>
             </div>
         </div>
     `;
@@ -82,12 +95,14 @@ window.showLoginModal = () => {
     
     const tryLogin = () => {
         const val = passInput.value;
-        if (val === 'Lavish1234') {
+        const creds = window.erpState.passwords || { staff: 'Lavish1234', owner: 'Swali4783' };
+        
+        if (val === creds.staff) {
             sessionStorage.setItem('lavish_user_role', 'Staff');
             window.erpState.role = 'Staff';
             overlay.remove();
             if (window.renderApp) window.renderApp();
-        } else if (val === 'Swali4783') {
+        } else if (val === creds.owner) {
             sessionStorage.setItem('lavish_user_role', 'Owner');
             window.erpState.role = 'Owner';
             overlay.remove();
@@ -145,13 +160,20 @@ window.loadLocalCache = () => {
                 window.erpState.whatsappTemplates = parsed.settings.whatsappTemplates || window.erpState.whatsappTemplates;
                 if (parsed.settings.taxes) window.erpState.taxes = parsed.settings.taxes;
                 if (parsed.settings.discounts) window.erpState.discounts = parsed.settings.discounts;
+                if (parsed.settings.passwords) window.erpState.passwords = parsed.settings.passwords;
             }
         }
     } catch(e) {}
 };
 window.saveLocalCache = () => {
     try {
-        const cacheObj = { settings: { printerWidth: window.erpState.printerWidth, whatsappTemplates: window.erpState.whatsappTemplates, taxes: window.erpState.taxes, discounts: window.erpState.discounts } };
+        const cacheObj = { settings: { 
+            printerWidth: window.erpState.printerWidth, 
+            whatsappTemplates: window.erpState.whatsappTemplates, 
+            taxes: window.erpState.taxes, 
+            discounts: window.erpState.discounts,
+            passwords: window.erpState.passwords 
+        } };
         ['items', 'sales', 'orders', 'clients', 'suppliers', 'expenses', 'expenseCategories', 'tickets'].forEach(k => {
             cacheObj[k] = window.erpState[k];
         });
@@ -205,7 +227,10 @@ window.renderSidebar = (activePage) => {
                 </div>
                 <div>
                     <h1 class="font-black text-white text-lg tracking-tighter uppercase">Lavish Lavender</h1>
-                    <p class="text-[9px] text-slate-500 font-black uppercase tracking-widest mt-1">Management Suite</p>
+                    <div class="flex items-center gap-2 mt-1">
+                        <p class="text-[9px] text-slate-500 font-black uppercase tracking-widest leading-none">Management Suite</p>
+                        <span class="text-[8px] font-black text-slate-600">${window.APP_VERSION}</span>
+                    </div>
                 </div>
             </div>
 
