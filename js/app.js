@@ -1,6 +1,6 @@
 // Shared Application State and Logic
 window.erpState = {
-    counter: 2499, tab: 'pos', role: 'staff',
+    counter: 2499, tab: 'pos', role: null,
     items: [], sales: [], orders: [], clients: [], suppliers: [], cart: [], tickets: [],
     expenses: [],
     expenseCategories: [
@@ -50,9 +50,9 @@ window.showLoginModal = () => {
 
     const overlay = document.createElement('div');
     overlay.id = 'login-modal-overlay';
-    overlay.className = 'login-overlay';
+    overlay.className = 'fixed inset-0 bg-slate-900/95 z-[99999] flex items-center justify-center p-6 backdrop-blur-xl';
     overlay.innerHTML = `
-        <div class="login-card animate-pop-in">
+        <div class="bg-white w-full max-w-[380px] rounded-[48px] p-10 shadow-2xl animate-pop-in text-center relative">
             <div style="margin-bottom: 40px;">
                 <div style="width: 64px; height: 64px; background: #4f46e5; border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
                     <i data-lucide="flower-2" style="color: white; width: 32px; height: 32px;"></i>
@@ -63,9 +63,10 @@ window.showLoginModal = () => {
 
             <div style="text-align: left;">
                 <label style="font-size: 10px; font-weight: 900; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; margin-left: 4px; display: block; margin-bottom: 8px;">Access Key</label>
-                <input id="auth_pass" type="password" placeholder="••••••••" class="login-input">
+                <input id="auth_pass" type="password" placeholder="••••••••" 
+                    style="width: 100%; padding: 16px; background: #f8fafc; border: 2px solid #f1f5f9; border-radius: 20px; font-weight: 900; font-size: 18px; text-align: center; letter-spacing: 4px; outline: none; margin-bottom: 24px;">
                 
-                <button id="auth_btn" class="login-btn">Unlock Terminal</button>
+                <button id="auth_btn" style="width: 100%; padding: 18px; background: #4f46e5; color: white; border: none; border-radius: 20px; font-weight: 900; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; cursor: pointer;">Unlock Terminal</button>
             </div>
 
             <div style="margin-top: 40px; padding-top: 32px; border-top: 1px solid #f1f5f9;">
