@@ -31,16 +31,103 @@ window.erpState = {
     },
     menuItems: [
         { id: 'dashboard', icon: 'LayoutDashboard', label: 'Dashboard', url: 'index.html' },
-        { id: 'pos', icon: 'HandCoins', label: 'Retail POS', url: 'POS.html' },
+        { id: 'pos', icon: 'HandCoins', label: 'Retail POS', url: 'pos.html' },
         { id: 'tailoring', icon: 'Scissors', label: 'Tailoring', url: 'tailoring.html' },
         { id: 'expenses', icon: 'Wallet', label: 'Expense Tracker', url: 'expenses.html' },
         { id: 'inventory', icon: 'Package', label: 'Inventory', url: 'inventory.html' },
-        { id: 'clients', icon: 'Users', label: 'Clients', url: 'POS.html?tab=clients' },
-        { id: 'reports', icon: 'FileSpreadsheet', label: 'Master Reports', url: 'POS.html?tab=reports' },
-        { id: 'settings', icon: 'Settings', label: 'Master Settings', url: 'POS.html?tab=settings' }
+        { id: 'clients', icon: 'Users', label: 'Clients', url: 'pos.html?tab=clients' },
+        { id: 'reports', icon: 'FileSpreadsheet', label: 'Master Reports', url: 'pos.html?tab=reports' },
+        { id: 'settings', icon: 'Settings', label: 'Master Settings', url: 'pos.html?tab=settings' }
     ],
     isOnline: navigator.onLine,
     pendingSyncCount: 0
+};
+
+// --- AUTH SYSTEM ---
+window.showLoginModal = () => {
+    const existing = document.getElementById('login-modal-overlay');
+    if (existing) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'login-modal-overlay';
+    overlay.className = 'login-overlay';
+    overlay.innerHTML = `
+        <div class="login-card animate-pop-in">
+            <div style="margin-bottom: 40px;">
+                <div style="width: 64px; height: 64px; background: #4f46e5; border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
+                    <i data-lucide="flower-2" style="color: white; width: 32px; height: 32px;"></i>
+                </div>
+                <h2 style="font-size: 24px; font-weight: 900; color: #1e293b; text-transform: uppercase; letter-spacing: -0.025em; margin: 0;">System Locked</h2>
+                <p style="color: #94a3b8; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; margin-top: 8px;">Authentication Required</p>
+            </div>
+
+            <div style="text-align: left;">
+                <label style="font-size: 10px; font-weight: 900; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; margin-left: 4px; display: block; margin-bottom: 8px;">Access Key</label>
+                <input id="auth_pass" type="password" placeholder="••••••••" class="login-input">
+                
+                <button id="auth_btn" class="login-btn">Unlock Terminal</button>
+            </div>
+
+            <div style="margin-top: 40px; padding-top: 32px; border-top: 1px solid #f1f5f9;">
+                <p style="font-size: 9px; font-weight: 900; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.2em; margin: 0;">Lavish Lavender OS v2.0</p>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    if (window.lucide) lucide.createIcons();
+
+    const passInput = document.getElementById('auth_pass');
+    const authBtn = document.getElementById('auth_btn');
+    
+    const tryLogin = () => {
+        const val = passInput.value;
+        if (val === 'Lavish1234') {
+            sessionStorage.setItem('lavish_user_role', 'Staff');
+            window.erpState.role = 'Staff';
+            overlay.remove();
+            if (window.renderApp) window.renderApp();
+        } else if (val === 'Swali4783') {
+            sessionStorage.setItem('lavish_user_role', 'Owner');
+            window.erpState.role = 'Owner';
+            overlay.remove();
+            if (window.renderApp) window.renderApp();
+        } else {
+            passInput.style.borderColor = '#f43f5e';
+            setTimeout(() => passInput.style.borderColor = '#f1f5f9', 1000);
+            passInput.value = '';
+            alert("Security Breach: Invalid Password");
+        }
+    };
+
+    authBtn.onclick = tryLogin;
+    passInput.onkeydown = (e) => { if (e.key === 'Enter') tryLogin(); };
+    passInput.focus();
+};
+
+window.checkAuth = () => {
+    const role = sessionStorage.getItem('lavish_user_role');
+    if (!role) {
+        window.showLoginModal();
+    } else {
+        window.erpState.role = role;
+    }
+};
+window.checkAuth();
+
+window.logout = () => {
+    sessionStorage.removeItem('lavish_user_role');
+    location.reload();
+};
+
+window.switchRole = (target) => {
+    if (window.erpState.role === target) return;
+    if (target === 'Owner') {
+        window.showLoginModal();
+    } else {
+        sessionStorage.setItem('lavish_user_role', 'Staff');
+        window.erpState.role = 'Staff';
+        if (window.renderApp) window.renderApp();
+    }
 };
 
 // Offline First Cache System
@@ -126,8 +213,30 @@ window.renderSidebar = (activePage) => {
                 ${window.erpState.menuItems.map(item => window.navBtn(item)).join('')}
             </nav>
 
-            <div class="pt-6 border-t border-white/5">
-                <p class="text-[8px] font-black text-slate-600 uppercase tracking-widest text-center">Syncing Live with Cloud</p>
+            <!-- User Auth & Role Switcher -->
+            <div class="mt-6 pt-6 border-t border-white/5">
+                <div class="flex items-center justify-between px-3 py-4 bg-white/5 rounded-2xl border border-white/5 mb-4 hover:border-indigo-500/20 transition-all">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                            <i data-lucide="${window.erpState.role === 'Owner' ? 'Crown' : 'User'}" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Access Level</p>
+                            <p class="text-xs font-black text-white uppercase">${window.erpState.role || 'Guest'}</p>
+                        </div>
+                    </div>
+                    <button onclick="window.logout()" class="p-2 text-slate-600 hover:text-rose-400 transition-colors" title="Logout">
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <!-- Role Toggle -->
+                <div class="flex bg-white/5 rounded-xl p-1 gap-1">
+                    <button onclick="window.switchRole('Staff')" class="flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${window.erpState.role === 'Staff' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}">Staff</button>
+                    <button onclick="window.switchRole('Owner')" class="flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${window.erpState.role === 'Owner' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}">Owner</button>
+                </div>
+
+                <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.2em] text-center mt-6">Syncing Live with Cloud</p>
             </div>
         </div>
     `;
