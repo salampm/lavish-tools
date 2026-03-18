@@ -1,5 +1,5 @@
 // Shared Application State and Logic
-window.APP_VERSION = "v2.0.01";
+window.APP_VERSION = "v2.1.0";
 
 // Force Unregister old Service Workers to fix "not loading new version" issue
 if ('serviceWorker' in navigator) {
@@ -7,6 +7,50 @@ if ('serviceWorker' in navigator) {
         for (let registration of registrations) registration.unregister();
     });
 }
+
+// Local Cache Helpers
+window.saveLocalState = () => {
+    try {
+        localStorage.setItem('erp_cache', JSON.stringify({
+            items: window.erpState.items,
+            clients: window.erpState.clients,
+            orders: window.erpState.orders,
+            sales: window.erpState.sales,
+            expenses: window.erpState.expenses,
+            tickets: window.erpState.tickets,
+            settings: {
+                printerWidth: window.erpState.printerWidth,
+                whatsappTemplates: window.erpState.whatsappTemplates,
+                taxes: window.erpState.taxes,
+                discounts: window.erpState.discounts,
+                passwords: window.erpState.passwords,
+                staff: window.erpState.staff || [],
+                printerConfig: window.erpState.printerConfig
+            },
+            timestamp: Date.now()
+        }));
+    } catch (e) { console.warn("Cache save failed", e); }
+};
+
+window.loadLocalState = () => {
+    const cache = localStorage.getItem('erp_cache');
+    if (cache) {
+        try {
+            const data = JSON.parse(cache);
+            if (data.items) window.erpState.items = data.items;
+            if (data.clients) window.erpState.clients = data.clients;
+            if (data.orders) window.erpState.orders = data.orders;
+            if (data.sales) window.erpState.sales = data.sales;
+            if (data.expenses) window.erpState.expenses = data.expenses;
+            if (data.tickets) window.erpState.tickets = data.tickets;
+            if (data.settings) {
+                Object.assign(window.erpState, data.settings);
+            }
+            return true;
+        } catch (e) { console.error("Cache load failed", e); }
+    }
+    return false;
+};
 
 window.erpState = {
     counter: 2499, tab: 'pos', role: null,
@@ -36,21 +80,21 @@ window.erpState = {
     loyalty: { enabled: true, pointsPer100: 5, eliteThreshold: 10000, goldThreshold: 50000 },
     activeSettingsSection: 'menu',
     whatsappTemplates: {
-        booking: '*Lavish Lavender Bridal Boutique*\n\nHello *{customerName}*,\n\nYour order has been successfully booked.\n\n*Bill No:* {billNo}\n*Total Amount:* Rs.{totalCost}\n*Advance Received:* Rs.{advancePaid}\n*Balance:* Rs.{balance}\n\n*Expected Delivery:* {deliveryDate}\n\n*Loyalty Status:*\nPoints: {points}\nTier: {tier}\n\nWe appreciate your trust in Lavish Lavender.\n\nVisit again soon!',
-        ready: '*Lavish Lavender Bridal Boutique*\n\nHello *{customerName}*,\n\nGood news! Your order is ready for pickup.\n\n*Bill No:* {billNo}\n*Balance Payable:* Rs.{balance}\n\n*Loyalty Status:*\nPoints: {points}\nTier: {tier}\n\n*Location:*\nhttps://share.google/iR4s2zrLMHoiTTZ66\n\nWe look forward to seeing you.',
-        delivered: '*Lavish Lavender Bridal Boutique*\n\nHello *{customerName}*,\n\nYour order has been successfully delivered.\n\n*Your Receipt:*\nhttps://www.lavishlavender.in/receipt/?bill={billNo}\n\n*Loyalty Status:*\nPoints: {points}\nTier: {tier}\n\nThank you for choosing Lavish Lavender. \n\nIf you were happy with our service, please leave us a 5-star review:\nhttps://g.page/r/CSDbXBIvElTEEBM/review\n\nVisit again soon!',
-        reminder: 'Hi {customerName}, This is a friendly reminder from *Lavish Lavender* regarding your bill *{billNo}*.\n\nThere is a pending balance of *{balance}*. \n\n*Loyalty Status:*\nPoints: {points}\nTier: {tier}\n\nYou can view your receipt details here: https://www.lavishlavender.in/receipt/?bill={billNo}\n\nWe appreciate your support!\n\nVisit again soon!'
+        booking: '*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nYour order has been successfully booked.\n\n*Bill No:* {billNo}\n*Amount:* Rs.{totalCost}\n*Advance:* Rs.{advancePaid}\n*Balance:* Rs.{balance}\n\n*Pickup Date:* {deliveryDate}\n\n✨ *Loyalty Status*\n{pointsEarned} PT Erned | {totalPoints} Total PT | {tier} Tier\n\nThank you for choosing Lavish Lavender. 🙏',
+        ready: '*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nGood news! Your order is ready for pickup. ✅\n\n*Bill No:* {billNo}\n*Balance Payable:* Rs.{balance}\n\n📍 *Location:*\nhttps://share.google/iR4s2zrLMHoiTTZ66\n\n✨ *Loyalty Status*\n{pointsEarned} PT Erned | {totalPoints} Total PT | {tier} Tier\n\nSee you soon! 🙏',
+        delivered: '*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nYour order has been successfully delivered. ✅\n\n*Receipt:* 📄\nhttps://www.lavishlavender.in/receipt/?bill={billNo}\n\n✨ *Loyalty Status*\n{pointsEarned} PT Erned | {totalPoints} Total PT | {tier} Tier\n\nThank you! 🙏',
+        reminder: 'Hi {customerName}, 🌸 Friendly reminder from *Lavish Lavender* for bill *{billNo}*.\n\nPending: *Rs.{balance}*.\n\n✨ *Loyalty Status*\n{totalPoints} Total PT | {tier} Tier\n\nVisit again! 🙏'
     },
     menuItems: [
-        { id: 'dashboard', icon: 'LayoutDashboard', label: 'Dashboard', url: 'index.html' },
+        { id: 'dashboard', icon: 'LayoutDashboard', label: 'Dashboard', url: 'index.html', roles: ['Owner'] },
         { id: 'pos', icon: 'HandCoins', label: 'Retail POS', url: 'pos.html' },
         { id: 'tailoring', icon: 'Scissors', label: 'Tailoring', url: 'tailoring.html' },
         { id: 'receipts', icon: 'Receipt', label: 'Receipts Ledger', url: 'pos.html?tab=receipts' },
         { id: 'expenses', icon: 'Wallet', label: 'Expense Tracker', url: 'expenses.html' },
         { id: 'inventory', icon: 'Package', label: 'Inventory', url: 'inventory.html' },
         { id: 'clients', icon: 'Users', label: 'Clients', url: 'pos.html?tab=clients' },
-        { id: 'reports', icon: 'FileSpreadsheet', label: 'Master Reports', url: 'pos.html?tab=reports' },
-        { id: 'settings', icon: 'Settings', label: 'Master Settings', url: 'pos.html?tab=settings' }
+        { id: 'reports', icon: 'FileSpreadsheet', label: 'Master Reports', url: 'pos.html?tab=reports', roles: ['Owner'] },
+        { id: 'settings', icon: 'Settings', label: 'Master Settings', url: 'pos.html?tab=settings', roles: ['Owner'] }
     ],
     isOnline: navigator.onLine,
     pendingSyncCount: 0,
@@ -234,7 +278,9 @@ window.renderSidebar = (activePage) => {
 
             <!-- Navigation -->
             <nav id="sidebar-nav" class="space-y-2 flex-1 scrollbar-hide overflow-y-auto">
-                ${window.erpState.menuItems.map(item => window.navBtn(item)).join('')}
+                ${window.erpState.menuItems
+                    .filter(item => !item.roles || item.roles.includes(window.erpState.role))
+                    .map(item => window.navBtn(item)).join('')}
             </nav>
 
             <!-- User Auth & Role Switcher -->

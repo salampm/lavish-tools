@@ -198,8 +198,8 @@
                     </button>
                 </div>
             </div>
-            <div id="tracker-list" class="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2">
-                ${active.map(o => renderOrderCard(o)).join('') || `<p class="text-center text-slate-300 italic py-20">No active orders</p>`}
+            <div id="tracker-list" class="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 custom-scrollbar pr-2 pb-10">
+                ${active.map(o => renderOrderCard(o)).join('') || `<div class="col-span-full py-40 text-center text-slate-300 italic flex flex-col items-center justify-center opacity-40"><i data-lucide="scissors" class="w-16 h-16 mb-4"></i> No active orders found</div>`}
             </div>
         </div>
         `;
@@ -215,37 +215,56 @@
             'Delivered': 'bg-slate-900 text-white'
         };
 
+        const isOverdue = o.deliveryDate && new Date(o.deliveryDate) < new Date() && o.status !== 'Delivered';
+
         return `
-        <div id="card-${o.id}" onclick="window.openOrderDetails('${o.id}')" class="bg-white rounded-[24px] border border-slate-100 shadow-sm p-6 hover:shadow-xl hover:shadow-slate-200/50 transition-all cursor-pointer relative group">
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-3 mb-1">
-                        <span class="text-[10px] font-black text-violet-500 font-mono tracking-tighter uppercase">${o.billNo}</span>
-                        <h3 class="font-black text-slate-800 text-base truncate">${o.customerName}</h3>
+        <div id="card-${o.id}" onclick="window.openOrderDetails('${o.id}')" class="bg-white rounded-[40px] border border-slate-100 shadow-sm p-8 hover:shadow-2xl hover:shadow-violet-500/10 hover:border-violet-200 transition-all cursor-pointer relative group flex flex-col h-full overflow-hidden">
+            <div class="absolute -right-6 -top-6 w-24 h-24 bg-slate-50 rounded-full group-hover:bg-violet-50 transition-colors duration-500"></div>
+            
+            <div class="flex justify-between items-start mb-6 relative z-10">
+                <div class="min-w-0">
+                    <span class="text-[10px] font-black text-violet-500 font-mono tracking-tighter uppercase mb-2 block leading-none">№ ${o.billNo}</span>
+                    <h3 class="font-black text-slate-900 text-lg uppercase tracking-tight leading-tight line-clamp-1">${o.customerName}</h3>
+                    <p class="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">${o.phone}</p>
+                </div>
+                <div class="flex-shrink-0">
+                    <span class="px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest ${statusColors[o.status] || statusColors['Pending']} shadow-sm">
+                        ${o.status.replace('Order ', '')}
+                    </span>
+                </div>
+            </div>
+
+            <div class="space-y-4 mb-8 pt-6 border-t border-slate-50 relative z-10">
+                <div class="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
+                    <div class="space-y-1">
+                        <p class="text-slate-400">Due Date</p>
+                        <p class="${isOverdue ? 'text-rose-500' : 'text-slate-800'} flex items-center gap-1.5"><i data-lucide="clock" class="w-3.5 h-3.5"></i> ${window.fmtDate(o.deliveryDate)}</p>
                     </div>
-                    <div class="flex items-center gap-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        <span class="flex items-center gap-1.5"><i data-lucide="package" class="w-3 h-3"></i> Placed: ${window.fmtDate(o.orderDate || o.timestamp)}</span>
-                        <span class="flex items-center gap-1.5"><i data-lucide="calendar" class="w-3 h-3"></i> Due: ${window.fmtDate(o.deliveryDate)}</span>
-                        <span class="flex items-center gap-1.5"><i data-lucide="phone" class="w-3 h-3"></i> ${o.phone}</span>
+                    <div class="text-right space-y-1">
+                        <p class="text-slate-400">Balance</p>
+                        <p class="${bal > 0 ? 'text-rose-600' : 'text-emerald-600'}">₹${bal.toLocaleString()}</p>
                     </div>
                 </div>
-                <div class="flex items-center gap-6">
-                    <div class="text-right">
-                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Financial State</p>
-                        ${bal > 0 ? `<p class="font-black text-rose-500 text-sm">₹${bal} Due</p>` : `<p class="font-black text-emerald-600 text-sm">Balanced</p>`}
-                    </div>
-                    <select onclick="event.stopPropagation()" onchange="window.updateOrderStatus('${o.id}', this.value)" class="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none ${statusColors[o.status] || statusColors['Pending']}">
+            </div>
+
+            <div class="mt-auto relative z-10">
+                <div class="flex flex-wrap gap-2 mb-6">
+                    ${(o.items || []).slice(0, 3).map(it => `
+                        <span class="px-3 py-1 bg-slate-50 rounded-lg text-[9px] font-bold text-slate-500 uppercase tracking-tighter border border-slate-100">${it.name}</span>
+                    `).join('')}
+                    ${(o.items || []).length > 3 ? `<span class="px-2 py-1 text-[9px] font-black text-slate-300 uppercase tracking-widest">+${o.items.length - 3}</span>` : ''}
+                </div>
+
+                <div class="flex gap-2">
+                    <select onclick="event.stopPropagation()" onchange="window.updateOrderStatus('${o.id}', this.value)" class="flex-1 px-4 py-3.5 rounded-2xl text-[9px] font-black uppercase tracking-widest outline-none bg-slate-900 text-white shadow-xl hover:bg-violet-700 transition-colors cursor-pointer border-none appearance-none text-center">
+                        <option value="Order Confirmed" ${o.status === 'Order Confirmed' ? 'selected' : ''}>Modify Flow</option>
                         <option value="Order Confirmed" ${o.status === 'Order Confirmed' ? 'selected' : ''}>Confirmed</option>
                         <option value="Stitching" ${o.status === 'Stitching' ? 'selected' : ''}>Stitching</option>
-                        <option value="Ready" ${o.status === 'Ready' ? 'selected' : ''}>Ready for Pickup</option>
-                        <option value="Delivered" ${o.status === 'Delivered' ? 'selected' : ''}>Delivered</option>
+                        <option value="Ready" ${o.status === 'Ready' ? 'selected' : ''}>Ready Point</option>
+                        <option value="Delivered" ${o.status === 'Delivered' ? 'selected' : ''}>Deliver Item</option>
                     </select>
                 </div>
             </div>
-            ${o.items ? `
-            <div class="mt-4 pt-4 border-t border-slate-50 flex gap-2 overflow-x-auto no-scrollbar">
-                ${o.items.map(it => `<span class="px-3 py-1 bg-slate-50 rounded-lg text-[9px] font-bold text-slate-500 whitespace-nowrap capitalize">${it.name}</span>`).join('')}
-            </div>` : ''}
         </div>
         `;
     }

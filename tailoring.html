@@ -6,7 +6,7 @@
     <title>Lavish Lavender - Tailoring Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="css/style.css?v=28">
+    <link rel="stylesheet" href="css/style.css?v=2.1.0">
     <style>
         .sub-tab-btn {
             display: flex;
@@ -665,9 +665,9 @@
     </div>
 
     <!-- Core Scripts -->
-    <script src="js/app.js?v=28"></script>
-    <script src="js/firebase.js?v=28"></script>
-    <script src="js/tailoring.js?v=28"></script>
+    <script src="js/app.js?v=2.1.0"></script>
+    <script src="js/firebase.js?v=2.1.0"></script>
+    <script src="js/tailoring.js?v=2.1.0"></script>
     
     <script>
         // Tab management within tailoring page
@@ -707,6 +707,7 @@
             // Unified listeners using FB.root to sync with the live live web database
             window.FB.root('orders').onSnapshot((snap) => {
                 window.erpState.orders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.saveLocalState();
                 window.renderApp();
 
                 if (viewOrderId && !window.selectedOrderId && window.erpState.orders.find(o => o.id === viewOrderId)) {
@@ -715,21 +716,25 @@
             });
             window.FB.root('clients').onSnapshot((snap) => {
                 window.erpState.clients = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.saveLocalState();
                 window.renderApp();
             });
 
             window.FB.collection('sales').onSnapshot((snap) => {
                 window.erpState.sales = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.saveLocalState();
                 window.renderApp();
             });
 
             window.FB.collection('items').onSnapshot((snap) => {
                 window.erpState.items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.saveLocalState();
                 window.renderApp();
             });
 
             window.FB.collection('expenses').onSnapshot((snap) => {
                 window.erpState.expenses = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.saveLocalState();
                 window.renderApp();
             });
 
@@ -744,7 +749,8 @@
                     if (data.passwords) window.erpState.passwords = data.passwords;
                     if (data.staff) window.erpState.staff = data.staff;
                     if (data.printerConfig) window.erpState.printerConfig = data.printerConfig;
-
+                    
+                    window.saveLocalState();
                     window.renderApp();
                 }
             });
@@ -754,6 +760,7 @@
         });
 
         // Render from cache immediately
+        window.loadLocalState();
         window.renderApp();
     </script>
     <!-- Global Action Popups -->

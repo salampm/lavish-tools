@@ -96,6 +96,9 @@
                         <option value="">All Categories</option>
                         ${[...new Set(window.erpState.items.map(i => i.category).filter(Boolean))].map(c => `<option value="${c}" ${window.erpState.categoryFilter === c ? 'selected' : ''}>${c}</option>`).join('')}
                     </select>
+                    <button onclick="window.openAddItem()" class="px-6 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-violet-200 flex items-center gap-2 hover:bg-violet-700 transition-all active:scale-95 leading-none">
+                        <i data-lucide="plus-circle" class="w-4 h-4"></i> Add Item
+                    </button>
                 </div>
             </div>
 
@@ -591,7 +594,7 @@
             <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
                 <div class="max-w-[1400px] mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     ${list.map(c => `
-                        <div class="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/10 hover:border-indigo-200 transition-all group cursor-pointer relative overflow-hidden">
+                        <div onclick="window.openClientProfile('${c.id}')" class="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/10 hover:border-indigo-200 transition-all group cursor-pointer relative overflow-hidden">
                             <div class="absolute -right-6 -top-6 w-24 h-24 bg-slate-50 rounded-full group-hover:bg-indigo-50 transition-colors duration-500"></div>
                             
                             <div class="flex items-center gap-5 mb-8 relative z-10">
@@ -607,12 +610,23 @@
                                 </div>
                             </div>
 
+                            <div class="flex items-center justify-between px-6 py-4 bg-slate-50 rounded-[28px] border border-slate-100 mb-6 relative z-10 group-hover:bg-white group-hover:border-indigo-100 transition-all">
+                                <div>
+                                    <p class="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Loyalty Pulse</p>
+                                    <p class="text-sm font-black text-slate-900">${(c.loyaltyPoints || 0).toLocaleString()} <span class="text-[9px] text-indigo-500 ml-0.5">PTS</span></p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Tier</p>
+                                    <p class="text-[9px] font-black text-indigo-600 uppercase tracking-tighter">${(window.erpState.loyalty?.enabled !== false) ? (c.loyaltyTier || 'Basic Member') : 'Standard'}</p>
+                                </div>
+                            </div>
+
                             <div class="grid grid-cols-2 gap-4 pt-6 border-t border-slate-50 relative z-10">
-                                <button onclick="window.shareWhatsApp('', '${c.name}', '${c.phone}', 0)" class="py-3 bg-emerald-50 text-emerald-600 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-2">
-                                    <i data-lucide="message-circle" class="w-4 h-4"></i> Broadcast
-                                </button>
-                                <button onclick="window.openClientProfile('${c.id}')" class="py-3 bg-slate-50 text-slate-500 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all flex items-center justify-center gap-2">
-                                    <i data-lucide="external-link" class="w-4 h-4"></i> Profile
+                                <a href="tel:${c.phone}" onclick="event.stopPropagation()" class="py-3 bg-indigo-50 text-indigo-600 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-2">
+                                    <i data-lucide="phone-call" class="w-4 h-4"></i> Call
+                                </a>
+                                <button onclick="event.stopPropagation(); window.shareWhatsApp('', '${c.name}', '${c.phone}', 0)" class="py-3 bg-emerald-50 text-emerald-600 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-2">
+                                    <i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp
                                 </button>
                             </div>
                         </div>
@@ -872,10 +886,10 @@
         // WHATSAPP SECTION
         if (section === 'whatsapp') {
             const templates = window.erpState.whatsappTemplates || {
-                booking: '*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nYour order has been successfully booked.\n\n*Bill No:* {billNo}\n*Total Amount:* Rs.{totalCost}\n*Advance Received:* Rs.{advancePaid}\n*Balance:* Rs.{balance}\n\n*Expected Delivery:* {deliveryDate}\n\nPlease keep this bill number for reference. We appreciate your trust in Lavish Lavender. 🙏',
-                ready: '*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nGood news! Your order is ready for pickup. ✅\n\n*Bill No:* {billNo}\n*Balance Payable:* Rs.{balance}\n\nPlease visit our boutique to collect your order.\n\n*Location:* 📍\nhttps://share.google/iR4s2zrLMHoiTTZ66\n\nWe look forward to seeing you.',
-                delivered: '*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nYour order has been successfully delivered. ✅\n\n*Your Receipt:* 📄\nhttps://www.lavishlavender.in/receipt/?bill={billNo}\n\nThank you for choosing Lavish Lavender. 🙏\n\nIf you were happy with our service, please leave us a 5-star review: ⭐\nhttps://g.page/r/CSDbXBIvElTEEBM/review\n\nVisit again soon!',
-                reminder: 'Hi {customerName}, 🌸 This is a friendly reminder from *Lavish Lavender* regarding your bill *{billNo}*.\n\nThere is a pending balance of *{balance}*. You can view your receipt details here: https://www.lavishlavender.in/receipt/?bill={billNo}\n\nWe appreciate your support! 🙏\n\nVisit again soon! 🌸'
+                booking: '*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nYour order has been successfully booked.\n\n*Bill No:* {billNo}\n*Amount:* Rs.{totalCost}\n*Advance:* Rs.{advancePaid}\n*Balance:* Rs.{balance}\n\n*Pickup Date:* {deliveryDate}\n\n✨ *Loyalty Status*\n{pointsEarned} PT Erned | {totalPoints} Total PT | {tier} Tier\n\nThank you for choosing Lavish Lavender. 🙏',
+                ready: '*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nGood news! Your order is ready for pickup. ✅\n\n*Bill No:* {billNo}\n*Balance Payable:* Rs.{balance}\n\n📍 *Location:*\nhttps://share.google/iR4s2zrLMHoiTTZ66\n\n✨ *Loyalty Status*\n{pointsEarned} PT Erned | {totalPoints} Total PT | {tier} Tier\n\nSee you soon! 🙏',
+                delivered: '*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nYour order has been successfully delivered. ✅\n\n*Receipt:* 📄\nhttps://www.lavishlavender.in/receipt/?bill={billNo}\n\n✨ *Loyalty Status*\n{pointsEarned} PT Erned | {totalPoints} Total PT | {tier} Tier\n\nThank you! 🙏',
+                reminder: 'Hi {customerName}, 🌸 Friendly reminder from *Lavish Lavender* for bill *{billNo}*.\n\nPending: *Rs.{balance}*.\n\n✨ *Loyalty Status*\n{totalPoints} Total PT | {tier} Tier\n\nVisit again! 🙏'
             };
 
             return `
@@ -893,10 +907,14 @@
                                 </div>
                             `).join('')}
                         </div>
-                        <button onclick="window.saveTemplates()" class="w-full py-6 bg-emerald-600 text-white rounded-[32px] font-black uppercase text-xs tracking-[0.2em] shadow-2xl shadow-emerald-200 hover:bg-emerald-800 transition-all flex items-center justify-center gap-3 active:scale-95">
-                            <i data-lucide="save" class="w-5 h-5"></i>
-                            Save Dynamic Templates
-                        </button>
+                        <div class="flex gap-4">
+                            <button onclick="window.saveTemplates()" class="flex-1 py-6 bg-emerald-600 text-white rounded-[32px] font-black uppercase text-xs tracking-[0.2em] shadow-2xl shadow-emerald-200 hover:bg-emerald-800 transition-all flex items-center justify-center gap-3 active:scale-95 leading-none">
+                                <i data-lucide="save" class="w-5 h-5"></i> Save Changes
+                            </button>
+                            <button onclick="window.resetWATemplates()" class="px-8 py-6 bg-slate-100 text-slate-400 rounded-[32px] font-black uppercase text-[10px] tracking-widest hover:bg-slate-200 hover:text-slate-600 transition-all active:scale-95 leading-none">
+                                Reset Default
+                            </button>
+                        </div>
                     </div>
                     <div class="bg-indigo-600 p-8 rounded-[40px] text-white/90 shadow-xl shadow-indigo-100">
                         <h4 class="text-[10px] font-black uppercase tracking-[0.2em] mb-4 text-white">Injection Tokens (Placeholders)</h4>
@@ -1424,6 +1442,7 @@
         window.erpState.dashboardConfig[widgetId] = enabled;
         try {
             await window.FB.collection('settings').doc('general').set({ dashboardConfig: window.erpState.dashboardConfig }, { merge: true });
+            window.renderApp(); // Refresh UI to show checked/unchecked state
         } catch (e) { console.error('Dashboard config save error:', e); }
     };
 
@@ -1458,6 +1477,27 @@
             alert("Logo upload failed.");
         } finally {
             btn.innerText = orig; btn.disabled = false;
+        }
+    };
+
+    window.resetWATemplates = async () => {
+        if (!confirm("Are you sure? This will replace your current templates with the new standard format (including loyalty tags).")) return;
+        
+        const newDefaults = {
+            booking: '*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nYour order has been successfully booked.\n\n*Bill No:* {billNo}\n*Amount:* Rs.{totalCost}\n*Advance:* Rs.{advancePaid}\n*Balance:* Rs.{balance}\n\n*Pickup Date:* {deliveryDate}\n\n✨ *Loyalty Status*\n{pointsEarned} PT Erned | {totalPoints} Total PT | {tier} Tier\n\nThank you for choosing Lavish Lavender. 🙏',
+            ready: '*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nGood news! Your order is ready for pickup. ✅\n\n*Bill No:* {billNo}\n*Balance Payable:* Rs.{balance}\n\n📍 *Location:*\nhttps://share.google/iR4s2zrLMHoiTTZ66\n\n✨ *Loyalty Status*\n{pointsEarned} PT Erned | {totalPoints} Total PT | {tier} Tier\n\nSee you soon! 🙏',
+            delivered: '*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nYour order has been successfully delivered. ✅\n\n*Receipt:* 📄\nhttps://www.lavishlavender.in/receipt/?bill={billNo}\n\n✨ *Loyalty Status*\n{pointsEarned} PT Erned | {totalPoints} Total PT | {tier} Tier\n\nThank you! 🙏',
+            reminder: 'Hi {customerName}, 🌸 Friendly reminder from *Lavish Lavender* for bill *{billNo}*.\n\nPending: *Rs.{balance}*.\n\n✨ *Loyalty Status*\n{totalPoints} Total PT | {tier} Tier\n\nVisit again! 🙏'
+        };
+
+        window.erpState.whatsappTemplates = newDefaults;
+        try {
+            await window.FB.collection('settings').doc('general').set({ whatsappTemplates: newDefaults }, { merge: true });
+            alert("Templates Reset Successfully! You can now customize them further.");
+            window.renderApp();
+        } catch (e) {
+            console.error(e);
+            alert("Error resetting templates.");
         }
     };
 
@@ -2292,12 +2332,13 @@
             html += `<div style='text-align:center;font-size:10px;color:#555;margin-top:16px;'>GSTIN: ${window.erpState.gstin}</div>`;
         }
 
-        // Loyalty Info optionally at the bottom
+        // Loyalty Info at the bottom
         if (sale.loyaltySnapshot) {
             const ls = sale.loyaltySnapshot;
-            html += `<div style='text-align:center;font-size:10px;color:#111;background:#f8fafc;padding:8px;border-radius:8px;margin-top:16px;'>`;
-            html += `<div style='margin-bottom:4px;'><strong style='color:#d97706'>${(ls.tier || 'Basic').toUpperCase()} TIER</strong></div>`;
-            html += `Earned: ${ls.earned} pts | Total: ${ls.total} pts`;
+            html += `<hr style='border:none;border-top:1px dashed #ccc;margin:16px 0;'>`;
+            html += `<div style='text-align:center;font-size:10px;color:#111;'>`;
+            html += `<p style='margin:0;font-style:italic;'>Loyalty Summary</p>`;
+            html += `<p style='margin:4px 0;font-weight:bold;'>${ls.earned} PT Erned | ${ls.total} Total PT | ${(ls.tier || 'Basic').toUpperCase()} Tier</p>`;
             html += `</div>`;
         }
 
@@ -2400,7 +2441,7 @@
             deliveryDate: sale ? new Date(sale.date).toLocaleDateString() : (order ? window.fmtDate(order.deliveryDate) : 'N/A'),
             pointsEarned: sale?.loyaltySnapshot?.earned || order?.loyaltySnapshot?.earned || 0,
             totalPoints: client?.loyaltyPoints || 0,
-            tier: (client?.tier || 'Basic').toUpperCase()
+            tier: (client?.loyaltyTier || 'Basic Member').toUpperCase()
         };
 
         const templates = window.erpState.whatsappTemplates || {};
@@ -2422,8 +2463,8 @@
             customerName: name || 'Customer',
             billNo: billNo,
             balance: (balance || 0).toLocaleString('en-IN'),
-            points: client?.points || 0,
-            tier: (client?.tier || 'Basic').toUpperCase()
+            totalPoints: client?.loyaltyPoints || 0,
+            tier: (client?.loyaltyTier || 'Basic Member').toUpperCase()
         };
         const templates = window.erpState.whatsappTemplates || {};
         const tpl = templates.reminder || `Friendly reminder from *Lavish Lavender* regarding bill *{billNo}*.\n\nPending balance: *₹{balance}*.\n\nThank you!`;
@@ -2582,11 +2623,16 @@
     window.openClientProfile = (id) => {
         const c = (window.erpState.clients || []).find(x => x.id === id);
         if(!c) return;
+
+        // Fetch latest tailoring measurements if any
+        const clientOrders = (window.erpState.orders || []).filter(o => o.phone === c.phone);
+        const latestOrder = clientOrders.sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+        const m = latestOrder?.measurements || c.measurements || {};
         
         const modal = document.createElement("div");
         modal.className = "fixed inset-0 bg-slate-900/90 backdrop-blur-2xl flex justify-center items-center z-[600] p-4";
         modal.innerHTML = `
-            <div class="bg-white w-full max-w-lg rounded-[56px] p-12 shadow-2xl animate-pop-in relative overflow-hidden">
+            <div class="bg-white w-full max-w-lg rounded-[56px] p-12 shadow-2xl animate-pop-in relative overflow-y-auto max-h-[90vh] custom-scrollbar">
                 <div class="absolute -right-16 -top-16 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-50"></div>
                 
                 <div class="flex items-center gap-6 mb-12 relative">
@@ -2595,41 +2641,203 @@
                     </div>
                     <div>
                         <h2 class="text-3xl font-black text-slate-900 tracking-tighter uppercase mb-1">${c.name}</h2>
-                        <p class="text-indigo-600 font-bold text-sm font-mono tracking-widest">${c.phone}</p>
+                        <div class="flex items-center gap-3">
+                            <p class="text-indigo-600 font-bold text-sm font-mono tracking-widest">${c.phone}</p>
+                            <span class="w-1.5 h-1.5 bg-slate-200 rounded-full"></span>
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">${c.loyaltyTier || 'Standard Partner'}</span>
+                        </div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-12 relative">
-                    <div class="p-6 bg-slate-50 rounded-[32px] border border-slate-100 bg-white/50">
-                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Current Tier</p>
-                        <div class="flex items-center gap-2">
-                            <i data-lucide="star" class="w-4 h-4 text-${window.LOYALTY?.TIERS[c.tier || 'basic']?.color || 'slate'}-500"></i>
-                            <p class="font-black text-slate-800 uppercase tracking-tight text-sm">${window.LOYALTY?.TIERS[c.tier || 'basic']?.label || 'Basic'}</p>
+                <!-- Loyalty Pulse Card -->
+                <div class="bg-slate-900 rounded-[40px] p-8 text-white mb-10 relative overflow-hidden shadow-2xl shadow-slate-200">
+                    <div class="absolute -right-10 -bottom-10 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl"></div>
+                    <div class="flex justify-between items-center relative z-10 mb-6">
+                        <div>
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1">Loyalty Balance</p>
+                            <h3 class="text-4xl font-black tracking-tighter">${(c.loyaltyPoints || 0).toLocaleString()} <span class="text-sm text-indigo-400 ml-1">POINTS</span></h3>
+                        </div>
+                        <div class="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center border border-white/10 backdrop-blur-md">
+                            <i data-lucide="crown" class="w-6 h-6 text-indigo-400"></i>
                         </div>
                     </div>
-                    <div class="p-6 bg-slate-50 rounded-[32px] border border-slate-100 bg-white/50">
-                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Total Points</p>
-                        <p class="font-black text-indigo-600 uppercase tracking-tight text-lg">${c.loyaltyPoints || 0}</p>
+                    <div class="flex items-center gap-3 relative z-10">
+                        <span class="px-4 py-2 bg-indigo-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/30">${c.loyaltyTier || 'Basic Member'} Tier</span>
+                        <p class="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em]">Validated with Cloud</p>
                     </div>
-                    <div class="p-6 bg-slate-50 rounded-[32px] border border-slate-100 bg-white/50">
-                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Total Spent</p>
-                        <p class="font-black text-slate-800 uppercase tracking-tight text-sm">${window.fmt(c.totalSpent || 0)}</p>
+                </div>
+
+                <!-- Measurement Quick View (Top 4) -->
+                <div class="mb-10 relative">
+                    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-1 flex justify-between">
+                        Measurement Specs <span class="text-indigo-500">Live from Tailoring</span>
+                    </h3>
+                    <div class="grid grid-cols-4 gap-3">
+                        ${['chest', 'waist', 'seat', 'full_length'].map(key => `
+                            <div class="bg-indigo-50/50 p-4 rounded-3xl border border-indigo-100 text-center">
+                                <p class="text-[8px] font-black text-indigo-400 uppercase mb-1">${key.replace('_', ' ')}</p>
+                                <p class="text-lg font-black text-indigo-700">${m[key] || '-'}</p>
+                            </div>
+                        `).join('')}
                     </div>
-                    <div class="p-6 bg-slate-50 rounded-[32px] border border-slate-100 bg-white/50">
-                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Member Since</p>
-                        <p class="font-black text-slate-500 uppercase tracking-tight text-[10px]">${new Date(c.createdAt || Date.now()).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mb-10 relative">
+                    <div class="p-6 bg-slate-50 rounded-[32px] border border-slate-100">
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Standard Size</p>
+                        <select id="cp_size" onchange="window.updateClientField('${c.id}', 'size', this.value)" class="w-full bg-transparent font-black text-slate-800 uppercase tracking-tight text-sm outline-none">
+                            <option value="">N/A</option>
+                            <option value="XS" ${c.size === 'XS' ? 'selected' : ''}>XS</option>
+                            <option value="S" ${c.size === 'S' ? 'selected' : ''}>Small (S)</option>
+                            <option value="M" ${c.size === 'M' ? 'selected' : ''}>Medium (M)</option>
+                            <option value="L" ${c.size === 'L' ? 'selected' : ''}>Large (L)</option>
+                            <option value="XL" ${c.size === 'XL' ? 'selected' : ''}>Extra Large (XL)</option>
+                            <option value="XXL" ${c.size === 'XXL' ? 'selected' : ''}>Double XL (XXL)</option>
+                        </select>
+                    </div>
+                    <div class="p-6 bg-slate-50 rounded-[32px] border border-slate-100">
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Fit Preference</p>
+                        <select id="cp_fit" onchange="window.updateClientField('${c.id}', 'fit', this.value)" class="w-full bg-transparent font-black text-slate-800 uppercase tracking-tight text-[10px] outline-none">
+                            <option value="">Normal</option>
+                            <option value="Slim" ${c.fit === 'Slim' ? 'selected' : ''}>Slim Fit</option>
+                            <option value="Regular" ${c.fit === 'Regular' ? 'selected' : ''}>Regular Fit</option>
+                            <option value="Modest" ${c.fit === 'Modest' ? 'selected' : ''}>Modest / Loose</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-10 relative">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block px-1">Private Client Notes</label>
+                    <textarea id="cp_notes" placeholder="Fabric preferences, style quirks, etc..." onblur="window.updateClientField('${c.id}', 'notes', this.value)" class="w-full p-6 bg-slate-50 rounded-[32px] border border-slate-100 text-sm font-medium text-slate-700 outline-none focus:border-indigo-300 transition-all min-h-[120px]">${c.notes || ''}</textarea>
+                </div>
+
+                <!-- Recent Activity (New Suggestion) -->
+                <div class="space-y-3 relative mb-12">
+                    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex justify-between">Recent History <span class="text-slate-300">Last 3 Orders</span></h3>
+                    <div class="space-y-2">
+                        ${clientOrders.slice(0, 3).map(o => `
+                            <div class="flex justify-between items-center p-4 bg-slate-50 rounded-3xl border border-slate-100 group/item hover:border-indigo-200 transition-all">
+                                <div>
+                                    <p class="text-xs font-bold text-slate-800 uppercase group-hover/item:text-indigo-600">${o.billNo}</p>
+                                    <p class="text-[9px] font-bold text-slate-400 uppercase">${window.fmtDate(o.timestamp)}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-xs font-black text-slate-800">${window.fmt(o.totalCost)}</p>
+                                    <span class="text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${o.status === 'Delivered' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}">${o.status}</span>
+                                </div>
+                            </div>
+                        `).join('') || '<p class="text-[10px] text-slate-300 font-bold uppercase tracking-widest text-center py-6 border-2 border-dashed border-slate-100 rounded-[32px]">No Transaction History</p>'}
                     </div>
                 </div>
 
                 <div class="space-y-4 relative">
-                    <button onclick="window.shareWhatsApp('', '${c.name}', '${c.phone}', 0)" class="w-full py-5 bg-emerald-500 text-white rounded-[28px] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-emerald-200 flex items-center justify-center gap-3">
-                         <i data-lucide="message-circle" class="w-5 h-5"></i> Contact via WhatsApp
-                    </button>
+                    <div class="grid grid-cols-2 gap-4">
+                        <a href="tel:${c.phone}" class="py-5 bg-indigo-600 text-white rounded-[28px] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-indigo-100 flex items-center justify-center gap-3">
+                             <i data-lucide="phone-call" class="w-5 h-5"></i> Call Now
+                        </a>
+                        <button onclick="window.shareWhatsApp('', '${c.name}', '${c.phone}', 0)" class="py-5 bg-emerald-500 text-white rounded-[28px] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-emerald-200 flex items-center justify-center gap-3">
+                             <i data-lucide="message-circle" class="w-5 h-5"></i> WhatsApp
+                        </button>
+                    </div>
                     <button onclick="this.closest('.fixed').remove()" class="w-full py-5 bg-slate-100 text-slate-400 rounded-[28px] font-black uppercase text-[10px] tracking-widest">Close Profile</button>
                 </div>
             </div>`;
         document.body.appendChild(modal);
-        lucide.createIcons();
+        if (window.lucide) lucide.createIcons();
+    };
+
+    window.openAddItem = function () {
+        const modal = document.createElement("div");
+        modal.className = "fixed inset-0 bg-slate-900/80 backdrop-blur-xl flex justify-center items-center z-[700] p-4";
+        modal.innerHTML = `
+            <div class="bg-white w-full max-w-sm rounded-[56px] p-12 shadow-2xl animate-pop-in relative overflow-hidden">
+                <div class="absolute -right-10 -top-10 w-48 h-48 bg-violet-50 rounded-full blur-3xl pointer-events-none opacity-50"></div>
+                <div class="mb-10 text-center relative">
+                    <h2 class="text-3xl font-black text-slate-900 tracking-tighter uppercase mb-2">Quick Add Item</h2>
+                    <p class="text-[10px] font-black text-violet-500 uppercase tracking-[0.3em]">Instant Inventory Sync</p>
+                </div>
+                
+                <div class="space-y-6 relative overflow-y-auto max-h-[70vh] custom-scrollbar px-2">
+                    <div class="space-y-1.5">
+                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] pl-2">Product Name</label>
+                        <input id="ai_name" placeholder="E.g. Linen Blouse" class="w-full px-6 py-5 bg-slate-50 border-none rounded-[28px] font-black text-sm outline-none focus:ring-4 focus:ring-violet-500/10 placeholder:text-slate-300">
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1.5">
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] pl-2">Category</label>
+                            <input id="ai_category" list="cat-opts" placeholder="Category" class="w-full px-6 py-4 bg-slate-50 border-none rounded-[24px] font-black text-xs outline-none focus:ring-4 focus:ring-violet-500/10">
+                            <datalist id="cat-opts">${[...new Set((window.erpState.items || []).map(i => i.category).filter(Boolean))].map(c => `<option value="${c}">`).join('')}</datalist>
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] pl-2">Stock Qty</label>
+                            <input id="ai_stock" type="number" placeholder="0" class="w-full px-6 py-4 bg-slate-50 border-none rounded-[24px] font-black text-sm outline-none focus:ring-4 focus:ring-violet-500/10">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1.5">
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] pl-2">Cost Price ₹</label>
+                            <input id="ai_cost" type="number" placeholder="0" class="w-full px-6 py-4 bg-slate-50 text-slate-500 border-none rounded-[24px] font-black text-sm outline-none focus:ring-4 focus:ring-violet-500/10">
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-[9px] font-black text-violet-500 uppercase tracking-[0.2em] pl-2">Selling Price ₹</label>
+                            <input id="ai_price" type="number" placeholder="0" class="w-full px-6 py-4 bg-violet-50 text-violet-600 border-none rounded-[24px] font-black text-sm outline-none focus:ring-4 focus:ring-violet-500/10">
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4 pt-6">
+                        <button onclick="this.closest('.fixed').remove()" class="flex-1 py-5 bg-slate-100 text-slate-400 rounded-[28px] font-black uppercase text-[10px] tracking-widest hover:bg-slate-200 transition-colors">Abort</button>
+                        <button id="ai_save_pos" class="flex-2 py-5 bg-violet-600 text-white rounded-[28px] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-violet-200 active:scale-95 transition-all">Save Item</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        
+        document.getElementById('ai_save_pos').onclick = async () => {
+             const name = document.getElementById('ai_name').value.trim();
+             const price = parseFloat(document.getElementById('ai_price').value || 0);
+             if(!name || price <= 0) {
+                 alert("Please enter a valid product name and selling price.");
+                 return;
+             }
+             
+             const btn = document.getElementById('ai_save_pos');
+             btn.innerHTML = `<i class="w-4 h-4 animate-spin border-2 border-white/20 border-t-white rounded-full mx-auto"></i>`;
+             btn.disabled = true;
+
+             const sku = "LL" + (window.erpState.items.length + 1001).toString().padStart(5, "0");
+             
+             try {
+                 await window.FB.collection('items').add({
+                     name,
+                     category: document.getElementById('ai_category').value || 'Uncategorized',
+                     supplier: '',
+                     soldBy: 'pcs',
+                     stock: parseFloat(document.getElementById('ai_stock').value || 0),
+                     sellingPrice: price,
+                     costPrice: parseFloat(document.getElementById('ai_cost').value || 0),
+                     sku, 
+                     barcode: sku,
+                     timestamp: Date.now()
+                 });
+                 modal.remove();
+                 window.renderApp();
+             } catch (e) {
+                 console.error(e);
+                 alert("Error saving item.");
+                 btn.disabled = false;
+                 btn.innerText = "Save Item";
+             }
+        };
+    };
+
+    window.updateClientField = async (id, field, val) => {
+        try {
+            await window.FB.root('clients').doc(id).update({ [field]: val });
+        } catch (e) {
+            console.error("Failed to update client field:", e);
+        }
     };
 
     window.exportAreaReport = function (type) {

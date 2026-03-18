@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="css/style.css?v=28">
+    <link rel="stylesheet" href="css/style.css?v=2.1.0">
 </head>
 <body class="bg-slate-50 font-['DM_Sans'] text-slate-900 antialiased selection:bg-violet-100 selection:text-violet-900 custom-scrollbar overflow-x-hidden">
     <div id="app" class="h-screen flex flex-col md:flex-row overflow-hidden">
@@ -52,10 +52,10 @@
     </div>
 
     <!-- Core Scripts -->
-    <script src="js/app.js?v=28"></script>
-    <script src="js/firebase.js?v=28"></script>
-    <script src="js/pos.js?v=28"></script>
-    <script src="js/expenses.js?v=28"></script>
+    <script src="js/app.js?v=2.1.0"></script>
+    <script src="js/firebase.js?v=2.1.0"></script>
+    <script src="js/pos.js?v=2.1.0"></script>
+    <script src="js/expenses.js?v=2.1.0"></script>
     
     <script>
         // Initialize POS-specific state defaults
@@ -73,6 +73,13 @@
 
         window.renderApp = function() {
             window.renderSidebar('pos');
+            
+            // ROLE CONTROL: Prevent staff from accessing Master Reports or Settings
+            const restrictedTabs = ['reports', 'settings'];
+            if (restrictedTabs.includes(window.erpState.tab) && window.erpState.role !== 'Owner') {
+                window.erpState.tab = 'pos';
+            }
+
             const container = document.getElementById('view-content');
             
             // Sync Header UI
@@ -148,6 +155,7 @@
         window.addEventListener('firebase-ready', () => {
             window.FB.collection('items').onSnapshot((snap) => {
                 window.erpState.items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.saveLocalState();
                 window.renderApp();
             });
 
@@ -159,16 +167,19 @@
                 } else {
                     window.erpState.counter = 2499;
                 }
+                window.saveLocalState();
                 window.renderApp();
             });
 
             window.FB.collection('expenses').onSnapshot((snap) => {
                 window.erpState.expenses = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.saveLocalState();
                 window.renderApp();
             });
 
             window.FB.root('orders').onSnapshot((snap) => {
                 window.erpState.orders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.saveLocalState();
                 window.renderApp();
             });
 
@@ -179,6 +190,7 @@
 
             window.FB.root('clients').onSnapshot((snap) => {
                 window.erpState.clients = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.saveLocalState();
                 window.renderApp();
             });
 
@@ -222,6 +234,7 @@
                     if (data.staff) window.erpState.staff = data.staff;
                     if (data.printerConfig) window.erpState.printerConfig = data.printerConfig;
 
+                    window.saveLocalState();
                     window.renderApp();
                 }
             });
@@ -232,7 +245,8 @@
             window.setPOSTab(initialTab);
         });
 
-        // Render immediately from cache while Firebase loads in background
+        // Load cache first for instant start
+        window.loadLocalState();
         window.renderApp();
     </script>
 </body>

@@ -8,7 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="css/style.css?v=28">
+    <link rel="stylesheet" href="css/style.css?v=2.1.0">
 </head>
 <body class="bg-slate-50 text-slate-900 font-['Plus_Jakarta_Sans'] antialiased">
     <div class="flex h-screen overflow-hidden">
@@ -254,10 +254,14 @@
         </main>
     </div>
 
-    <script src="js/app.js?v=28"></script>
-    <script src="js/firebase.js?v=28"></script>
-    <script src="js/pos.js?v=28"></script>
+    <script src="js/app.js?v=2.1.0"></script>
+    <script src="js/firebase.js?v=2.1.0"></script>
+    <script src="js/pos.js?v=2.1.0"></script>
     <script>
+        if (window.erpState.role !== 'Owner') {
+            location.href = 'pos.html';
+        }
+
         window.toggleHistOps = function() {
             const ops = document.getElementById('hist-ops');
             if (ops.classList.contains('hidden')) {
@@ -593,19 +597,23 @@
                 } else {
                     window.erpState.counter = 2499;
                 }
+                window.saveLocalState();
                 window.renderApp();
                 updateChart();
             });
             window.FB.root('orders').onSnapshot(snap => {
                 window.erpState.orders = snap.docs.map(doc => ({id: doc.id, ...doc.data()}));
+                window.saveLocalState();
                 window.renderApp();
             });
             window.FB.collection('expenses').onSnapshot(snap => {
                 window.erpState.expenses = snap.docs.map(doc => ({id: doc.id, ...doc.data()}));
+                window.saveLocalState();
                 window.renderApp();
             });
             window.FB.collection('items').onSnapshot(snap => {
                 window.erpState.items = snap.docs.map(doc => ({id: doc.id, ...doc.data()}));
+                window.saveLocalState();
                 window.renderApp();
             });
 
@@ -627,11 +635,13 @@
                     else merged.push(cloudCat);
                 });
                 window.erpState.expenseCategories = merged;
+                window.saveLocalState();
                 window.renderApp();
             });
 
             window.FB.root('clients').onSnapshot((snap) => {
                 window.erpState.clients = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.saveLocalState();
                 window.renderApp();
             });
 
@@ -641,11 +651,11 @@
                     const data = doc.data();
                     window.erpState.printerWidth = data.printerWidth || '58';
                     window.erpState.whatsappTemplates = data.whatsappTemplates;
-                    if (data.taxes) window.erpState.taxes = data.taxes;
-                    if (data.discounts) window.erpState.discounts = data.discounts;
                     if (data.passwords) window.erpState.passwords = data.passwords;
                     if (data.staff) window.erpState.staff = data.staff;
                     if (data.printerConfig) window.erpState.printerConfig = data.printerConfig;
+                    if (data.taxes) window.erpState.taxes = data.taxes;
+                    if (data.discounts) window.erpState.discounts = data.discounts;
                     if (data.loyalty) {
                         window.erpState.loyalty = data.loyalty;
                         // Update live constants if exist
@@ -657,6 +667,7 @@
                         }
                     }
 
+                    window.saveLocalState();
                     window.renderApp();
                 }
             });
