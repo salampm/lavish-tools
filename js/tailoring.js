@@ -14,12 +14,13 @@
         if (!o) return;
 
         const client = (window.erpState.clients || []).find(c => c.phone === o.phone);
-        const pts = client?.points || 0;
-        const tier = (client?.tier || 'Basic').toUpperCase();
+        const earned = o.loyaltySnapshot?.earned || 0;
+        const totalPts = client?.loyaltyPoints || 0;
+        const tier = (client?.tier || o.loyaltySnapshot?.tier || 'Basic').toUpperCase();
 
         const target = o.phone.replace(/\D/g, '');
         const templates = window.erpState.whatsappTemplates || {};
-        const bal = (o.totalCost || 0) - (o.deliveryDiscount || 0) - (o.advancePaid || 0);
+        const bal = Math.max(0, (o.totalCost || 0) - (o.deliveryDiscount || 0) - (o.advancePaid || 0));
         
         let template = "";
         if (type === 1) template = templates.booking;
@@ -28,11 +29,11 @@
         else if (type === 4) template = templates.reminder;
 
         if (!template) {
-            // Fallback templates if not defined in settings
-            if (type === 1) template = "Hi {customerName}, your order {billNo} is confirmed. Total: ₹{totalCost}, Advance: ₹{advancePaid}. Expected Delivery: {deliveryDate}. Loyalty: {tier} ({points} pts).";
-            else if (type === 2) template = "Hi {customerName}, your order {billNo} is ready! Balance: ₹{balance}. Visit us soon. Loyalty: {tier} ({points} pts).";
-            else if (type === 3) template = "Hi {customerName}, your order {billNo} is delivered! Hope you love it. Loyalty: {tier} ({points} pts). Receipt: https://lavishlavender.in/receipt/?bill={billNo}";
-            else if (type === 4) template = "Hi {customerName}, friendly reminder for order {billNo}. Balance: ₹{balance}. Loyalty: {tier} ({points} pts).";
+            const footer = `\n\n✨ *Loyalty Status*\n${earned} PT Erned | ${totalPts} Total PT | ${tier} Tier`;
+            if (type === 1) template = "Hi {customerName}, your order {billNo} is confirmed. Total: ₹{totalCost}, Advance: ₹{advancePaid}. Expected Delivery: {deliveryDate}." + footer;
+            else if (type === 2) template = "Hi {customerName}, your order {billNo} is ready! Balance: ₹{balance}. Visit us soon." + footer;
+            else if (type === 3) template = "Hi {customerName}, your order {billNo} is delivered! Hope you love it." + footer + "\nReceipt: https://lavishlavender.in/receipt/?bill={billNo}";
+            else if (type === 4) template = "Hi {customerName}, friendly reminder for order {billNo}. Balance: ₹{balance}." + footer;
         }
 
         const msgText = template
@@ -41,7 +42,10 @@
             .replace(/{totalCost}/g, o.totalCost)
             .replace(/{advancePaid}/g, o.advancePaid || 0)
             .replace(/{balance}/g, bal)
-            .replace(/{points}/g, pts)
+            .replace(/{earnedPoints}/g, earned)
+            .replace(/{pointsEarned}/g, earned)
+            .replace(/{totalPoints}/g, totalPts)
+            .replace(/{points}/g, totalPts)
             .replace(/{tier}/g, tier)
             .replace(/{deliveryDate}/g, window.fmtDate(o.deliveryDate));
 
@@ -206,7 +210,8 @@
     }
 
     function renderOrderCard(o) {
-        const bal = (o.totalCost || 0) - (o.advancePaid || 0);
+        const rawBal = (o.totalCost || 0) - (o.advancePaid || 0);
+        const bal = Math.max(0, rawBal);
         const statusColors = {
             'Pending': 'bg-slate-100 text-slate-600',
             'Order Confirmed': 'bg-violet-50 text-violet-600 border border-violet-100',

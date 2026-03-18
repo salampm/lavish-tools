@@ -175,6 +175,27 @@
                         <span>Subtotal</span>
                         <span>${fmt(subtotal)}</span>
                     </div>
+                    
+                    <!-- Internal Profit Gauge (Staff Only) -->
+                    ${(() => {
+                        const costPrice = window.erpState.cart.reduce((s, it) => s + ((it.cost || 0) * it.qty), 0);
+                        const profit = subtotal - costPrice;
+                        const margin = subtotal > 0 ? (profit / subtotal) * 100 : 0;
+                        const marginColor = margin > 40 ? 'text-emerald-500' : margin > 20 ? 'text-amber-500' : 'text-rose-500';
+                        if (window.erpState.cart.length === 0) return '';
+                        return `
+                        <div class="flex justify-between items-center py-2 px-4 bg-white border border-slate-100 rounded-xl mt-2 mb-4">
+                            <div class="flex flex-col">
+                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Internal Projection</span>
+                                <span class="text-[10px] font-black ${marginColor} tracking-tighter uppercase leading-none">Margin: ${margin.toFixed(1)}%</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-[10px] font-black text-slate-800 leading-none">Profit ₹${profit.toLocaleString()}</span>
+                            </div>
+                        </div>
+                        `;
+                    })()}
+
                     <div class="flex justify-between items-center text-slate-900 font-black text-xl md:text-2xl tracking-tighter">
                         <span>Total</span>
                         <span>${fmt(subtotal)}</span>
@@ -1136,140 +1157,170 @@
 
         // PRINTER SECTION
         if (section === 'printer') {
-            const pConf = window.erpState.printerConfig || { width: '58', logo: '', header: 'Lavish Lavender', footer: 'Visit Again!', showCustomer: true, showTax: true };
+            const pConf = window.erpState.printerConfig || { 
+                width: '58', logo: '', header: 'Lavish Lavender', subTitle: 'Bridal Boutique', 
+                address: 'MAK building, Near Uppala Bustand, Uppala, Kasargod', 
+                phone: '+91 75580 08881', website: 'www.lavishlavender.in',
+                showCustomer: true, showStaff: true, showTax: true,
+                note: '*** IMPORTANT CARE NOTES ***\nNo Returns | No Exchange | Dry Wash Only',
+                footer1: 'Thank you for Purchase', footer2: 'Visit Again!', footer3: '',
+                extraFields: []
+            };
+
             return `
             <div class="flex-1 overflow-y-auto p-10 bg-slate-50 custom-scrollbar">
-                <div class="max-w-3xl mx-auto space-y-8 animate-pop-in">
+                <div class="max-w-4xl mx-auto space-y-8 animate-pop-in">
+                    <!-- Config Controls -->
                     <div class="bg-white p-10 rounded-[48px] shadow-sm border border-slate-100">
                         <div class="flex items-center gap-3 mb-8">
                             <div class="w-12 h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center font-black shadow-lg shadow-emerald-100">
                                 <i data-lucide="printer" class="w-6 h-6"></i>
                             </div>
                             <div>
-                                <h3 class="text-xl font-black text-slate-900 tracking-tighter uppercase mb-0.5">Printer Settings</h3>
-                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Thermal Receipt Configuration</p>
+                                <h3 class="text-xl font-black text-slate-900 tracking-tighter uppercase mb-0.5">Printer Master Settings</h3>
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Branding & Layout Configuration</p>
                             </div>
                         </div>
 
-                        <div class="space-y-6 mb-10">
-                            <div class="flex items-center justify-between bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                                <div>
-                                    <h4 class="font-black text-sm uppercase text-slate-800">Printer Width</h4>
-                                    <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Select paper size</p>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-12 gap-y-8 mb-10">
+                            <!-- Left Column: Branding -->
+                            <div class="space-y-6">
+                                <div class="flex items-center justify-between bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                                    <div>
+                                        <h4 class="font-black text-sm uppercase text-slate-800">Print Size</h4>
+                                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Auto-resizes receipt</p>
+                                    </div>
+                                    <select onchange="window.updatePrinterConfig({ width: this.value })" class="px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none">
+                                        <option value="58" ${pConf.width === '58' ? 'selected' : ''}>58mm</option>
+                                        <option value="80" ${pConf.width === '80' ? 'selected' : ''}>80mm</option>
+                                    </select>
                                 </div>
-                                <select onchange="window.updatePrinterConfig({ width: this.value })" class="px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none">
-                                    <option value="58" ${pConf.width === '58' ? 'selected' : ''}>58mm</option>
-                                    <option value="80" ${pConf.width === '80' ? 'selected' : ''}>80mm</option>
-                                </select>
+
+                                <div class="space-y-4">
+                                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Brand Logo</label>
+                                    <div class="flex gap-4 items-center bg-slate-50 p-4 rounded-2xl border-2 border-slate-100">
+                                        <input id="pc_logo" type="text" value="${pConf.logo || ''}" placeholder="Logo URL" class="flex-1 bg-transparent border-none font-black text-sm outline-none" oninput="window.updatePrinterConfig({ logo: this.value })">
+                                        <div class="h-8 w-px bg-slate-200"></div>
+                                        <button onclick="document.getElementById('pc_logo_file').click()" class="px-4 py-2 bg-white text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-200 hover:bg-slate-50 transition-all">Browse</button>
+                                        <input type="file" id="pc_logo_file" class="hidden" accept="image/*" onchange="window.handleLogoUpload(this)">
+                                    </div>
+                                    <p class="text-[8px] font-bold text-slate-400 uppercase px-2">Colors will be auto-monochromed for thermal printing.</p>
+                                </div>
+
+                                <div class="grid grid-cols-1 gap-4">
+                                    <div>
+                                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Shop Name</label>
+                                        <input id="pc_header" type="text" value="${pConf.header || ''}" oninput="window.updatePrinterConfig({ header: this.value })" class="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-base outline-none focus:border-emerald-500 shadow-inner">
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Sub-Title</label>
+                                        <input id="pc_subTitle" type="text" value="${pConf.subTitle || ''}" oninput="window.updatePrinterConfig({ subTitle: this.value })" class="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-sm outline-none focus:border-emerald-500 shadow-inner">
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Address</label>
+                                        <textarea id="pc_address" rows="2" oninput="window.updatePrinterConfig({ address: this.value })" class="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-xs outline-none focus:border-emerald-500 shadow-inner">${pConf.address || ''}</textarea>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Phone No</label>
+                                            <input id="pc_phone" type="text" value="${pConf.phone || ''}" oninput="window.updatePrinterConfig({ phone: this.value })" class="w-full px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-xs outline-none focus:border-emerald-500 shadow-inner">
+                                        </div>
+                                        <div>
+                                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Website</label>
+                                            <input id="pc_website" type="text" value="${pConf.website || ''}" oninput="window.updatePrinterConfig({ website: this.value })" class="w-full px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-xs outline-none focus:border-emerald-500 shadow-inner">
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
-                            <div class="space-y-4">
-                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Brand Logo</label>
-                                <div class="flex gap-4 items-center bg-slate-50 p-4 rounded-2xl border-2 border-slate-100">
-                                    <input id="pc_logo" type="text" value="${pConf.logo || ''}" placeholder="Logo URL" class="flex-1 bg-transparent border-none font-black text-sm outline-none">
-                                    <div class="h-8 w-px bg-slate-200"></div>
-                                    <button onclick="document.getElementById('pc_logo_file').click()" class="px-4 py-2 bg-white text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-200 hover:bg-slate-50 transition-all">Browse</button>
-                                    <input type="file" id="pc_logo_file" class="hidden" accept="image/*" onchange="window.handleLogoUpload(this)">
+                            <!-- Right Column: Extras & Footers -->
+                            <div class="space-y-6">
+                                <div class="bg-slate-50 p-6 rounded-[32px] border border-slate-100 space-y-4">
+                                    <h4 class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Display Toggles</h4>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[11px] font-black text-slate-700 uppercase">Customer details</span>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                          <input type="checkbox" id="pc_show_customer" class="sr-only peer" ${pConf.showCustomer ? 'checked' : ''} onchange="window.updatePrinterConfig({ showCustomer: this.checked })">
+                                          <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[11px] font-black text-slate-700 uppercase">Staff name</span>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                          <input type="checkbox" id="pc_show_staff" class="sr-only peer" ${pConf.showStaff ? 'checked' : ''} onchange="window.updatePrinterConfig({ showStaff: this.checked })">
+                                          <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[11px] font-black text-slate-700 uppercase">Tax Breakdown (GSTIN)</span>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                          <input type="checkbox" id="pc_show_tax" class="sr-only peer" ${pConf.showTax ? 'checked' : ''} onchange="window.updatePrinterConfig({ showTax: this.checked })">
+                                          <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                                        </label>
+                                    </div>
                                 </div>
-                            </div>
-                            <div>
-                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Shop Name</label>
-                                <input id="pc_header" type="text" value="${pConf.header || ''}" placeholder="e.g. Lavish Lavender Boutique" class="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-base outline-none focus:border-emerald-500 shadow-inner">
-                            </div>
-                            <div>
-                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Address Details</label>
-                                <textarea id="pc_address" rows="2" placeholder="e.g. Uppala, Kasaragod, Kerala" class="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-sm outline-none focus:border-emerald-500 shadow-inner">${pConf.address || ''}</textarea>
-                            </div>
-                            <div>
-                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Footer Text</label>
-                                <input id="pc_footer" type="text" value="${pConf.footer || ''}" placeholder="e.g. Thank you for your visit!" class="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-base outline-none focus:border-emerald-500 shadow-inner">
-                            </div>
 
-                            <div class="flex items-center justify-between bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                                <div>
-                                    <h4 class="font-black text-sm uppercase text-slate-800">Show Customer Details</h4>
-                                    <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Name & Phone on receipt</p>
+                                <div class="grid grid-cols-1 gap-4">
+                                    <div>
+                                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Important Note</label>
+                                        <textarea id="pc_note" rows="2" oninput="window.updatePrinterConfig({ note: this.value })" class="w-full px-6 py-4 bg-slate-100 border-none rounded-2xl font-black text-xs outline-none focus:ring-2 focus:ring-emerald-400 shadow-inner">${pConf.note || ''}</textarea>
+                                    </div>
+                                    <div class="grid grid-cols-1 gap-3">
+                                        <input id="pc_footer1" placeholder="Footer 1" type="text" value="${pConf.footer1 || ''}" oninput="window.updatePrinterConfig({ footer1: this.value })" class="w-full px-6 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-xs outline-none">
+                                        <input id="pc_footer2" placeholder="Footer 2" type="text" value="${pConf.footer2 || ''}" oninput="window.updatePrinterConfig({ footer2: this.value })" class="w-full px-6 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-xs outline-none">
+                                        <input id="pc_footer3" placeholder="Footer 3 (Empty)" type="text" value="${pConf.footer3 || ''}" oninput="window.updatePrinterConfig({ footer3: this.value })" class="w-full px-6 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-xs outline-none">
+                                    </div>
                                 </div>
-                                <label class="relative inline-flex items-center cursor-pointer">
-                                  <input type="checkbox" id="pc_show_customer" class="sr-only peer" ${pConf.showCustomer ? 'checked' : ''} onchange="window.updatePrinterConfig({ showCustomer: this.checked })">
-                                  <div class="w-14 h-7 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-500"></div>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                                <div>
-                                    <h4 class="font-black text-sm uppercase text-slate-800">Show Tax Breakdown</h4>
-                                    <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Display tax amount on receipt</p>
+
+                                <!-- Extra Fields -->
+                                <div class="pt-4 space-y-3">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <h4 class="text-[10px] font-black uppercase text-slate-400">Custom Fields</h4>
+                                        <div class="relative group">
+                                            <button class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-indigo-100 hover:bg-slate-900 transition-all">
+                                                Add Field <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                                            </button>
+                                            <div class="absolute right-0 mt-2 w-40 bg-white border border-slate-100 rounded-2xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 overflow-hidden">
+                                                <button onclick="window.addExtraPrinterField('top')" class="w-full px-4 py-3 text-left text-[9px] font-black uppercase hover:bg-indigo-50 text-slate-600">At Top (Head)</button>
+                                                <button onclick="window.addExtraPrinterField('bottom')" class="w-full px-4 py-3 text-left text-[9px] font-black uppercase hover:bg-rose-50 border-t border-slate-50 text-slate-600">At Bottom (Foot)</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="pc_extra_container" class="space-y-2">
+                                        ${(pConf.extraFields || []).map((f, idx) => `
+                                            <div class="flex gap-2 items-center bg-slate-50 p-2 rounded-xl group">
+                                                <input type="text" value="${f.label}" placeholder="Header" oninput="window.updateExtraPrinterField(${idx}, 'label', this.value)" class="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-[10px] font-black uppercase">
+                                                <input type="text" value="${f.value}" placeholder="Value" oninput="window.updateExtraPrinterField(${idx}, 'value', this.value)" class="flex-[2] bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-[10px] font-bold">
+                                                <button onclick="window.removeExtraPrinterField(${idx})" class="w-8 h-8 flex items-center justify-center text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                                </button>
+                                            </div>
+                                        `).join('')}
+                                    </div>
                                 </div>
-                                <label class="relative inline-flex items-center cursor-pointer">
-                                  <input type="checkbox" id="pc_show_tax" class="sr-only peer" ${pConf.showTax ? 'checked' : ''} onchange="window.updatePrinterConfig({ showTax: this.checked })">
-                                  <div class="w-14 h-7 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-500"></div>
-                                </label>
                             </div>
                         </div>
 
-                        <button onclick="window.updatePrinterConfig()" class="w-full py-6 bg-slate-900 text-white rounded-[28px] font-black uppercase text-xs tracking-[0.2em] shadow-xl hover:bg-black transition-all active:scale-95 flex items-center justify-center gap-3">
+                        <button onclick="window.savePrinterFullConfig()" id="btn_save_p_config" class="w-full py-6 bg-slate-900 text-white rounded-[28px] font-black uppercase text-xs tracking-[0.2em] shadow-xl hover:bg-emerald-600 transition-all active:scale-95 flex items-center justify-center gap-3">
                             <i data-lucide="save" class="w-4 h-4"></i>
-                            Save Printer Config
+                            Save Master Configuration
                         </button>
                     </div>
 
-                    <div class="bg-white p-10 rounded-[48px] shadow-sm">
-                        <div class="flex justify-between items-center mb-6 px-1">
-                            <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Establishments GSTIN</h3>
-                            <span class="text-[8px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded uppercase">Official</span>
-                        </div>
-                        <div class="flex gap-4">
-                            <input id="pc_gstin" value="${window.erpState.gstin || ''}" placeholder="Enter GSTIN Number" class="flex-1 px-6 py-4 bg-slate-50 border-none rounded-2xl font-black text-sm outline-none focus:ring-2 focus:ring-indigo-400 shadow-inner">
-                            <button onclick="window.updateGSTIN()" class="px-8 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all">Update</button>
-                        </div>
-                    </div>
-
                     <!-- Live Receipt Preview -->
-                    <div class="bg-white p-10 rounded-[48px] shadow-sm border border-slate-100">
-                        <div class="flex items-center gap-3 mb-8">
-                            <div class="w-12 h-12 bg-violet-600 text-white rounded-2xl flex items-center justify-center font-black shadow-lg shadow-violet-100">
-                                <i data-lucide="eye" class="w-6 h-6"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-xl font-black text-slate-900 tracking-tighter uppercase mb-0.5">Receipt Preview</h3>
-                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Live thermal template layout</p>
+                    <div class="flex flex-col lg:flex-row gap-10">
+                        <div class="lg:w-1/3 bg-slate-900/5 p-8 rounded-[48px] border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center">
+                            <i data-lucide="eye" class="w-10 h-10 text-slate-300 mb-4"></i>
+                            <h4 class="font-black text-slate-800 uppercase text-xs">Live Preview</h4>
+                            <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-2">Updates for ${pConf.width}mm paper</p>
+                        </div>
+                        
+                        <div class="flex-1 bg-white p-10 rounded-[48px] shadow-sm border border-slate-100 flex justify-center">
+                            <div id="printer_preview_area" class="bg-white shadow-2xl overflow-hidden p-[1mm] border border-slate-100" style="width: ${pConf.width == '80' ? '80mm' : '58mm'}; transition: width 0.3s ease-out">
+                                ${window.getReceiptPreviewHtml()}
                             </div>
                         </div>
-
-                        <div class="flex justify-center">
-                            <div style="width:200px;font-family:monospace;font-size:9px;line-height:1.4;color:#111;border:1px dashed #cbd5e1;border-radius:12px;padding:12px;background:#fafafa;">
-                                ${pConf.logo ? `<div style="text-align:center;margin-bottom:6px;"><img src="${pConf.logo}" style="max-width:80px;max-height:40px;"></div>` : `<div style="text-align:center;margin-bottom:4px;border:1px dashed #e2e8f0;border-radius:6px;padding:6px;color:#94a3b8;font-size:8px;">[ Logo Here ]</div>`}
-                                <div style="text-align:center;font-weight:bold;font-size:11px;">${pConf.header || 'Shop Name'}</div>
-                                ${pConf.address ? pConf.address.split('\n').map(l => `<div style="text-align:center;font-size:8px;color:#555;">${l.trim()}</div>`).join('') : `<div style="text-align:center;font-size:8px;color:#94a3b8;">[ Address ]</div>`}
-                                <div style="text-align:center;font-size:7px;color:#888;margin-top:2px;">+91 75580 08881</div>
-                                <div style="border-top:1px dashed #ccc;margin:6px 0;"></div>
-                                <div style="font-size:8px;">Bill No: B-0001 &nbsp; Date: Today</div>
-                                <div style="font-size:8px;">Customer: Walk-in</div>
-                                <div style="border-top:1px dashed #ccc;margin:6px 0;"></div>
-                                <div style="display:flex;justify-content:space-between;font-size:8px;font-weight:bold;">
-                                    <span>Item</span><span>Qty</span><span>Amt</span>
-                                </div>
-                                <div style="border-top:1px dashed #ccc;margin:3px 0;"></div>
-                                <div style="display:flex;justify-content:space-between;font-size:8px;">
-                                    <span>Sample Item</span><span>x1</span><span>₹500</span>
-                                </div>
-                                <div style="border-top:1px dashed #ccc;margin:6px 0;"></div>
-                                <div style="display:flex;justify-content:space-between;font-size:8px;">
-                                    <span>Subtotal</span><span>₹500</span>
-                                </div>
-                                <div style="display:flex;justify-content:space-between;font-size:8px;font-weight:bold;">
-                                    <span>TOTAL</span><span>₹500</span>
-                                </div>
-                                <div style="display:flex;justify-content:space-between;font-size:8px;">
-                                    <span>Paid</span><span>₹500</span>
-                                </div>
-                                <div style="border-top:1px dashed #ccc;margin:6px 0;"></div>
-                                <div style="text-align:center;font-size:8px;color:#555;">Dry Wash Only, No Exchange, No Refund</div>
-                                <div style="text-align:center;font-size:8px;font-style:italic;margin-top:2px;">${pConf.footer || 'Thank you for visiting!'}</div>
-                                ${window.erpState.gstin ? `<div style="text-align:center;font-size:7px;color:#888;margin-top:4px;">GSTIN: ${window.erpState.gstin}</div>` : ''}
-                            </div>
-                        </div>
-                        <p class="text-center text-[9px] font-black text-slate-300 uppercase tracking-widest mt-6">Updates when you save · Synced from printer config</p>
                     </div>
                 </div>
             </div>`;
@@ -1417,24 +1468,169 @@
     };
 
     window.updatePrinterConfig = async (updates) => {
-        const pConf = window.erpState.printerConfig || { width: '58', logo: '', header: 'Lavish Lavender', address: '', footer: 'Visit Again!', showCustomer: true, showTax: true };
+        const pConf = window.erpState.printerConfig || { 
+            width: '58', logo: '', header: 'Lavish Lavender', subTitle: 'Bridal Boutique', 
+            address: 'MAK building, Near Uppala Bustand, Uppala, Kasargod', 
+            phone: '+91 75580 08881', website: 'www.lavishlavender.in',
+            showCustomer: true, showStaff: true, showTax: true,
+            note: '*** IMPORTANT CARE NOTES ***\nNo Returns | No Exchange | Dry Wash Only',
+            footer1: 'Thank you for Purchase', footer2: 'Visit Again!', footer3: '',
+            extraFields: []
+        };
         
         if (updates) {
             Object.assign(pConf, updates);
-        } else {
-            // Read from DOM
-            pConf.header = document.getElementById('pc_header').value;
-            pConf.address = document.getElementById('pc_address').value;
-            pConf.footer = document.getElementById('pc_footer').value;
-            pConf.logo = document.getElementById('pc_logo').value;
+            window.erpState.printerConfig = pConf;
+            // Update preview in real-time
+            const previewArea = document.getElementById('printer_preview_area');
+            if (previewArea) {
+                previewArea.style.width = (pConf.width == '80' ? '80mm' : '58mm');
+                previewArea.innerHTML = window.getReceiptPreviewHtml();
+            }
         }
+    };
+
+    window.savePrinterFullConfig = async () => {
+        const pConf = window.erpState.printerConfig;
+        pConf.header = document.getElementById('pc_header').value;
+        pConf.subTitle = document.getElementById('pc_subTitle').value;
+        pConf.address = document.getElementById('pc_address').value;
+        pConf.phone = document.getElementById('pc_phone').value;
+        pConf.website = document.getElementById('pc_website').value;
+        pConf.note = document.getElementById('pc_note').value;
+        pConf.footer1 = document.getElementById('pc_footer1').value;
+        pConf.footer2 = document.getElementById('pc_footer2').value;
+        pConf.footer3 = document.getElementById('pc_footer3').value;
 
         window.erpState.printerConfig = pConf;
-        window.erpState.printerWidth = pConf.width; // Sync legacy width field
+        window.erpState.printerWidth = pConf.width;
         
+        const btn = document.getElementById('btn_save_p_config');
+        btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Saving...`;
+        lucide.createIcons();
+
         await window.saveGeneralSettings();
         window.renderApp();
-        if (!updates) alert("Printer Configuration Synchronized!");
+        alert("Master Printer Configuration Saved!");
+    };
+
+    window.addExtraPrinterField = (pos) => {
+        const pConf = window.erpState.printerConfig;
+        const field = { label: 'HEADER', value: 'Value Detail', position: pos };
+        pConf.extraFields = pConf.extraFields || [];
+        pConf.extraFields.push(field);
+        window.updatePrinterConfig();
+        window.renderApp();
+    };
+
+    window.removeExtraPrinterField = (idx) => {
+        window.erpState.printerConfig.extraFields.splice(idx, 1);
+        window.updatePrinterConfig();
+        window.renderApp();
+    };
+
+    window.updateExtraPrinterField = (idx, key, val) => {
+        window.erpState.printerConfig.extraFields[idx][key] = val;
+        // Don't re-render full app on every keystroke to avoid focus loss
+        const previewArea = document.getElementById('printer_preview_area');
+        if (previewArea) previewArea.innerHTML = window.getReceiptPreviewHtml();
+    };
+
+    window.getReceiptPreviewHtml = () => {
+        const pConf = window.erpState.printerConfig || { 
+            width: '58', logo: '', header: 'Lavish Lavender', subTitle: 'Bridal Boutique', 
+            address: 'MAK building, Near Uppala Bustand, Uppala, Kasargod', 
+            phone: '+91 75580 08881', website: 'www.lavishlavender.in',
+            showCustomer: true, showStaff: true, showTax: true,
+            note: '*** IMPORTANT CARE NOTES ***\nNo Returns | No Exchange | Dry Wash Only',
+            footer1: 'Thank you for Purchase', footer2: 'Visit Again!', footer3: '',
+            extraFields: []
+        };
+
+        const width = pConf.width === '80' ? '80mm' : '58mm';
+        const extras = pConf.extraFields || [];
+        
+        let html = `<div style="font-family:monospace; font-size:10px; line-height:1.3; color:#000; padding:4px 8px;">`;
+
+        // Logo
+        if (pConf.logo) {
+            html += `<div style="text-align:center; margin-bottom:8px;"><img src="${pConf.logo}" style="width:40mm; filter:grayscale(1) contrast(1.5);"></div>`;
+        }
+
+        // Header
+        html += `<div style="text-align:center; font-weight:bold; font-size:16px; letter-spacing:1px;">${pConf.header}</div>`;
+        html += `<div style="text-align:center; font-size:10px; margin-bottom:2px;">${pConf.subTitle}</div>`;
+        
+        // Address (Centered, Multi-line)
+        pConf.address.split(',').forEach(line => {
+            html += `<div style="text-align:center; font-size:9px;">${line.trim()}</div>`;
+        });
+        
+        // Phone | Website
+        html += `<div style="text-align:center; font-size:9px;">${pConf.phone} | ${pConf.website}</div>`;
+
+        // Extra Fields (Top)
+        extras.filter(f => f.position === 'top').forEach(f => {
+            html += `<div style="text-align:center; font-size:9px; font-weight:bold; margin-top:2px;">${f.label}: ${f.value}</div>`;
+        });
+
+        html += `<hr style="border:none; border-top:1px dashed #000; margin:6px 0;">`;
+
+        // Meta (Fixed Demo)
+        html += `<div>Bill No: 4-2500</div>`;
+        html += `<div>Date: 18 Mar 2026 Time: 06:28 pm</div>`;
+        if (pConf.showStaff) html += `<div>Staff: Swaliha (Owner)</div>`;
+        if (pConf.showCustomer) {
+            html += `<div>Customer: Abdu salam</div>`;
+            html += `<div>Phone: 8714283895</div>`;
+        }
+
+        html += `<hr style="border:none; border-top:1px dashed #000; margin:6px 0;">`;
+
+        // Items (Fixed Demo)
+        html += `<table style="width:100%; font-size:10px;">`;
+        html += `<tr style="font-weight:bold;"><td>Item</td><td style="text-align:center">Qty</td><td style="text-align:right">Amt</td></tr>`;
+        html += `<tr><td colspan="3" style="border-top:1px dashed #000;"></td></tr>`;
+        html += `<tr><td style="padding:2px 0;">LLU0017</td><td style="text-align:center">x1</td><td style="text-align:right">₹3,830</td></tr>`;
+        html += `</table>`;
+
+        html += `<hr style="border:none; border-top:1px dashed #000; margin:6px 0;">`;
+
+        // Summary
+        html += `<div style="display:flex; justify-content:space-between;"><span>Subtotal</span><span>₹3,830</span></div>`;
+        if (pConf.showTax) html += `<div style="display:flex; justify-content:space-between; font-size:8px;"><span>GSTIN: ${window.erpState.gstin || 'N/A'}</span></div>`;
+        html += `<div style="display:flex; justify-content:space-between; font-weight:bold;"><span>TOTAL</span><span>₹3,830</span></div>`;
+        html += `<div style="display:flex; justify-content:space-between;"><span>Paid</span><span>₹3,830</span></div>`;
+
+        // Loyalty Summary
+        html += `<div style="margin-top:8px; border:1px solid #000; padding:4px; text-align:center;">`;
+        html += `<div style="font-weight:bold; font-size:8px; text-transform:uppercase;">Loyalty Summary</div>`;
+        html += `<div style="font-size:9px;">76 PT Erned | 76 Total PT | BASIC Tier</div>`;
+        html += `</div>`;
+
+        html += `<hr style="border:none; border-top:1px dashed #000; margin:8px 0;">`;
+
+        // Important Note
+        if (pConf.note) {
+            pConf.note.split('\n').forEach(line => {
+                html += `<div style="text-align:center; font-size:9px; font-weight:bold;">${line.trim()}</div>`;
+            });
+            html += `<hr style="border:none; border-top:1px dashed #000; margin:8px 0;">`;
+        }
+
+        // Footers
+        if (pConf.footer1) html += `<div style="text-align:center; font-size:10px;">${pConf.footer1}</div>`;
+        if (pConf.footer2) html += `<div style="text-align:center; font-size:10px;">${pConf.footer2}</div>`;
+        if (pConf.footer3) html += `<div style="text-align:center; font-size:10px;">${pConf.footer3}</div>`;
+
+        // Extra Fields (Bottom)
+        extras.filter(f => f.position === 'bottom').forEach(f => {
+            html += `<div style="text-align:center; font-size:9px; font-weight:bold; margin-top:4px;">${f.label}: ${f.value}</div>`;
+        });
+
+        html += `<div style="text-align:center; margin-top:10px;">* * * * * * * * * * * * * *</div>`;
+        html += `</div>`;
+        return html;
     };
 
     window.toggleDashWidget = async (widgetId, enabled) => {
@@ -1631,6 +1827,18 @@
                                 <span id="cm_final_label" class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Remaining Balance</span>
                                 <span id="cm_final" class="text-2xl font-black text-white">--</span>
                             </div>
+
+                            <!-- Internal Profit Ref (Staff Only) -->
+                            <div class="mt-4 pt-4 border-t border-white/10 flex justify-between items-center text-[7px] font-black uppercase tracking-[0.2em] text-slate-500 relative z-10">
+                                <div class="flex flex-col">
+                                    <span class="mb-1">Internal Margin</span>
+                                    <span id="cm_internal_margin" class="text-emerald-400 text-[10px] font-black">0%</span>
+                                </div>
+                                <div class="text-right flex flex-col items-end">
+                                    <span class="mb-1">Est. Profit</span>
+                                    <span id="cm_internal_profit_val" class="text-slate-200 text-[10px] font-black">₹0</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1735,6 +1943,22 @@
                 const balance = Math.max(0, billTotal - paid);
                 document.getElementById('cm_final').innerText = fmt(balance);
                 document.getElementById('cm_final_label').innerText = balance > 0 ? "Remaining Balance" : "Fully Settled (Advance)";
+            }
+
+            // Internal Profit Calculation
+            const costPrice = window.erpState.cart.reduce((s, it) => s + ((it.cost || 0) * it.qty), 0);
+            const revenue = sub - disc - redeem;
+            const profitVal = revenue - costPrice;
+            const marginVal = revenue > 0 ? (profitVal / revenue) * 100 : 0;
+            
+            const marginEl = document.getElementById('cm_internal_margin');
+            const profitElVal = document.getElementById('cm_internal_profit_val');
+            if (marginEl && profitElVal) {
+                marginEl.innerText = marginVal.toFixed(1) + '%';
+                marginEl.className = marginVal > 40 ? 'text-emerald-400 font-black text-[10px]' : 
+                                   marginVal > 20 ? 'text-amber-400 font-black text-[10px]' : 
+                                   'text-rose-400 font-black text-[10px]';
+                profitElVal.innerText = '₹' + Math.round(profitVal).toLocaleString();
             }
 
             // Sync mixed inputs if visible
@@ -1908,7 +2132,8 @@
                 setTimeout(() => alert(`Success! You earned ${pointsEarned} points 🎉`), 200);
             }
 
-            document.getElementById('charge-modal-overlay').remove();
+            document.getElementById('charge-modal-overlay')?.remove();
+            
             window.erpState.cart = [];
             window.erpState.counter = counter;
             window.erpState.activeDiscountAmt = 0;
@@ -1918,9 +2143,10 @@
             window.scheduleRender();
         } catch (e) {
             console.error(e);
-            alert("Database write failed.");
-            btn.innerHTML = origText;
-            btn.disabled = false;
+            alert("Database write failed. The sale may have been queued offline.");
+            document.getElementById('charge-modal-overlay')?.remove();
+            window.erpState.cart = [];
+            window.renderApp();
         }
     };
 
@@ -2000,7 +2226,8 @@
         if(isNaN(amt) || amt <= 0) return;
         
         const method = prompt("Payment Method (Cash/UPI/Card):", "Cash");
-        
+        if (!method) return;
+
         try {
             const newPaid = (s.advancePaid || 0) + amt;
             const newBal = Math.max(0, s.total - newPaid);
@@ -2010,7 +2237,10 @@
                 balanceDue: newBal,
                 paymentLog: (s.paymentLog || []).concat([{ date: Date.now(), amount: amt, method, note: "Due Collection" }])
             });
+            
             alert("Payment recorded!");
+            // Close any open receipt modals
+            document.querySelectorAll(".fixed.inset-0").forEach(m => m.remove());
             window.renderApp();
         } catch (e) { alert("Sync Error"); }
     };
@@ -2084,9 +2314,12 @@
                             <span class="text-xl font-black text-violet-600">${fmt(sale.total)}</span>
                         </div>
                         ${balance > 0 ? `
-                            <div class="flex justify-between items-center bg-rose-50 px-3 py-2 rounded-lg mt-2">
-                                <span class="text-[10px] font-black text-rose-400 uppercase">Balance Due</span>
-                                <span class="text-sm font-black text-rose-600">${fmt(balance)}</span>
+                            <div class="flex justify-between items-center bg-rose-50 px-3 py-2 rounded-xl mt-3">
+                                <div>
+                                    <span class="text-[10px] font-black text-rose-400 uppercase block leading-none mb-1">Due</span>
+                                    <span class="text-sm font-black text-rose-600">${fmt(balance)}</span>
+                                </div>
+                                <button onclick="window.collectDue('${sale.id}')" class="bg-rose-600 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-rose-200 active:scale-95">Collect</button>
                             </div>
                         ` : ''}
                     </div>
@@ -2229,126 +2462,142 @@
         const sale = window.erpState.sales.find(s => s.billNo === billNo);
         if (!sale) return;
         const items = sale.items || [];
-        const pConf = window.erpState.printerConfig || { width: '58', logo: '', header: 'Lavish Lavender', footer: 'Visit Again!', showCustomer: true, showTax: true };
-        const width = pConf.width || '58';
-        const widthPx = width === '80' ? '80mm' : '58mm';
-
+        const pConf = window.erpState.printerConfig || { 
+            width: '58', logo: '', header: 'Lavish Lavender', subTitle: 'Bridal Boutique', 
+            address: 'MAK building, Near Uppala Bustand, Uppala, Kasargod', 
+            phone: '+91 75580 08881', website: 'www.lavishlavender.in',
+            showCustomer: true, showStaff: true, showTax: true,
+            note: '*** IMPORTANT CARE NOTES ***\nNo Returns | No Exchange | Dry Wash Only',
+            footer1: 'Thank you for Purchase', footer2: 'Visit Again!', footer3: '',
+            extraFields: []
+        };
+        
         const dateObj = new Date(sale.date);
         const dateStr = dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
         const timeStr = dateObj.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
-        const w = window.open('', '_blank', `width=${width === '80' ? 450 : 350},height=600`);
-        
-        let html = `<html><body style='font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;width:${widthPx};font-size:12px;margin:0 auto;padding:10px 5px;line-height:1.4;color:#111;text-align:center;'>`;
+        const paperWidth = pConf.width === '80' ? '80mm' : '58mm';
+        const w = window.open('', '_blank', `width=${pConf.width == '80' ? '450' : '350'},height=600`);
+        if (!w) return alert("Popup blocked! Please allow popups for printing.");
 
+        let html = `<html><body style='font-family:monospace;width:${paperWidth};font-size:10px;margin:0;padding:5px 12px;line-height:1.2;color:#000;'>`;
+
+        // Logo
         if (pConf.logo) {
-            html += `<div style='margin-bottom:10px;'><img src='${pConf.logo}' style='max-width:140px;max-height:80px;'></div>`;
+            html += `<div style='text-align:center;margin-bottom:8px;'><img src='${pConf.logo}' style='width:40mm;filter:grayscale(1) contrast(1.5);'></div>`;
         }
-        html += `<div style='font-weight:bold;font-size:15px;margin-bottom:4px;'>${pConf.header || 'Lavish lavender'}</div>`;
-        if (pConf.address) {
-            const lines = pConf.address.split('\n');
-            lines.forEach(line => {
-                html += `<div style='font-size:12px;color:#444;'>${line.trim()}</div>`;
+
+        // Header Section
+        html += `<div style='text-align:center;font-weight:bold;font-size:16px;letter-spacing:1px;'>${pConf.header}</div>`;
+        html += `<div style='text-align:center;font-size:10px;margin-bottom:2px;'>${pConf.subTitle}</div>`;
+        
+        pConf.address.split(',').forEach(line => {
+            html += `<div style='text-align:center;font-size:9px;'>${line.trim()}</div>`;
+        });
+        
+        html += `<div style='text-align:center;font-size:9px;'>${pConf.phone} | ${pConf.website}</div>`;
+
+        // Extra Top Fields
+        if (pConf.extraFields) {
+            pConf.extraFields.filter(f => f.position === 'top').forEach(f => {
+                html += `<div style='text-align:center;font-size:9px;font-weight:bold;margin-top:2px;'>${f.label}: ${f.value}</div>`;
             });
         }
-        
-        html += `<hr style='border:none;border-top:1px dashed #ccc;margin:16px 0;'>`;
 
-        // Big Total
-        html += `<div style='font-size:28px;font-weight:500;margin-bottom:4px;letter-spacing:-0.5px;'>₹${sale.total || 0}</div>`;
-        html += `<div style='font-size:12px;color:#666;'>Total</div>`;
+        html += `<hr style='border:none;border-top:1px dashed #000;margin:5px 0;'>`;
 
-        html += `<hr style='border:none;border-top:1px dashed #ccc;margin:16px 0;'>`;
+        // Meta Section
+        html += `<div>Bill No: ${billNo}</div>`;
+        html += `<div>Date: ${dateStr} Time: ${timeStr}</div>`;
+        if (pConf.showStaff) html += `<div>Staff: ${sale.recordedBy || 'Staff Member'}</div>`;
+        if (pConf.showCustomer) {
+            html += `<div>Customer: ${sale.customerName || 'Guest'}</div>`;
+            html += `<div>Phone: ${sale.customerPhone || 'N/A'}</div>`;
+        }
 
-        // Employee & POS
-        const employeeName = sale.recordedBy || window.erpState.role || 'Owner';
-        html += `<div style='text-align:left;font-size:12px;margin-bottom:4px;'>Employee: ${employeeName}</div>`;
-        html += `<div style='text-align:left;font-size:12px;'>POS: Tab 2</div>`;
+        // Tailoring Ref
+        const tRefs = [...new Set(items.map(i => i.tailoringRef).filter(Boolean))];
+        if (tRefs.length > 0) {
+            html += `<div style='font-weight:bold;margin-top:2px;'>Tailoring Ref: ${tRefs.join(', ')}</div>`;
+        }
 
-        html += `<hr style='border:none;border-top:1px dashed #ccc;margin:16px 0;'>`;
+        html += `<hr style='border:none;border-top:1px dashed #000;margin:5px 0;'>`;
 
-        // Items list formatted to match Loyverse
-        html += `<div style='text-align:left;'>`;
+        // Item Table Header
+        html += `<table style='width:100%;font-size:10px;text-align:left;'>`;
+        html += `<tr style='font-weight:bold;'><td>Item</td><td style='text-align:center;'>Qty</td><td style='text-align:right;'>Amt</td></tr>`;
+        html += `<tr><td colspan='3' style='border-top:1px dashed #000;'></td></tr>`;
+
+        // Item Loop
         items.forEach(i => {
-            html += `<div style='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;'>`;
-            html += `  <div style='flex:1;padding-right:10px;'>`;
-            html += `    <div style='font-size:12px;color:#111;'>${i.name}</div>`;
-            html += `    <div style='font-size:11px;color:#666;margin-top:2px;'>${i.qty} &times; ₹${i.price}</div>`;
-            html += `  </div>`;
-            html += `  <div style='font-size:12px;color:#111;'>₹${i.price * i.qty}</div>`;
-            html += `</div>`;
+            html += `<tr>`;
+            html += `<td style='padding:2px 0;'>${i.name}</td>`;
+            html += `<td style='text-align:center;'>x${i.qty}</td>`;
+            html += `<td style='text-align:right;'>₹${(i.price * i.qty).toLocaleString('en-IN')}</td>`;
+            html += `</tr>`;
         });
+        html += `</table>`;
+        html += `<hr style='border:none;border-top:1px dashed #000;margin:5px 0;'>`;
 
-        // Summary lines
-        html += `<div style='display:flex;justify-content:space-between;font-weight:bold;font-size:12px;margin-top:20px;margin-bottom:10px;'>`;
-        html += `  <span>Total</span>`;
-        html += `  <span>₹${sale.total || 0}</span>`;
-        html += `</div>`;
-
-        // Advance paid / Cash
-        const paid = sale.advancePaid || (sale.total || 0);
-        html += `<div style='display:flex;justify-content:space-between;font-size:12px;margin-bottom:10px;'>`;
-        html += `  <span>Cash</span>`;
-        html += `  <span>₹${paid}</span>`; 
-        html += `</div>`;
-
-        // Balance Due
+        // Summary Calculations
+        const subtotal = sale.subtotal || 0;
+        const discount = sale.discount || 0;
+        const taxVal = sale.taxValue || 0;
+        const taxAmt = (subtotal - discount) * (taxVal / 100);
+        const total = sale.total || 0;
+        const paid = sale.advancePaid || 0;
         const balance = sale.balanceDue || 0;
-        if (balance > 0) {
-            html += `<div style='display:flex;justify-content:space-between;font-size:12px;margin-bottom:10px;'>`;
-            html += `  <span>Balance</span>`;
-            html += `  <span style="color:#d97706;font-weight:bold;">₹${balance}</span>`; 
-            html += `</div>`;
+
+        const printRow = (l, v, b = false, c = '#000') =>
+            `<div style='display:flex;justify-content:space-between;${b ? "font-weight:bold;" : ""}color:${c};'><span>${l}</span><span>${v}</span></div>`;
+
+        html += printRow("Subtotal", "₹" + subtotal.toLocaleString('en-IN'));
+        if (discount > 0) html += printRow("Discount", "- ₹" + discount.toLocaleString('en-IN'));
+        if (pConf.showTax && taxVal > 0) {
+            html += printRow("Tax (" + taxVal + "%)", "₹" + Math.round(taxAmt).toLocaleString('en-IN'));
+            html += `<div style='font-size:8px;text-align:right;'>GSTIN: ${window.erpState.gstin || 'N/A'}</div>`;
         }
-        
-        // Tax explicit breakdown (if applicable/enabled)
-        if (pConf.showTax && sale.taxValue > 0) {
-            const subtotal = sale.subtotal || 0;
-            const discount = sale.discount || 0;
-            const total = sale.total || 0;
-            html += `<div style='display:flex;justify-content:space-between;font-size:12px;color:#666;margin-top:10px;'>`;
-            html += `  <span>Tax (${sale.taxValue}%)</span>`;
-            html += `  <span>₹${total - (subtotal - discount)}</span>`;
-            html += `</div>`;
-        }
+        html += `<hr style='border:none;border-top:1px dashed #000;margin:3px 0;'>`;
+        html += printRow("TOTAL", "₹" + total.toLocaleString('en-IN'), true);
+        html += printRow("Paid", "₹" + paid.toLocaleString('en-IN'));
+        if (balance > 0) html += printRow("Balance Due", "₹" + balance.toLocaleString('en-IN'), true, "#dc2626");
 
-        html += `</div>`; // Close text-align:left
-        html += `<hr style='border:none;border-top:1px dashed #ccc;margin:16px 0;'>`;
+        html += `<hr style='border:none;border-top:1px dashed #000;margin:5px 0;'>`;
 
-        // Footer Care Notes (exactly as requested)
-        html += `<div style='text-align:center;font-size:11px;color:#555;line-height:1.5;margin-bottom:16px;'>`;
-        html += `Dry Wash Only, No Exchange, No Refund<br>`;
-        html += `Thank your for purchase,<br>`;
-        html += `Please come back again.`;
-        html += `</div>`;
-
-        // Date and Receipt Number
-        html += `<div style='display:flex;justify-content:space-between;font-size:11px;color:#555;'>`;
-        html += `  <span>${dateStr} ${timeStr}</span>`;
-        html += `  <span>№ ${billNo}</span>`;
-        html += `</div>`;
-        
-        if (window.erpState.gstin) {
-            html += `<div style='text-align:center;font-size:10px;color:#555;margin-top:16px;'>GSTIN: ${window.erpState.gstin}</div>`;
-        }
-
-        // Loyalty Info at the bottom
+        // Loyalty Summary
         if (sale.loyaltySnapshot) {
             const ls = sale.loyaltySnapshot;
-            html += `<hr style='border:none;border-top:1px dashed #ccc;margin:16px 0;'>`;
-            html += `<div style='text-align:center;font-size:10px;color:#111;'>`;
-            html += `<p style='margin:0;font-style:italic;'>Loyalty Summary</p>`;
-            html += `<p style='margin:4px 0;font-weight:bold;'>${ls.earned} PT Erned | ${ls.total} Total PT | ${(ls.tier || 'Basic').toUpperCase()} Tier</p>`;
+            html += `<div style='margin-top:4px;border:1px solid #000;padding:4px;text-align:center;'>`;
+            html += `<div style='font-weight:bold;font-size:8px;text-transform:uppercase;'>Loyalty Summary</div>`;
+            html += `<div style='font-size:9px;'>${ls.earned} PT Erned | ${ls.total} Total PT | ${(ls.tier || 'Basic').toUpperCase()} Tier</div>`;
             html += `</div>`;
+            html += `<hr style='border:none;border-top:1px dashed #000;margin:8px 0;'>`;
         }
 
-        html += `<div style='text-align:center;font-size:10px;color:#999;margin-top:30px;'>`;
-        html += `&copy; 2026 Loyverse. All rights reserved.`;
-        html += `</div>`;
+        // Care Notes
+        if (pConf.note) {
+            pConf.note.split('\n').forEach(line => {
+                html += `<div style='text-align:center;font-size:9px;font-weight:bold;'>${line.trim()}</div>`;
+            });
+            html += `<hr style='border:none;border-top:1px dashed #000;margin:8px 0;'>`;
+        }
 
-        html += "</body></html>";
+        // Footers
+        if (pConf.footer1) html += `<div style='text-align:center;font-size:10px;'>${pConf.footer1}</div>`;
+        if (pConf.footer2) html += `<div style='text-align:center;font-size:10px;'>${pConf.footer2}</div>`;
+        if (pConf.footer3) html += `<div style='text-align:center;font-size:10px;'>${pConf.footer3}</div>`;
 
-        const style = `<style>@media print { @page { margin: 0; size: ${widthPx} auto; } body { margin: 0; padding: 0; width: ${widthPx}; overflow: hidden; } html, body { height: auto !important; margin: 0 !important; padding: 0 !important; } } body { width: ${widthPx}; padding: 0; margin: 0; }</style>`;
+        // Extra Bottom Fields
+        if (pConf.extraFields) {
+            pConf.extraFields.filter(f => f.position === 'bottom').forEach(f => {
+                html += `<div style='text-align:center;font-size:9px;font-weight:bold;margin-top:4px;'>${f.label}: ${f.value}</div>`;
+            });
+        }
+
+        html += `<div style='text-align:center;margin-top:10px;'>* * * * * * * * * * * * * *</div>`;
+        html += `<div style='height:20px;'></div></body></html>`;
+
+        const style = `<style>@media print { @page { margin: 0; size: ${paperWidth} auto; } body { margin: 0; padding: 0; width: ${paperWidth}; overflow: hidden; } html, body { height: auto !important; margin: 0 !important; padding: 0 !important; } * { -webkit-print-color-adjust: exact; } } body { width: ${paperWidth}; font-family: monospace; padding: 0; margin: 0; }</style>`;
 
         w.document.write(style + html);
         w.document.close();
@@ -2448,7 +2697,7 @@
         let tpl = balance > 0 ? (templates.ready || templates.booking) : templates.delivered;
         
         if (!tpl) {
-            tpl = `Hi {customerName},\n\nThank you for shopping at *Lavish Lavender*!\n\nYour bill *{billNo}* for *₹{totalCost}* is confirmed. {balance != "0" ? 'Remaining: *₹{balance}*' : ''}\n\n✨ *Loyalty Info*\nTier: {tier}\nPoints: {totalPoints}\n\nView details: https://www.lavishlavender.in/receipt/?bill={billNo}`;
+            tpl = `*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nYour bill *{billNo}* for *₹{totalCost}* is confirmed. {balance != "0" ? 'Remaining: *₹{balance}*' : ''}\n\n✨ *Loyalty Info*\n{earnedPoints} PT Erned | {totalPoints} Total PT | {tier} Tier\n\nView details: https://www.lavishlavender.in/receipt/?bill={billNo}`;
         }
 
         const msg = encodeURIComponent(fillTemplate(tpl, data));
