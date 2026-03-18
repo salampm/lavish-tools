@@ -1211,6 +1211,40 @@
         window.showPopup(isPartial ? "Order Delivered (Pending Dues)" : "Order Delivered & Settled", () => window.sendWA(o.id, 3));
     };
 
+    window.printOrderReceipt = function(billNo) {
+        let bNo = billNo;
+        if (!bNo) {
+            const el = document.getElementById('del-bill-no');
+            if (el) bNo = el.innerText;
+        }
+        if (!bNo) {
+            const o = window.erpState.orders.find(x => x.id === window.selectedOrderId);
+            if (o) bNo = o.billNo;
+        }
+        
+        const o = window.erpState.orders.find(x => x.billNo === bNo);
+        if (!o) return alert("Order not found: " + bNo);
+
+        const printData = {
+            billNo: o.billNo,
+            customerName: o.customerName,
+            customerPhone: o.phone,
+            date: o.orderDate || o.timestamp,
+            recordedBy: o.recordedBy || "",
+            items: o.items || [],
+            subtotal: o.totalCost || 0,
+            discount: o.deliveryDiscount || 0,
+            taxVal: 0, 
+            total: (o.totalCost || 0) - (o.deliveryDiscount || 0),
+            paid: o.advancePaid || 0,
+            balance: Math.max(0, (o.totalCost || 0) - (o.deliveryDiscount || 0) - (o.advancePaid || 0)),
+            loyaltySnapshot: o.loyaltySnapshot,
+            tailoringRefs: [o.billNo]
+        };
+
+        window.generateThermalPrint(printData);
+    };
+
     window.exportAll = () => {
         const data = window.erpState.orders.map(o => ({
             Bill: o.billNo,

@@ -336,3 +336,157 @@ window.scheduleRender = () => {
         if (window.saveLocalCache) window.saveLocalCache();
     });
 };
+// UNIVERSAL THERMAL PRINT ENGINE
+window.generateThermalPrint = function(data) {
+    const pConf = window.erpState.printerConfig || { 
+        width: '58', logo: '', header: 'Lavish Lavender', subTitle: 'Bridal Boutique', 
+        address: 'MAK building, Near Uppala Bustand, Uppala, Kasargod', 
+        phone: '+91 75580 08881', website: 'www.lavishlavender.in',
+        showCustomer: true, showStaff: true, showTax: true,
+        note: '*** IMPORTANT CARE NOTES ***\nNo Returns | No Exchange | Dry Wash Only',
+        footer1: 'Thank you for Purchase', footer2: 'Visit Again!', footer3: '',
+        extraFields: []
+    };
+    
+    const paperWidth = pConf.width === '80' ? '80mm' : '58mm';
+    const fmt = (v) => '₹' + (v || 0).toLocaleString('en-IN');
+    
+    const dateObj = new Date(data.date || Date.now());
+    const dateStr = dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    const timeStr = dateObj.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    const w = window.open('', '_blank', `width=${pConf.width == '80' ? '450' : '350'},height=600`);
+    if (!w) return alert("Popup blocked! Please allow popups for printing.");
+
+    let html = `<html><body style='font-family:monospace;width:${paperWidth};font-size:10px;margin:0;padding:5px 12px;line-height:1.2;color:#000;'>`;
+
+    // Logo
+    if (pConf.logo) {
+        html += `<div style='text-align:center;margin-bottom:8px;'><img src='${pConf.logo}' style='width:40mm;filter:grayscale(1) contrast(1.5);'></div>`;
+    }
+
+    // Header Section
+    html += `<div style='text-align:center;font-weight:bold;font-size:16px;letter-spacing:1px;'>${pConf.header}</div>`;
+    html += `<div style='text-align:center;font-size:10px;margin-bottom:2px;'>${pConf.subTitle}</div>`;
+    
+    (pConf.address || "").split(',').forEach(line => {
+        html += `<div style='text-align:center;font-size:9px;'>${line.trim()}</div>`;
+    });
+    
+    html += `<div style='text-align:center;font-size:9px;'>${pConf.phone} | ${pConf.website}</div>`;
+
+    // Extra Top Fields
+    if (pConf.extraFields) {
+        pConf.extraFields.filter(f => f.position === 'top').forEach(f => {
+            html += `<div style='text-align:center;font-size:9px;font-weight:bold;margin-top:2px;'>${f.label}: ${f.value}</div>`;
+        });
+    }
+
+    html += `<hr style='border:none;border-top:1px dashed #000;margin:5px 0;'>`;
+
+    // Meta Section
+    html += `<div>Bill No: ${data.billNo}</div>`;
+    html += `<div>Date: ${dateStr} Time: ${timeStr}</div>`;
+    if (pConf.showStaff && data.recordedBy) html += `<div>Staff: ${data.recordedBy}</div>`;
+    if (pConf.showCustomer) {
+        if (data.customerName) html += `<div>Customer: ${data.customerName}</div>`;
+        if (data.customerPhone) html += `<div>Phone: ${data.customerPhone}</div>`;
+    }
+
+    // Tailoring References
+    if (data.tailoringRefs && data.tailoringRefs.length > 0) {
+        html += `<div style='font-weight:bold;margin-top:2px;'>Tailoring Ref: ${data.tailoringRefs.join(', ')}</div>`;
+    }
+
+    html += `<hr style='border:none;border-top:1px dashed #000;margin:5px 0;'>`;
+
+    // Items
+    html += `<table style='width:100%;font-size:10px;text-align:left;'>`;
+    html += `<tr style='font-weight:bold;'><td>Item</td><td style='text-align:center;'>Qty</td><td style='text-align:right;'>Amt</td></tr>`;
+    html += `<tr><td colspan='3' style='border-top:1px dashed #000;'></td></tr>`;
+
+    (data.items || []).forEach(i => {
+        html += `<tr>`;
+        html += `<td style='padding:2px 0;'>${i.name}</td>`;
+        html += `<td style='text-align:center;'>x${i.qty || 1}</td>`;
+        html += `<td style='text-align:right;'>${fmt((i.price || 0) * (i.qty || 1))}</td>`;
+        html += `</tr>`;
+    });
+    html += `</table>`;
+    html += `<hr style='border:none;border-top:1px dashed #000;margin:5px 0;'>`;
+
+    const printRow = (l, v, b = false, c = '#000') =>
+        `<div style='display:flex;justify-content:space-between;${b ? "font-weight:bold;" : ""}color:${c};'><span>${l}</span><span>${v}</span></div>`;
+
+    html += printRow("Subtotal", fmt(data.subtotal));
+    if (data.discount > 0) html += printRow("Discount", "- " + fmt(data.discount));
+    if (pConf.showTax && data.taxVal > 0) {
+        const taxAmt = (data.subtotal - data.discount) * (data.taxVal / 100);
+        html += printRow("Tax (" + data.taxVal + "%)", fmt(Math.round(taxAmt)));
+        html += `<div style='font-size:8px;text-align:right;'>GSTIN: ${window.erpState.gstin || 'N/A'}</div>`;
+    }
+    
+    html += `<hr style='border:none;border-top:1px dashed #000;margin:3px 0;'>`;
+    html += printRow("TOTAL", fmt(data.total), true);
+    html += printRow("Paid", fmt(data.paid));
+    if (data.balance > 0) html += printRow("Balance Due", fmt(data.balance), true, "#dc2626");
+
+    html += `<hr style='border:none;border-top:1px dashed #000;margin:5px 0;'>`;
+
+    // Loyalty
+    if (data.loyaltySnapshot) {
+        const ls = data.loyaltySnapshot;
+        html += `<div style='margin-top:4px;border:1px solid #000;padding:4px;text-align:center;'>`;
+        html += `<div style='font-weight:bold;font-size:8px;text-transform:uppercase;'>Loyalty Summary</div>`;
+        html += `<div style='font-size:9px;'>${ls.earned} PT Erned | ${ls.total} Total PT | ${(ls.tier || 'Basic').toUpperCase()} Tier</div>`;
+        html += `</div>`;
+        html += `<hr style='border:none;border-top:1px dashed #000;margin:8px 0;'>`;
+    }
+
+    // Care Note
+    if (pConf.note) {
+        pConf.note.split('\n').forEach(line => {
+            html += `<div style='text-align:center;font-size:9px;font-weight:bold;'>${line.trim()}</div>`;
+        });
+        html += `<hr style='border:none;border-top:1px dashed #000;margin:8px 0;'>`;
+    }
+
+    // Footers
+    if (pConf.footer1) html += `<div style='text-align:center;font-size:10px;'>${pConf.footer1}</div>`;
+    if (pConf.footer2) html += `<div style='text-align:center;font-size:10px;'>${pConf.footer2}</div>`;
+    if (pConf.footer3) html += `<div style='text-align:center;font-size:10px;'>${pConf.footer3}</div>`;
+
+    if (pConf.extraFields) {
+        pConf.extraFields.filter(f => f.position === 'bottom').forEach(f => {
+            html += `<div style='text-align:center;font-size:9px;font-weight:bold;margin-top:4px;'>${f.label}: ${f.value}</div>`;
+        });
+    }
+
+    html += `<div style='text-align:center;margin-top:10px;'>* * * * * * * * * * * * * *</div>`;
+    html += `</body></html>`;
+
+    const style = `<style>
+        @page { margin: 0; size: ${paperWidth} auto; }
+        body { 
+            margin: 0; 
+            padding: 0; 
+            width: ${paperWidth}; 
+            height: auto !important;
+            overflow: hidden;
+            font-family: monospace;
+        }
+        * { -webkit-print-color-adjust: exact; box-sizing: border-box; }
+        @media print { 
+            body { width: ${paperWidth}; } 
+            .no-print { display: none; }
+        }
+    </style>`;
+
+    w.document.write(style + html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => {
+        w.print();
+        setTimeout(() => { w.close(); }, 800);
+    }, 800);
+};
