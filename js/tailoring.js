@@ -183,22 +183,22 @@
         });
 
         return `
-        <div class="p-8 h-full flex flex-col overflow-hidden">
-            <div class="mb-6 flex flex-col md:flex-row gap-4">
+        <div class="p-8 h-full flex flex-col overflow-hidden bg-slate-50/50">
+            <div class="mb-10 flex flex-col md:flex-row gap-6">
                 <div class="relative flex-1">
-                    <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4"></i>
-                    <input type="text" id="tracker-search" placeholder="Search by name or bill..." class="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold" oninput="window.filterTracker(this.value)">
+                    <i data-lucide="search" class="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5"></i>
+                    <input type="text" id="tracker-search" placeholder="Search by name or bill..." class="w-full pl-14 pr-6 py-4 bg-white border border-slate-100 rounded-[28px] text-sm font-bold shadow-sm outline-none focus:border-violet-200 transition-all" oninput="window.filterTracker(this.value)">
                 </div>
-                <div class="flex gap-2">
-                    <button onclick="window.toggleTrackerSort('billNo')" class="bg-white border border-slate-200 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${key === 'billNo' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
+                <div class="flex gap-3">
+                    <button onclick="window.toggleTrackerSort('billNo')" class="bg-white border border-slate-100 px-6 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${key === 'billNo' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
                         <i data-lucide="hash" class="w-4 h-4"></i> Bill ${key === 'billNo' ? (dir === 'desc' ? '↓' : '↑') : ''}
                     </button>
-                    <button onclick="window.toggleTrackerSort('deliveryDate')" class="bg-white border border-slate-200 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${key === 'deliveryDate' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
+                    <button onclick="window.toggleTrackerSort('deliveryDate')" class="bg-white border border-slate-100 px-6 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${key === 'deliveryDate' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
                         <i data-lucide="calendar" class="w-4 h-4"></i> Date ${key === 'deliveryDate' ? (dir === 'desc' ? '↓' : '↑') : ''}
                     </button>
                 </div>
             </div>
-            <div id="tracker-list" class="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 custom-scrollbar pr-2 pb-10">
+            <div id="tracker-list" class="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-10 custom-scrollbar pr-4 pb-20">
                 ${active.map(o => renderOrderCard(o)).join('') || `<div class="col-span-full py-40 text-center text-slate-300 italic flex flex-col items-center justify-center opacity-40"><i data-lucide="scissors" class="w-16 h-16 mb-4"></i> No active orders found</div>`}
             </div>
         </div>
@@ -218,51 +218,34 @@
         const isOverdue = o.deliveryDate && new Date(o.deliveryDate) < new Date() && o.status !== 'Delivered';
 
         return `
-        <div id="card-${o.id}" onclick="window.openOrderDetails('${o.id}')" class="bg-white rounded-[40px] border border-slate-100 shadow-sm p-8 hover:shadow-2xl hover:shadow-violet-500/10 hover:border-violet-200 transition-all cursor-pointer relative group flex flex-col h-full overflow-hidden">
-            <div class="absolute -right-6 -top-6 w-24 h-24 bg-slate-50 rounded-full group-hover:bg-violet-50 transition-colors duration-500"></div>
-            
-            <div class="flex justify-between items-start mb-6 relative z-10">
-                <div class="min-w-0">
-                    <span class="text-[10px] font-black text-violet-500 font-mono tracking-tighter uppercase mb-2 block leading-none">№ ${o.billNo}</span>
-                    <h3 class="font-black text-slate-900 text-lg uppercase tracking-tight leading-tight line-clamp-1">${o.customerName}</h3>
-                    <p class="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">${o.phone}</p>
+        <div id="card-${o.id}" onclick="window.openOrderDetails('${o.id}')" class="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex flex-col h-fit hover:shadow-xl transition-all cursor-pointer group">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                   <h3 class="font-black text-lg uppercase text-slate-900">${o.customerName}</h3>
+                   <span class="text-[10px] font-black text-violet-400 font-mono tracking-tighter uppercase block mt-0.5">№ ${o.billNo}</span>
                 </div>
-                <div class="flex-shrink-0">
-                    <span class="px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest ${statusColors[o.status] || statusColors['Pending']} shadow-sm">
-                        ${o.status.replace('Order ', '')}
-                    </span>
-                </div>
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${window.fmtDate(o.deliveryDate)}</span>
             </div>
 
-            <div class="space-y-4 mb-8 pt-6 border-t border-slate-50 relative z-10">
-                <div class="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
-                    <div class="space-y-1">
-                        <p class="text-slate-400">Due Date</p>
-                        <p class="${isOverdue ? 'text-rose-500' : 'text-slate-800'} flex items-center gap-1.5"><i data-lucide="clock" class="w-3.5 h-3.5"></i> ${window.fmtDate(o.deliveryDate)}</p>
+            <div class="space-y-1 mb-6">
+                ${(o.items || []).map(it => `
+                    <div class="flex justify-between text-xs font-bold text-slate-500">
+                        <span>1x ${it.name}</span>
+                        <span>${isOverdue ? '<i data-lucide="alert-circle" class="w-3 h-3 text-rose-500 inline mr-1"></i>' : ''} ${window.fmtDate(o.orderDate || o.timestamp)}</span>
                     </div>
-                    <div class="text-right space-y-1">
-                        <p class="text-slate-400">Balance</p>
-                        <p class="${bal > 0 ? 'text-rose-600' : 'text-emerald-600'}">₹${bal.toLocaleString()}</p>
-                    </div>
-                </div>
+                `).join('')}
+                ${(o.items || []).length === 0 ? '<div class="text-xs italic text-slate-300">No items specified</div>' : ''}
             </div>
 
-            <div class="mt-auto relative z-10">
-                <div class="flex flex-wrap gap-2 mb-6">
-                    ${(o.items || []).slice(0, 3).map(it => `
-                        <span class="px-3 py-1 bg-slate-50 rounded-lg text-[9px] font-bold text-slate-500 uppercase tracking-tighter border border-slate-100">${it.name}</span>
-                    `).join('')}
-                    ${(o.items || []).length > 3 ? `<span class="px-2 py-1 text-[9px] font-black text-slate-300 uppercase tracking-widest">+${o.items.length - 3}</span>` : ''}
+            <div class="flex items-center justify-between pt-4 border-t border-slate-50">
+                <div class="flex flex-col">
+                    <span class="text-xl font-black ${bal > 0 ? 'text-rose-600' : 'text-slate-900'}">₹${bal.toLocaleString()}</span>
+                    <span class="text-[8px] font-black text-slate-300 uppercase tracking-widest leading-none mt-1">${bal > 0 ? 'Balance Due' : 'Fully Paid'}</span>
                 </div>
-
                 <div class="flex gap-2">
-                    <select onclick="event.stopPropagation()" onchange="window.updateOrderStatus('${o.id}', this.value)" class="flex-1 px-4 py-3.5 rounded-2xl text-[9px] font-black uppercase tracking-widest outline-none bg-slate-900 text-white shadow-xl hover:bg-violet-700 transition-colors cursor-pointer border-none appearance-none text-center">
-                        <option value="Order Confirmed" ${o.status === 'Order Confirmed' ? 'selected' : ''}>Modify Flow</option>
-                        <option value="Order Confirmed" ${o.status === 'Order Confirmed' ? 'selected' : ''}>Confirmed</option>
-                        <option value="Stitching" ${o.status === 'Stitching' ? 'selected' : ''}>Stitching</option>
-                        <option value="Ready" ${o.status === 'Ready' ? 'selected' : ''}>Ready Point</option>
-                        <option value="Delivered" ${o.status === 'Delivered' ? 'selected' : ''}>Deliver Item</option>
-                    </select>
+                    <span class="px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${statusColors[o.status] || statusColors['Pending']}">
+                        ${o.status.replace('Order ', '').replace('Pickup', '')}
+                    </span>
                 </div>
             </div>
         </div>
