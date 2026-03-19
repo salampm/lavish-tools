@@ -1,12 +1,59 @@
-// Shared Application State and Logic
 window.APP_VERSION = "v2.1.0";
 
-// Force Unregister old Service Workers to fix "not loading new version" issue
+// --- CACHE & UPDATE MANAGEMENT ---
+// 1. Force unregister old Service Workers that often block updates
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(registrations => {
         for (let registration of registrations) registration.unregister();
     });
 }
+
+// 2. Periodic Remote Update Check
+window.checkAppUpdates = async () => {
+    try {
+        const response = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+        const remote = await response.json();
+        const localBuild = localStorage.getItem('app_last_build');
+        
+        // If it's a new session or build is newer than local
+        if (localBuild && remote.build > parseInt(localBuild)) {
+            window.showUpdateNotification(remote.version);
+        }
+        localStorage.setItem('app_last_build', remote.build);
+        localStorage.setItem('app_curr_version', remote.version);
+    } catch (e) { console.warn("Update check failed", e); }
+};
+
+window.showUpdateNotification = (v) => {
+    if (document.getElementById('update-toast')) return;
+    const toast = document.createElement('div');
+    toast.id = 'update-toast';
+    toast.className = "fixed bottom-10 left-1/2 -translate-x-1/2 bg-slate-900 shadow-2xl rounded-[32px] p-6 z-[9999] border border-slate-700 animate-pop-in flex items-center gap-6 max-w-[90%]";
+    toast.innerHTML = `
+        <div class="w-12 h-12 bg-violet-600 rounded-full flex items-center justify-center flex-shrink-0 pulse">
+            <i data-lucide="zap" class="w-6 h-6 text-white text-violet-100"></i>
+        </div>
+        <div class="min-w-0">
+            <p class="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-1">New Update Available</p>
+            <p class="text-white font-bold text-sm">Version ${v} is ready for you</p>
+        </div>
+        <button onclick="window.hardReloadApp()" class="px-6 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-violet-700 transition-all shadow-lg shadow-violet-500/20 whitespace-nowrap">Reload</button>
+    `;
+    document.body.appendChild(toast);
+    if (window.lucide) lucide.createIcons();
+};
+
+window.hardReloadApp = () => {
+    // Clear erp_cache to ensure fresh data if it's a breaking update
+    // But keep crucial settings if possible. For now, just a force reload is safer.
+    localStorage.removeItem('erp_cache');
+    window.location.reload(true);
+};
+
+// Check for updates on startup
+window.addEventListener('load', () => {
+    setTimeout(window.checkAppUpdates, 3000); // Check 3 seconds after load
+});
 
 window.sanitizePhone = (phone) => {
     if (!phone) return "";
@@ -328,9 +375,42 @@ window.navBtn = (item) => {
     </div>`;
 };
 
+window.toggleSidebar = (show) => {
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (!sidebar) return;
+
+    if (show === undefined) show = sidebar.classList.contains('-translate-x-full');
+
+    if (show) {
+        sidebar.classList.remove('-translate-x-full');
+        if (backdrop) {
+            backdrop.classList.remove('hidden', 'pointer-events-none');
+            setTimeout(() => backdrop.classList.add('opacity-100'), 10);
+        }
+    } else {
+        sidebar.classList.add('-translate-x-full');
+        if (backdrop) {
+            backdrop.classList.remove('opacity-100');
+            setTimeout(() => {
+                backdrop.classList.add('hidden', 'pointer-events-none');
+            }, 300);
+        }
+    }
+};
+
 window.renderSidebar = (activePage) => {
     const sidebar = document.getElementById('sidebar');
     if (!sidebar) return;
+    
+    // Manage Backdrop for Mobile
+    if (!document.getElementById('sidebar-backdrop')) {
+        const bd = document.createElement('div');
+        bd.id = 'sidebar-backdrop';
+        bd.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[45] hidden transition-opacity duration-300 opacity-0 pointer-events-none md:hidden";
+        bd.onclick = () => window.toggleSidebar(false);
+        document.body.appendChild(bd);
+    }
     
     sidebar.innerHTML = `
         <div class="p-6 h-full flex flex-col">
