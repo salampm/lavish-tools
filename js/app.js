@@ -1,4 +1,4 @@
-window.APP_VERSION = "v2.1.0";
+window.APP_VERSION = "v2.3.0";
 
 // --- CACHE & UPDATE MANAGEMENT ---
 // 1. Force unregister old Service Workers that often block updates
@@ -367,7 +367,7 @@ window.navBtn = (item) => {
     
     return `
     <div class="menu-item-wrapper relative group">
-        <button onclick="location.href='${item.url}'" 
+        <button onclick="window.toggleSidebar(false); setTimeout(() => location.href='${item.url}', 150);" 
                 class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-bold pointer-events-auto ${active ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-500/30' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}">
             <i data-lucide="${item.icon}" class="w-4 h-4"></i>
             <span class="flex-1 text-left">${item.label}</span>
@@ -414,18 +414,23 @@ window.renderSidebar = (activePage) => {
     
     sidebar.innerHTML = `
         <div class="p-6 h-full flex flex-col">
-            <!-- Brand -->
-            <div class="flex items-center gap-3 mb-10 px-2 cursor-pointer" onclick="location.href='index.html'">
-                <div class="bg-indigo-600 p-2 rounded-lg">
-                    <i data-lucide="flower-2" class="text-white w-6 h-6"></i>
-                </div>
-                <div>
-                    <h1 class="font-black text-white text-lg tracking-tighter uppercase">Lavish Lavender</h1>
-                    <div class="flex items-center gap-2 mt-1">
-                        <p class="text-[9px] text-slate-500 font-black uppercase tracking-widest leading-none">Management Suite</p>
-                        <span class="text-[8px] font-black text-slate-600">${window.APP_VERSION}</span>
+            <!-- Brand & Mobile Close -->
+            <div class="flex items-center justify-between mb-10 px-2 cursor-pointer">
+                <div class="flex items-center gap-3" onclick="location.href='index.html'">
+                    <div class="bg-indigo-600 p-2 rounded-lg">
+                        <i data-lucide="flower-2" class="text-white w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-black text-white text-lg tracking-tighter uppercase">Lavish Lavender</h1>
+                        <div class="flex items-center gap-2 mt-1">
+                            <p class="text-[9px] text-slate-500 font-black uppercase tracking-widest leading-none">Management Suite</p>
+                            <span class="text-[8px] font-black text-slate-600">${window.APP_VERSION}</span>
+                        </div>
                     </div>
                 </div>
+                <button onclick="window.toggleSidebar(false);" class="p-2 md:hidden text-slate-400 hover:text-white transition-colors bg-white/5 rounded-lg active:scale-95">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
             </div>
 
             <!-- Navigation -->
@@ -475,6 +480,13 @@ window.addEventListener('online', () => {
 window.addEventListener('offline', () => {
     window.erpState.isOnline = false;
     if (window.scheduleRender) window.scheduleRender();
+});
+
+// Safari/Mobile BFCache unloader - force closes menu on navigating back
+window.addEventListener('pageshow', (e) => {
+    if (e.persisted && document.getElementById('sidebar')?.classList.contains('md:translate-x-0') === false) {
+        window.toggleSidebar(false);
+    }
 });
 
 // RAF Debounce for rendering
