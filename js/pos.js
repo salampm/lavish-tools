@@ -1742,7 +1742,7 @@
 
                     <div class="space-y-4 mb-6">
                         <div class="grid grid-cols-2 gap-3">
-                            <input id="cm_client_phone" oninput="window.lookupClient(window.sanitizePhone(this.value))" type="tel" placeholder="Phone Number" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none focus:ring-4 focus:ring-violet-500/10 shadow-inner">
+                            <input id="cm_client_phone" oninput="this.value = window.sanitizePhone(this.value); window.lookupClient(this.value)" type="tel" placeholder="Phone Number" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none focus:ring-4 focus:ring-violet-500/10 shadow-inner">
                             <input id="cm_client_name" type="text" placeholder="Customer Name" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none focus:ring-4 focus:ring-violet-500/10 shadow-inner">
                         </div>
 
@@ -3156,7 +3156,10 @@
                     <div>
                         <h2 class="text-3xl font-black text-slate-900 tracking-tighter uppercase mb-1">${c.name}</h2>
                         <div class="flex items-center gap-3">
-                            <p class="text-indigo-600 font-bold text-sm font-mono tracking-widest">${window.sanitizePhone(c.phone)}</p>
+                            <div class="flex items-center gap-1.5 px-3 py-1 bg-indigo-50 rounded-full group/phone cursor-pointer hover:bg-indigo-100 transition-all" onclick="window.editClientPhone('${c.id}', '${c.phone}')">
+                                <p class="text-indigo-600 font-black text-xs font-mono tracking-widest">${window.sanitizePhone(c.phone)}</p>
+                                <i data-lucide="pencil" class="w-3 h-3 text-indigo-400 group-hover/phone:text-indigo-600"></i>
+                            </div>
                             <span class="w-1.5 h-1.5 bg-slate-200 rounded-full"></span>
                             <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">${c.loyaltyTier || 'Standard Partner'}</span>
                         </div>
@@ -3252,15 +3255,34 @@
                         <button onclick="window.shareWhatsApp('', '${c.name}', '${c.phone}', 0)" class="flex-1 py-5 bg-emerald-500 text-white rounded-[28px] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-emerald-200 flex items-center justify-center gap-3">
                              <i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp
                         </button>
-                        <button onclick="window.deleteCustomer('${c.id}')" class="flex-none w-14 py-5 bg-rose-50 text-rose-500 rounded-[28px] font-black uppercase text-[10px] tracking-[0.2em] flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all">
-                            <i data-lucide="trash-2" class="w-5 h-5"></i>
-                        </button>
                     </div>
-                    <button onclick="this.closest('.fixed').remove()" class="w-full py-5 bg-slate-100 text-slate-400 rounded-[28px] font-black uppercase text-[10px] tracking-widest">Close Profile</button>
+                    <button onclick="window.deleteCustomer('${c.id}')" class="w-full py-5 bg-rose-50 text-rose-500 rounded-[28px] font-black uppercase text-[10px] tracking-widest hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center gap-3 border border-rose-100">
+                        <i data-lucide="user-x" class="w-4 h-4"></i> Delete Client Record
+                    </button>
+                    <button onclick="this.closest('.fixed').remove()" class="w-full py-5 bg-slate-900 text-white rounded-[28px] font-black uppercase text-[10px] tracking-widest">Close Profile</button>
                 </div>
             </div>`;
         document.body.appendChild(modal);
         if (window.lucide) lucide.createIcons();
+    };
+
+    window.editClientPhone = async (id, currentPhone) => {
+        const newPhone = prompt("Enter new 10-digit phone number (e.g. 8714283895):", currentPhone);
+        if (newPhone === null) return;
+        const cleanPhone = window.sanitizePhone(newPhone);
+        if (cleanPhone.length < 10) return window.erpAlert("Invalid phone number. Must be 10 digits.", "Validation Error", "phone");
+
+        try {
+            await window.FB.root('clients').doc(id).update({ phone: cleanPhone });
+            window.erpAlert("Phone number updated successfully.", "Success", "check-circle");
+            document.querySelectorAll(".fixed").forEach(m => m.remove());
+            window.renderApp();
+            // Re-open profile to see changes
+            setTimeout(() => window.openClientProfile(id), 500);
+        } catch (e) {
+            console.error(e);
+            alert("Error updating phone number.");
+        }
     };
 
     window.openAddItem = function () {
@@ -3782,6 +3804,166 @@
         } catch(err) {
             console.error(err);
             alert('Migration Error: ' + err.message);
+        } finally {
+            btn.innerText = orig; btn.disabled = false;
+        }
+    };
+
+    window.deleteCustomer = async (id) => {
+        const pin = prompt("Owner PIN required to delete client record:");
+        if (pin !== (window.erpState.passwords?.owner || 'Swali4783')) return alert("Access Denied");
+        
+        if (!confirm("Are you absolutely sure? This will permanently delete the client record and their loyalty points. Transaction history will remain but as 'Walk-in' (by phone match).")) return;
+
+        try {
+            await window.FB.root('clients').doc(id).delete();
+            window.erpAlert("Customer deleted successfully.", "Success", "check-circle");
+            document.querySelectorAll(".fixed").forEach(m => m.remove());
+            window.renderApp();
+        } catch (e) {
+            console.error(e);
+            alert("Error deleting customer.");
+        }
+    };
+
+    window.openAddClient = () => {
+        const modal = document.createElement('div');
+        modal.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-[600] p-4";
+        modal.innerHTML = `
+            <div class="bg-white w-full max-w-sm rounded-[56px] p-12 shadow-2xl animate-pop-in relative overflow-hidden">
+                <div class="absolute -right-10 -top-10 w-48 h-48 bg-indigo-50 rounded-full blur-3xl opacity-50"></div>
+                
+                <div class="text-center mb-10 relative">
+                    <h2 class="text-3xl font-black text-slate-900 tracking-tighter uppercase mb-2">Enroll Client</h2>
+                    <p class="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">Add New Boutique Partner</p>
+                </div>
+                
+                <div class="space-y-6 relative">
+                    <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Client Name</label>
+                        <input id="ac_name" type="text" placeholder="Full Name" class="w-full px-6 py-4 bg-slate-50 border-none rounded-[28px] font-black text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 shadow-inner">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">10-Digit Phone</label>
+                        <input id="ac_phone" type="tel" placeholder="Phone Number" 
+                            oninput="this.value = window.sanitizePhone(this.value)"
+                            class="w-full px-6 py-4 bg-slate-50 border-none rounded-[28px] font-black text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 shadow-inner">
+                    </div>
+                    
+                    <div class="flex gap-4 pt-6">
+                        <button onclick="this.closest('.fixed').remove()" class="flex-1 py-5 bg-slate-100 text-slate-400 rounded-[28px] font-black uppercase text-[10px] tracking-widest">Abort</button>
+                        <button id="ac_save_btn" class="flex-[2] py-5 bg-indigo-600 text-white rounded-[28px] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-indigo-100 hover:bg-slate-900 transition-all active:scale-95 leading-none">Validate & Save</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        if (window.lucide) lucide.createIcons();
+        document.getElementById('ac_name').focus();
+
+        document.getElementById('ac_save_btn').onclick = async () => {
+            const name = document.getElementById('ac_name').value.trim();
+            const phone = window.sanitizePhone(document.getElementById('ac_phone').value.trim());
+
+            if (!name || phone.length < 10) {
+                return window.erpAlert("Please enter a valid Name and 10-digit Phone Number.", "Validation Failed", "alert-circle");
+            }
+
+            const existing = window.erpState.clients.find(c => window.sanitizePhone(c.phone) === phone);
+            if (existing) {
+                return window.erpAlert(`Client with phone ${phone} already exists as ${existing.name}.`, "Duplicate Record", "user-x");
+            }
+
+            const btn = document.getElementById('ac_save_btn');
+            btn.innerHTML = `<i class="w-4 h-4 animate-spin border-2 border-white/20 border-t-white rounded-full mx-auto"></i>`;
+            btn.disabled = true;
+
+            try {
+                await window.FB.root('clients').add({
+                    name, phone,
+                    createdAt: Date.now(),
+                    loyaltyPoints: 0,
+                    totalSpent: 0,
+                    tier: 'basic',
+                    loyaltyTier: 'basic'
+                });
+                modal.remove();
+                window.renderApp();
+            } catch (e) {
+                console.error(e);
+                alert("Error saving client.");
+                btn.disabled = false;
+                btn.innerText = "Validate & Save";
+            }
+        };
+    };
+
+    window.standardizeClientNumbers = async (e) => {
+        if (!confirm("This will normalize all client phone numbers to 10 digits and merge any duplicates. Existing points will be added together. Proceed?")) return;
+        
+        const btn = e.target;
+        const orig = btn.innerText;
+        btn.innerText = "Normalizing Cleanups..."; btn.disabled = true;
+
+        try {
+            const db = window.FB.db;
+            const batch = db.batch();
+            const clientCol = window.FB.root('clients');
+            
+            // Map to store combined data for each sanitized phone
+            const merged = {};
+            const toDelete = [];
+
+            // Group clients by sanitized phone
+            window.erpState.clients.forEach(c => {
+                const clean = window.sanitizePhone(c.phone);
+                if (!clean) return;
+
+                if (!merged[clean]) {
+                    merged[clean] = {
+                        id: c.id,
+                        name: c.name,
+                        points: c.loyaltyPoints || 0,
+                        spent: c.totalSpent || 0,
+                        notes: c.notes || "",
+                        measurements: c.measurements || {}
+                    };
+                } else {
+                    // Accumulate data into the first record found
+                    merged[clean].points += (c.loyaltyPoints || 0);
+                    merged[clean].spent += (c.totalSpent || 0);
+                    if (c.notes) merged[clean].notes += "\n" + c.notes;
+                    // Keep most populated measurements if any
+                    if (Object.keys(c.measurements || {}).length > Object.keys(merged[clean].measurements || {}).length) {
+                        merged[clean].measurements = c.measurements;
+                    }
+                    toDelete.push(c.id);
+                }
+            });
+
+            // Update merged records
+            for (const phone in merged) {
+                const data = merged[phone];
+                const tier = window.getLoyaltyTier(data.spent);
+                batch.update(clientCol.doc(data.id), {
+                    phone: phone,
+                    loyaltyPoints: data.points,
+                    totalSpent: data.spent,
+                    tier: tier,
+                    loyaltyTier: tier,
+                    notes: data.notes.trim()
+                });
+            }
+
+            // Delete duplicates
+            toDelete.forEach(id => {
+                batch.delete(clientCol.doc(id));
+            });
+
+            await batch.commit();
+            window.erpAlert(`Cleanup complete! ${Object.keys(merged).length} unique clients, ${toDelete.length} duplicates removed.`, "CRM Cleansed", "trash-2");
+        } catch (err) {
+            console.error(err);
+            alert("Standardization Error: " + err.message);
         } finally {
             btn.innerText = orig; btn.disabled = false;
         }

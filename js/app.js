@@ -11,8 +11,10 @@ if ('serviceWorker' in navigator) {
 window.sanitizePhone = (phone) => {
     if (!phone) return "";
     let p = phone.toString().replace(/\D/g, ''); 
-    if (p.startsWith('91') && p.length === 12) p = p.substring(2);
-    if (p.length === 11 && p.startsWith('0')) p = p.substring(1);
+    // Remove common prefixes for 10-digit Indian numbers
+    if (p.length === 12 && p.startsWith('91')) p = p.substring(2);
+    else if (p.length === 11 && p.startsWith('0')) p = p.substring(1);
+    else if (p.length === 13 && p.startsWith('0091')) p = p.substring(4);
     return p;
 };
 
