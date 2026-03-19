@@ -34,8 +34,18 @@
         const db = firebase.firestore();
         
         // Enable Offline Persistence
+        // ISSUE #12 FIX: Show visible warning when persistence fails, not silent swallow
         db.enablePersistence({ synchronizeTabs: true }).catch(err => {
             console.warn("Persistence failed:", err.code);
+            if (err.code === 'failed-precondition') {
+                // Multiple tabs open
+                const banner = document.createElement('div');
+                banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#f59e0b;color:#1c1917;padding:8px 16px;text-align:center;font-size:11px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;';
+                banner.innerHTML = '⚠ Offline mode disabled — multiple tabs open. Close other tabs and reload for offline support.';
+                document.body.prepend(banner);
+            } else if (err.code === 'unimplemented') {
+                console.warn('Browser does not support offline persistence.');
+            }
         });
 
         const APP_ID = 'lavish-lavender-erp';

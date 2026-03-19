@@ -131,6 +131,12 @@
                         ${o.items.map(i => `<div class="flex justify-between py-2 border-b border-slate-200 last:border-0"><span class="text-sm font-bold text-slate-700">${i.name}</span><span class="text-sm font-black text-slate-800">${formatMoney(i.price)}</span></div>`).join('')}
                     </div>` : ''}
 
+                    ${o.loyaltySnapshot ? `
+                    <div class="mb-10 bg-violet-50 p-6 rounded-[36px] border border-violet-100 text-center">
+                         <p class="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-1.5 leading-none">Loyalty Program</p>
+                         <p class="text-sm font-black text-violet-700">earned ${o.loyaltySnapshot.earned} | total:${o.loyaltySnapshot.total} | ${o.loyaltySnapshot.tier.toUpperCase()}</p>
+                    </div>` : ''}
+
                     <div class="mt-8">
                         <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Archive Actions</p>
                         <button onclick="window.returnToQueue()" class="w-full bg-orange-50 text-orange-600 py-4.5 rounded-[24px] font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 mb-4 border border-orange-100 transition-all hover:bg-orange-100">
@@ -180,6 +186,12 @@
                              <span class="text-4xl font-black text-purple-700">${formatMoney(finalTotal)}</span>
                         </div>
                     </div>
+
+                    ${o.loyaltySnapshot ? `
+                    <div class="mb-8 bg-violet-50 p-6 rounded-[32px] border border-violet-100 text-center">
+                         <p class="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-1.5 leading-none">Loyalty Program</p>
+                         <p class="text-sm font-black text-violet-700">earned ${o.loyaltySnapshot.earned} | total:${o.loyaltySnapshot.total} | ${o.loyaltySnapshot.tier.toUpperCase()}</p>
+                    </div>` : ''}
 
                     <button onclick="window.print()" class="w-full bg-[#0f172a] text-white py-5 rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all">
                         <i data-lucide="printer" class="w-5 h-5"></i> Print Thermal Receipt

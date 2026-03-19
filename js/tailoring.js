@@ -8,17 +8,17 @@
     const ORDERS_COL = () => window.FB.root('orders');
     const CLIENTS_COL = () => window.FB.root('clients');
 
-    // --- WHATSAPP & FEEDBACK ---
+    // ISSUE #6 FIX: Use sanitizePhone for client lookup in WhatsApp
     window.sendWA = (id, type) => {
         const o = window.erpState.orders.find(x => x.id === id);
         if (!o) return;
 
-        const client = (window.erpState.clients || []).find(c => c.phone === o.phone);
+        const client = (window.erpState.clients || []).find(c => window.sanitizePhone(c.phone) === window.sanitizePhone(o.phone));
         const earned = o.loyaltySnapshot?.earned || 0;
         const totalPts = client?.loyaltyPoints || 0;
         const tier = (client?.tier || o.loyaltySnapshot?.tier || 'Basic').toUpperCase();
 
-        const target = o.phone.replace(/\D/g, '');
+        const target = window.sanitizePhone(o.phone);
         const templates = window.erpState.whatsappTemplates || {};
         const bal = Math.max(0, (o.totalCost || 0) - (o.deliveryDiscount || 0) - (o.advancePaid || 0));
         
@@ -82,6 +82,7 @@
 
         switch(tab) {
             case 'tracker':     return renderTracker(orders);
+            case 'ready':       return renderReady(orders);
             case 'pending-due': return renderPendingDue(orders);
             case 'history':     return renderHistory(orders);
             default:            return renderTracker(orders);
@@ -175,7 +176,7 @@
         const key = window.erpState.trackerSortKey || 'deliveryDate';
         const dir = window.erpState.trackerSortDir || 'desc';
 
-        const active = orders.filter(o => o.status !== 'Delivered').sort((a,b) => {
+        const active = orders.filter(o => o.status !== 'Delivered' && o.status !== 'Ready').sort((a,b) => {
             let valA = a[key] || '';
             let valB = b[key] || '';
             if (key === 'billNo') {
@@ -191,7 +192,7 @@
             <div class="mb-10 flex flex-col md:flex-row gap-6">
                 <div class="relative flex-1">
                     <i data-lucide="search" class="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5"></i>
-                    <input type="text" id="tracker-search" placeholder="Search by name or bill..." class="w-full pl-14 pr-6 py-4 bg-white border border-slate-100 rounded-[28px] text-sm font-bold shadow-sm outline-none focus:border-violet-200 transition-all" oninput="window.filterTracker(this.value)">
+                    <input type="text" id="tracker-search" placeholder="Search production queue..." class="w-full pl-14 pr-6 py-4 bg-white border border-slate-100 rounded-[28px] text-sm font-bold shadow-sm outline-none focus:border-violet-200 transition-all" oninput="window.filterTracker(this.value)">
                 </div>
                 <div class="flex gap-3">
                     <button onclick="window.toggleTrackerSort('billNo')" class="bg-white border border-slate-100 px-6 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${key === 'billNo' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
@@ -203,14 +204,56 @@
                 </div>
             </div>
             <div id="tracker-list" class="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-10 custom-scrollbar pr-4 pb-20">
-                ${active.map(o => renderOrderCard(o)).join('') || `<div class="col-span-full py-40 text-center text-slate-300 italic flex flex-col items-center justify-center opacity-40"><i data-lucide="scissors" class="w-16 h-16 mb-4"></i> No active orders found</div>`}
+                ${active.map(o => renderOrderCard(o)).join('') || `<div class="col-span-full py-40 text-center text-slate-300 italic flex flex-col items-center justify-center opacity-40"><i data-lucide="scissors" class="w-16 h-16 mb-4"></i> No production items found</div>`}
+            </div>
+        </div>
+        `;
+    }
+
+    function renderReady(orders) {
+        const key = window.erpState.trackerSortKey || 'deliveryDate';
+        const dir = window.erpState.trackerSortDir || 'desc';
+
+        const list = orders.filter(o => {
+            const bal = (o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0);
+            return o.status === 'Ready' && bal > 0;
+        }).sort((a,b) => {
+            let valA = a[key] || '';
+            let valB = b[key] || '';
+            if (key === 'billNo') {
+                valA = parseInt(valA.replace(/\D/g,'')) || 0;
+                valB = parseInt(valB.replace(/\D/g,'')) || 0;
+            }
+            if (dir === 'desc') return valB < valA ? -1 : 1;
+            return valA < valB ? -1 : 1;
+        });
+
+        return `
+        <div class="p-8 h-full flex flex-col overflow-hidden bg-slate-50/50">
+            <div class="mb-10 flex flex-col md:flex-row gap-6">
+                <div class="relative flex-1">
+                    <i data-lucide="search" class="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5"></i>
+                    <input type="text" placeholder="Search ready orders..." class="w-full pl-14 pr-6 py-4 bg-white border border-slate-100 rounded-[28px] text-sm font-bold shadow-sm outline-none focus:border-violet-200 transition-all" oninput="window.filterTracker(this.value)">
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="window.toggleTrackerSort('billNo')" class="bg-white border border-slate-100 px-6 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${key === 'billNo' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
+                        <i data-lucide="hash" class="w-4 h-4"></i> Bill ${key === 'billNo' ? (dir === 'desc' ? '↓' : '↑') : ''}
+                    </button>
+                    <button onclick="window.toggleTrackerSort('deliveryDate')" class="bg-white border border-slate-100 px-6 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${key === 'deliveryDate' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
+                        <i data-lucide="calendar" class="w-4 h-4"></i> Date ${key === 'deliveryDate' ? (dir === 'desc' ? '↓' : '↑') : ''}
+                    </button>
+                </div>
+            </div>
+            <div id="tracker-list" class="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-10 custom-scrollbar pr-4 pb-20">
+                ${list.map(o => renderOrderCard(o)).join('') || `<div class="col-span-full py-40 text-center text-slate-300 italic flex flex-col items-center justify-center opacity-40"><i data-lucide="package-check" class="w-16 h-16 mb-4"></i> All ready orders picked up</div>`}
             </div>
         </div>
         `;
     }
 
     function renderOrderCard(o) {
-        const rawBal = (o.totalCost || 0) - (o.advancePaid || 0);
+        // ISSUE #3 FIX: Include delivery discount in balance calculation
+        const rawBal = (o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0);
         const bal = Math.max(0, rawBal);
         const statusColors = {
             'Pending': 'bg-slate-100 text-slate-600',
@@ -235,7 +278,8 @@
             <div class="space-y-1 mb-6">
                 ${(o.items || []).map(it => `
                     <div class="flex justify-between text-xs font-bold text-slate-500">
-                        <span>1x ${it.name}</span>
+                        <!-- ISSUE #16 FIX: Show actual qty, not hardcoded 1x -->
+                        <span>${it.qty || 1}x ${it.name}</span>
                         <span>${isOverdue ? '<i data-lucide="alert-circle" class="w-3 h-3 text-rose-500 inline mr-1"></i>' : ''} ${window.fmtDate(o.orderDate || o.timestamp)}</span>
                     </div>
                 `).join('')}
@@ -347,9 +391,10 @@
 
     function renderHistory(orders) {
         window.erpState.historySort = window.erpState.historySort || 'desc';
-        const delivered = orders
-            .filter(o => o.status === 'Delivered' && ((o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0)) <= 0)
-            .sort((a,b) => {
+        const delivered = orders.filter(o => {
+            const bal = (o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0);
+            return o.status === 'Delivered' || (o.status === 'Ready' && bal <= 0);
+        }).sort((a,b) => {
                 const da = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp || 0);
                 const db = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp || 0);
                 return window.erpState.historySort === 'desc' ? db - da : da - db;
@@ -413,6 +458,7 @@
         const now = new Date();
         const todayStr = now.toISOString().split('T')[0];
         
+        // ISSUE #21 FIX: Use calendar month start for monthly filter (not rolling 30 days)
         if (filter === 'Daily') {
             list = list.filter(o => {
                 const od = o.orderDate || (o.timestamp ? new Date(o.timestamp).toISOString().split('T')[0] : '');
@@ -422,11 +468,13 @@
             const start = now.getTime() - (7 * 24 * 60 * 60 * 1000);
             list = list.filter(o => (o.timestamp || 0) >= start);
         } else if (filter === 'Monthly') {
-            const start = now.getTime() - (30 * 24 * 60 * 60 * 1000);
-            list = list.filter(o => (o.timestamp || 0) >= start);
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+            list = list.filter(o => (o.timestamp || 0) >= monthStart);
         }
 
         const totalYield = list.reduce((s, o) => s + (o.totalCost || 0), 0);
+        // ISSUE #15 FIX: Track collected revenue separately from booked total
+        const collectedYield = list.reduce((s, o) => s + (o.advancePaid || 0), 0);
         const garmentsCount = list.reduce((s, o) => s + (o.items?.length || 0), 0);
 
         return `
@@ -455,6 +503,7 @@
                     <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-violet-50 rounded-full group-hover:scale-125 transition-transform"></div>
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 relative z-10">Total Period Yield</p>
                     <h3 class="text-3xl font-black text-slate-800 tracking-tight relative z-10">${fmt(totalYield)}</h3>
+                    <p class="text-[9px] font-black text-emerald-500 uppercase tracking-widest mt-1 relative z-10">Collected: ${fmt(collectedYield)}</p>
                 </div>
                 <div class="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm relative overflow-hidden group hover:border-violet-200 transition-colors">
                     <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-emerald-50 rounded-full group-hover:scale-125 transition-transform"></div>
@@ -510,16 +559,19 @@
 
     window.exportToExcel = () => {
         const orders = window.erpState.orders || [];
+        // ISSUE #23 FIX: Escape commas in all string fields to prevent CSV column corruption
+        const esc = (v) => `"${String(v || '').replace(/"/g, '""')}"`;
         const csv = [
-            ['Bill No', 'Customer', 'Phone', 'Date', 'Total Cost', 'Advance', 'Status'],
+            ['Bill No', 'Customer', 'Phone', 'Date', 'Total Cost', 'Advance', 'Balance', 'Status'],
             ...orders.map(o => [
-                o.billNo,
-                o.customerName,
-                o.phone,
-                o.orderDate || '',
+                esc(o.billNo),
+                esc(o.customerName),
+                esc(o.phone),
+                esc(o.orderDate || ''),
                 o.totalCost,
                 o.advancePaid || 0,
-                o.status
+                Math.max(0, (o.totalCost||0) - (o.advancePaid||0) - (o.deliveryDiscount||0)),
+                esc(o.status)
             ])
         ].map(r => r.join(',')).join('\n');
         
@@ -538,28 +590,10 @@
     let draftImages = [];
 
     window.openOrderModal = function() {
-        // Safer Bill Numbering: Sort by creation date to find the ACTUAL last sequence
+        // ISSUE #14 FIX: Always use absolute max to prevent bill number duplication
         const orders = window.erpState.orders || [];
-        const sortedOrders = [...orders].filter(o => o.createdAt).sort((a,b) => {
-            const timeA = typeof a.createdAt === 'number' ? a.createdAt : (a.createdAt?.toMillis ? a.createdAt.toMillis() : 0);
-            const timeB = typeof b.createdAt === 'number' ? b.createdAt : (b.createdAt?.toMillis ? b.createdAt.toMillis() : 0);
-            return timeB - timeA;
-        });
-        
-        let lastNum = 100;
-        if (sortedOrders.length > 0) {
-            const latestBillNo = sortedOrders[0].billNo || "";
-            const match = latestBillNo.match(/\d+/);
-            if (match) lastNum = parseInt(match[0]);
-        }
-        
-        // Final safety Check: ensure we aren't duplicating the absolute max if it's within a reasonable range
         const absoluteMax = Math.max(100, ...orders.map(o => parseInt(o.billNo?.match(/\d+/)?.[0] || 0)));
-        if (absoluteMax < lastNum + 1000) {
-            lastNum = Math.max(lastNum, absoluteMax);
-        }
-
-        document.getElementById('form-billNo').value = "B-" + (lastNum + 1);
+        document.getElementById('form-billNo').value = "B-" + (absoluteMax + 1);
         document.getElementById('form-orderDate').value = new Date().toISOString().split('T')[0];
         document.getElementById('items-container').innerHTML = '';
         document.getElementById('draft-measurement-status')?.classList.add('hidden');
@@ -587,9 +621,12 @@
         document.getElementById('modal-balance').innerText = "₹" + (total - adv);
     };
 
+    // ISSUE #11 FIX: Use sanitizePhone for exact match after 10-digit input
     window.handlePhoneLookup = function(phone) {
-        if (!phone || phone.length < 4) return;
-        const client = (window.erpState.clients || []).find(c => c.phone.includes(phone) || phone.includes(c.phone));
+        if (!phone) return;
+        const clean = window.sanitizePhone(phone);
+        if (clean.length < 6) return; // Still allow partial during typing
+        const client = (window.erpState.clients || []).find(c => window.sanitizePhone(c.phone) === clean || window.sanitizePhone(c.phone).startsWith(clean));
         if (client) {
             const nameEl = document.getElementById('form-cust-name');
             if (nameEl && !nameEl.value) {
@@ -666,15 +703,16 @@
 
             const docRef = await ORDERS_COL().add(orderData);
             
-            // Sync client
-            if(!window.erpState.clients.find(c => c.phone === phone)) {
-                await CLIENTS_COL().add({name, phone, createdAt: Date.now()});
+            // ISSUE #4 FIX: Initialize all loyalty fields when creating new client from Tailoring
+            if(!window.erpState.clients.find(c => window.sanitizePhone(c.phone) === window.sanitizePhone(phone))) {
+                await CLIENTS_COL().add({name, phone: window.sanitizePhone(phone), createdAt: Date.now(), loyaltyPoints: 0, totalSpent: 0, tier: 'basic'});
             }
 
             window.closeOrderModal();
             window.showPopup("Booking Confirmation Ready", () => window.sendWA(docRef.id, 1));
             draftMeasurements = null;
-        } catch (e) { console.error(e); alert("Sync failed"); }
+        // ISSUE #17 FIX: Use erpAlert instead of native alert for consistent UX
+        } catch (e) { console.error(e); window.erpAlert("Order save failed. Check your connection.", "Sync Error", "wifi-off"); }
         btn.disabled = false;
         btn.innerText = "Save Order & Notify Client";
     };
@@ -777,20 +815,35 @@
         } catch (e) { statusEl.innerText = "OCR failed."; }
     };
 
-    // --- STATUS UPDATES ---
     window.updateOrderStatus = async function(id, status) {
+        const o = window.erpState.orders.find(x => x.id === id);
+        if (!o) return;
+
         if (status === 'Delivered') {
+            if (o.isFromPOS) {
+                alert("This order originated from POS. Please complete the delivery and final payment in the Retail Terminal (Pending Dues).");
+                return;
+            }
             window.openDeliveryModal(id);
             return;
         }
 
+        let laborCost = o.tailoringCost || 0;
+        if (status === 'Ready') {
+            const val = prompt("Stitching complete! Enter Labor/Tailoring Cost (Production Expense):", laborCost);
+            if (val === null) return; // Cancelled
+            laborCost = parseFloat(val) || 0;
+        }
+
         if(!confirm(`Move to ${status}?`)) return;
         try {
-            const o = window.erpState.orders.find(x => x.id === id);
-            let log = o ? (o.notesLog || []) : [];
-            log.push({ text: `Status updated to ${status}`, timestamp: new Date().toLocaleString() });
+            let log = o.notesLog || [];
+            log.push({ text: `Status updated to ${status}${status === 'Ready' ? ` (Labor Cost: ₹${laborCost})` : ''}`, timestamp: new Date().toLocaleString() });
 
-            await ORDERS_COL().doc(id).update({ status, lastUpdated: Date.now(), notesLog: log });
+            const updates = { status, lastUpdated: Date.now(), notesLog: log };
+            if (status === 'Ready') updates.tailoringCost = laborCost;
+
+            await ORDERS_COL().doc(id).update(updates);
             
             if (status === 'Ready') window.showPopup("Pickup Alert Ready", () => window.sendWA(id, 2));
             if (status === 'Order Confirmed') window.showPopup("Confirmation Ready", () => window.sendWA(id, 1));
@@ -896,8 +949,8 @@
                             : `<select onchange="window.updateOrderStatus('${o.id}', this.value)" class="px-4 py-2 bg-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-violet-200 border-none outline-none">
                                 <option value="Order Confirmed" ${o.status === 'Order Confirmed' ? 'selected' : ''}>Confirmed</option>
                                 <option value="Stitching" ${o.status === 'Stitching' ? 'selected' : ''}>Stitching</option>
-                                <option value="Ready" ${o.status === 'Ready' ? 'selected' : ''}>Ready</option>
-                                <option value="Delivered" ${o.status === 'Delivered' ? 'selected' : ''}>Delivered</option>
+                                <option value="Ready" ${o.status === 'Ready' ? 'selected' : ''}>Ready for Pickup</option>
+                                ${!o.isFromPOS ? `<option value="Delivered" ${o.status === 'Delivered' ? 'selected' : ''}>Delivered</option>` : ''}
                             </select>`
                         }
                     </div>
@@ -933,16 +986,22 @@
                     </div>
                 </div>
 
-                <div class="bg-slate-900 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
+                <div class="${o.isFromPOS ? 'bg-slate-800' : 'bg-slate-900'} p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
                     <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-white/5 rounded-full blur-3xl"></div>
                     <div class="flex justify-between items-end relative z-10">
                         <div>
                             <p class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Grand Total</p>
                             <h3 class="text-4xl font-black text-white tracking-widest">${fmt(o.totalCost)}</h3>
+                            ${o.isFromPOS ? `<p class="text-[8px] font-black text-indigo-400 uppercase mt-2 tracking-widest">Billing managed in Retail POS</p>` : ''}
                         </div>
                         <div class="text-right">
-                            <p class="text-[10px] font-black text-rose-400 uppercase mb-1">Balance Due</p>
-                            <p class="text-2xl font-black text-rose-500 tracking-tighter">${fmt(bal)}</p>
+                            ${!o.isFromPOS ? `
+                                <p class="text-[10px] font-black text-rose-400 uppercase mb-1">Balance Due</p>
+                                <p class="text-2xl font-black text-rose-500 tracking-tighter">${fmt(bal)}</p>
+                            ` : `
+                                <p class="text-[10px] font-black text-emerald-400 uppercase mb-1">Labor Cost</p>
+                                <p class="text-2xl font-black text-emerald-500 tracking-tighter">${fmt(o.tailoringCost || 0)}</p>
+                            `}
                         </div>
                     </div>
                 </div>
@@ -964,7 +1023,7 @@
         const historyActions = document.getElementById('history-actions');
         const editActions = document.querySelector('#detail-modal .mt-12');
         
-        if (finSection) finSection.style.display = o.status === 'Delivered' ? 'none' : 'block';
+        if (finSection) finSection.style.display = (o.status === 'Delivered' || o.isFromPOS) ? 'none' : 'block';
         if (historyActions) {
             historyActions.style.display = o.status === 'Delivered' ? 'block' : 'none';
             if (o.status === 'Delivered') {
@@ -994,11 +1053,27 @@
     window.closeDetailModal = () => document.getElementById('detail-modal').classList.add('hidden');
 
     window.deleteOrder = async function(id) {
-        if(!confirm("Permanently delete this order record?")) return;
+        const pin = prompt("Owner PIN required to delete records:");
+        const ownerPin = window.erpState.passwords?.owner || 'Swali4783';
+        if (pin !== ownerPin) return alert("Access Denied: Incorrect Security PIN");
+
+        if(!confirm("Permanently delete this order record? This will also void any linked POS bills.")) return;
         try {
+            const order = (window.erpState.orders || []).find(o => o.id === id);
             await ORDERS_COL().doc(id).delete();
+
+            // Check and delete linked POS bill
+            if (order && order.billNo) {
+                const linkedSale = (window.erpState.sales || []).find(s => s.billNo === order.billNo);
+                if (linkedSale && window.FB.collection) {
+                    await window.FB.collection('sales').doc(linkedSale.id).delete();
+                }
+            }
+
             window.closeDetailModal();
-        } catch (e) { alert("Delete failed"); }
+            if (window.renderApp) window.renderApp();
+            alert("Order and associated records successfully removed.");
+        } catch (e) { console.error(e); alert("Delete failed"); }
     };
 
     // --- FINANCIAL ADJUSTMENTS ---
@@ -1008,7 +1083,8 @@
     window.calcAdjBal = () => {
         const o = window.erpState.orders.find(x => x.id === window.selectedOrderId);
         if(!o) return;
-        const curBal = (o.totalCost || 0) - (o.advancePaid || 0);
+        // Include deliveryDiscount in balance preview for accuracy
+        const curBal = (o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0);
         const add = parseFloat(document.getElementById('advance-amt').value) || 0;
         document.getElementById('adj-bal-preview').innerText = "New Balance: ₹" + (curBal - add);
     };
@@ -1053,8 +1129,8 @@
                 upi: (existingBreakdown.upi || 0) + upi
             };
             
-            // If Delivered and now settled, record delivery date
-            const newBal = (o.totalCost || 0) - updates.advancePaid;
+            // If Delivered and now settled (including delivery discount), record delivery date
+            const newBal = (o.totalCost || 0) - (o.deliveryDiscount || 0) - updates.advancePaid;
             if (o.status === 'Delivered' && newBal <= 0) {
                 updates.actualDeliveryDate = Date.now();
             }
@@ -1209,6 +1285,33 @@
 
         document.getElementById('delivery-modal').classList.add('hidden');
         window.showPopup(isPartial ? "Order Delivered (Pending Dues)" : "Order Delivered & Settled", () => window.sendWA(o.id, 3));
+    };
+
+    window.updateClientLoyalty = async (phone) => {
+        const o = window.erpState.orders.find(x => x.id === window.selectedOrderId);
+        if (!o) return;
+
+        const client = (window.erpState.clients || []).find(c => c.phone === phone);
+        const earned = Math.floor((o.totalCost || 0) / 100);
+        const currentPoints = client ? (client.loyaltyPoints || 0) : 0;
+        const newTotal = currentPoints + earned;
+        const tier = client ? (client.tier || 'Basic') : 'Basic';
+
+        try {
+            // Update order with snapshot
+            await ORDERS_COL().doc(o.id).update({
+                loyaltySnapshot: { earned, total: newTotal, tier }
+            });
+
+            // Update client points
+            if (client) {
+                await CLIENTS_COL().doc(client.id).update({
+                    loyaltyPoints: newTotal
+                });
+            }
+        } catch (e) {
+            console.error("Loyalty update failed:", e);
+        }
     };
 
     window.printOrderReceipt = function(billNo) {

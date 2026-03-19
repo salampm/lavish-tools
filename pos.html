@@ -89,12 +89,18 @@
             if (window.erpState.tab === 'clients') {
                 if (headerTitle) headerTitle.textContent = 'Client Intelligence';
                 if (subNav) subNav.classList.add('hidden');
-            } else if (window.erpState.tab === 'reports') {
-                if (headerTitle) headerTitle.textContent = 'Master Reports';
-                if (subNav) subNav.classList.add('hidden');
-            } else if (window.erpState.tab === 'receipts') {
+            } else if (['receipts', 'dues', 'voided', 'history'].includes(window.erpState.tab)) {
                 if (headerTitle) headerTitle.textContent = 'Receipts Ledger';
-                if (subNav) subNav.classList.add('hidden');
+                if (subNav) {
+                    subNav.classList.remove('hidden');
+                    subNav.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <button onclick="window.setPOSTab('receipts')" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.tab === 'receipts' || window.erpState.tab === 'history' ? 'border-violet-600 text-violet-600' : 'border-transparent text-slate-400'}">Settled Receipts</button>
+                            <button onclick="window.setPOSTab('dues')" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.tab === 'dues' ? 'border-violet-600 text-violet-600' : 'border-transparent text-slate-400'}">Pending Collections</button>
+                            <button onclick="window.setPOSTab('voided')" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.tab === 'voided' ? 'border-violet-600 text-violet-600' : 'border-transparent text-slate-400'}">Voided Invoices</button>
+                        </div>
+                    `;
+                }
             } else if (window.erpState.tab === 'settings') {
                 if (headerTitle) headerTitle.textContent = 'Master Settings';
                 if (subNav) {
@@ -118,20 +124,18 @@
                     subNav.classList.remove('hidden');
                     subNav.innerHTML = `
                         <div class="flex items-center gap-2">
-                            <button onclick="window.setPOSTab('pos')" id="tab-pos" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Retail Terminal</button>
-                            <button onclick="window.setPOSTab('dues')" id="tab-dues" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Pending Dues</button>
-                            <button onclick="window.setPOSTab('tickets')" id="tab-tickets" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Saved Tickets</button>
+                            <button onclick="window.setPOSTab('pos')" id="tab-pos" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.tab === 'pos' ? 'border-violet-600 text-violet-600' : 'border-transparent'} transition-all hover:text-violet-600">Retail Terminal</button>
+                            <button onclick="window.setPOSTab('tickets')" id="tab-tickets" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.tab === 'tickets' ? 'border-violet-600 text-violet-600' : 'border-transparent'} transition-all hover:text-violet-600">Saved Tickets</button>
                         </div>
                     `;
                 }
-                
+            }    
                 // Active sub-tab highlighting
                 const activeBtn = document.getElementById('tab-' + window.erpState.tab);
                 if (activeBtn) {
                     activeBtn.classList.remove('border-transparent');
                     activeBtn.classList.add('border-violet-600', 'text-violet-600');
                 }
-            }
 
             // Preserve search focus
             const activeId = document.activeElement ? document.activeElement.id : null;
@@ -194,6 +198,16 @@
                 window.renderApp();
             });
 
+            window.FB.collection('voided_sales').onSnapshot((snap) => {
+                window.erpState.voidedSales = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
+            window.FB.collection('voided_orders').onSnapshot((snap) => {
+                window.erpState.voidedOrders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.renderApp();
+            });
+
             window.FB.collection('expense_categories').onSnapshot((snap) => {
                 const cloudCats = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 const defaults = [
@@ -233,6 +247,8 @@
                     if (data.passwords) window.erpState.passwords = data.passwords;
                     if (data.staff) window.erpState.staff = data.staff;
                     if (data.printerConfig) window.erpState.printerConfig = data.printerConfig;
+                    if (data.dashboardConfig) window.erpState.dashboardConfig = data.dashboardConfig;
+                    if (data.gstin) window.erpState.gstin = data.gstin;
 
                     window.saveLocalState();
                     window.renderApp();
@@ -247,6 +263,24 @@
 
         // Load cache first for instant start
         window.loadLocalState();
+        
+        // Wrap renderApp to preserve scroll in Settings
+        const originalRenderApp = window.renderApp;
+        window.renderApp = function() {
+            const scrollEls = document.querySelectorAll('.overflow-y-auto');
+            const positions = Array.from(scrollEls).map(el => ({ id: el.id, top: el.scrollTop }));
+            
+            originalRenderApp();
+            
+            // Restore scroll
+            setTimeout(() => {
+                positions.forEach(pos => {
+                    const el = pos.id ? document.getElementById(pos.id) : document.querySelector('.overflow-y-auto');
+                    if (el) el.scrollTop = pos.top;
+                });
+            }, 50);
+        };
+        
         window.renderApp();
     </script>
 </body>

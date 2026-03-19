@@ -76,7 +76,7 @@
                     </div>
  
                     <!-- Financial Daily Progress (Ledger) -->
-                    <div id="financial-ledger" class="mb-10 bg-slate-900 rounded-[48px] p-10 shadow-2xl relative overflow-hidden">
+                    <div id="financial-ledger" class="mb-10 bg-slate-900 rounded-[48px] p-10 shadow-2xl relative overflow-hidden hidden">
                          <div class="absolute -right-20 -top-20 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl"></div>
                          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-10 relative z-10">
                              <div class="flex-1">
@@ -123,7 +123,7 @@
                     </div>
 
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
-                        <div class="lg:col-span-2 bg-white rounded-[48px] border border-slate-100 p-10 shadow-sm relative overflow-hidden">
+                        <div id="section_revenueChart" class="lg:col-span-2 bg-white rounded-[48px] border border-slate-100 p-10 shadow-sm relative overflow-hidden hidden">
                             <div class="absolute top-0 right-0 p-10">
                                 <i data-lucide="trending-up" class="w-12 h-12 text-indigo-50 opacity-20"></i>
                             </div>
@@ -138,9 +138,9 @@
                             </div>
                         </div>
                         
-                        <div class="space-y-8">
+                        <div class="space-y-8 flex-1">
                             <!-- Composition Chart / Mini Stats -->
-                            <div class="bg-indigo-600 rounded-[48px] p-8 text-white shadow-2xl shadow-indigo-200 relative overflow-hidden">
+                            <div id="section_inventory" class="bg-indigo-600 rounded-[48px] p-8 text-white shadow-2xl shadow-indigo-200 relative overflow-hidden hidden">
                                 <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
                                 <h3 class="text-xs font-black uppercase tracking-[0.2em] mb-6 opacity-80">Inventory Pulse</h3>
                                 <div class="space-y-6">
@@ -181,10 +181,10 @@
 
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         <!-- Recent Transactions -->
-                        <div class="bg-white rounded-[48px] border border-slate-100 p-10 shadow-sm">
+                        <div id="section_recentFlux" class="bg-white rounded-[48px] border border-slate-100 p-10 shadow-sm hidden">
                             <div class="flex justify-between items-center mb-8">
                                 <h3 class="text-lg font-black text-slate-800 uppercase tracking-tight">Recent Pulse</h3>
-                                <button class="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline">View All Sales</button>
+                                <button onclick="location.href='pos.html?tab=history'" class="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline">View All Sales</button>
                             </div>
                             <div id="recent-sales" class="space-y-4">
                                 <!-- Dynamically Injected -->
@@ -193,7 +193,7 @@
                         </div>
 
                         <!-- Top Performers -->
-                        <div class="bg-white rounded-[48px] border border-slate-100 p-10 shadow-sm">
+                        <div id="section_topItems" class="bg-white rounded-[48px] border border-slate-100 p-10 shadow-sm hidden">
                             <div class="flex justify-between items-center mb-8">
                                 <h3 class="text-lg font-black text-slate-800 uppercase tracking-tight">Top Performers</h3>
                                 <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Best Selling Items</p>
@@ -206,7 +206,7 @@
                     </div>
 
                     <!-- Tailoring Workflow Monitor -->
-                    <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div id="section_tailoringPending" class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8 hidden">
                         <!-- Overdue Section -->
                         <div class="bg-rose-50/50 rounded-[48px] border border-rose-100 p-10 shadow-sm">
                             <div class="flex justify-between items-center mb-8">
@@ -308,6 +308,29 @@
 
         window.renderApp = function() {
             window.renderSidebar('dashboard');
+            
+            const dash = window.erpState.dashboardConfig || {};
+            const isVisible = (id) => dash[id] !== false;
+
+            // Toggle visibility of main sections
+            const ledger = document.getElementById('financial-ledger');
+            if (ledger) ledger.classList.toggle('hidden', !isVisible('todaySales') && !isVisible('expenseTracker'));
+            
+            const chartSection = document.getElementById('section_revenueChart');
+            if (chartSection) chartSection.classList.toggle('hidden', !isVisible('revenueChart'));
+            
+            const invSection = document.getElementById('section_inventory');
+            if (invSection) invSection.classList.toggle('hidden', !isVisible('inventory'));
+            
+            const recentSection = document.getElementById('section_recentFlux');
+            if (recentSection) recentSection.classList.toggle('hidden', !isVisible('recentFlux'));
+            
+            const topSection = document.getElementById('section_topItems');
+            if (topSection) topSection.classList.toggle('hidden', !isVisible('topItems'));
+            
+            const tailSection = document.getElementById('section_tailoringPending');
+            if (tailSection) tailSection.classList.toggle('hidden', !isVisible('tailoringPending'));
+
             const stats = document.getElementById('stats-grid');
             const now = Date.now();
             const today = new Date().setHours(0,0,0,0);
@@ -409,6 +432,7 @@
             const totalClients = (window.erpState.clients || []).length;
 
             stats.innerHTML = `
+                ${isVisible('todaySales') ? `
                 <!-- Block 1: Total Inflow -->
                 <div class="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm relative overflow-hidden group">
                     <div class="absolute -right-4 -top-4 w-20 h-20 bg-indigo-50 rounded-full group-hover:scale-150 transition-transform duration-700 opacity-50"></div>
@@ -419,7 +443,9 @@
                         <p class="text-[9px] font-bold text-slate-500 uppercase">Cash: ${window.fmt(cashIn)} | UPI: ${window.fmt(upiIn)}</p>
                     </div>
                 </div>
+                ` : ''}
 
+                ${isVisible('expenseTracker') ? `
                 <!-- Block 2: Total Outflow -->
                 <div class="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm relative overflow-hidden group">
                     <div class="absolute -right-4 -top-4 w-20 h-20 bg-rose-50 rounded-full group-hover:scale-150 transition-transform duration-700 opacity-50"></div>
@@ -430,7 +456,9 @@
                         <p class="text-[9px] font-bold text-slate-500 uppercase">Cash: ${window.fmt(cashOut)} | UPI: ${window.fmt(upiOut)}</p>
                     </div>
                 </div>
+                ` : ''}
 
+                ${isVisible('totalSales') ? `
                 <!-- Block 3: Net Revenue -->
                 <div class="bg-slate-900 p-8 rounded-[48px] shadow-2xl relative overflow-hidden group">
                     <div class="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
@@ -441,7 +469,9 @@
                         <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Retail: ${window.fmt(revRetail)} | Tailor: ${window.fmt(revTailoring)}</p>
                     </div>
                 </div>
+                ` : ''}
 
+                ${isVisible('tailoringPending') ? `
                 <!-- Block 4: Active Queue -->
                 <div onclick="location.href='tailoring.html?tab=tracker'" class="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm relative overflow-hidden group cursor-pointer hover:border-violet-200 transition-all">
                     <div class="absolute -right-4 -top-4 w-20 h-20 bg-violet-50 rounded-full group-hover:scale-150 transition-transform duration-700 opacity-50"></div>
@@ -485,7 +515,9 @@
                         <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Ready for Delivery</p>
                     </div>
                 </div>
+                ` : ''}
 
+                ${isVisible('pendingDues') ? `
                 <!-- Block 8: Balances Due -->
                 <div onclick="location.href='pos.html?tab=receipts'" class="bg-emerald-900 p-8 rounded-[48px] shadow-2xl relative overflow-hidden group cursor-pointer">
                     <div class="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
@@ -495,6 +527,7 @@
                         <p class="text-[9px] font-bold text-emerald-300/60 uppercase">Future Liquidities</p>
                     </div>
                 </div>
+                ` : ''}
             `;
 
             // Inventory Stats
@@ -656,6 +689,7 @@
                     if (data.printerConfig) window.erpState.printerConfig = data.printerConfig;
                     if (data.taxes) window.erpState.taxes = data.taxes;
                     if (data.discounts) window.erpState.discounts = data.discounts;
+                    if (data.dashboardConfig) window.erpState.dashboardConfig = data.dashboardConfig;
                     if (data.loyalty) {
                         window.erpState.loyalty = data.loyalty;
                         // Update live constants if exist

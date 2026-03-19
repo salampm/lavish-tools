@@ -3,27 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Receipt - Lavish Lavender</title>
+    <title>Receipt — Lavish Lavender</title>
+    <meta name="description" content="View your official digital receipt from Lavish Lavender Bridal Boutique.">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=28">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css?v=2.2.0">
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8f5ff; display: flex; align-items: flex-start; justify-content: center; padding: 24px; min-height: 100vh; }
-        .receipt { background: white; width: 100%; max-width: 480px; border-radius: 40px; overflow: hidden; box-shadow: 0 40px 100px rgba(110, 74, 138, 0.12); border: 1px solid rgba(110, 74, 138, 0.05); }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: linear-gradient(135deg, #f8f5ff 0%, #ede9fe 50%, #f0fdf4 100%);
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 24px 16px;
+            min-height: 100vh;
+        }
+        .receipt-wrapper {
+            width: 100%;
+            max-width: 500px;
+        }
+        .receipt {
+            background: white;
+            width: 100%;
+            border-radius: 40px;
+            overflow: hidden;
+            box-shadow: 0 40px 100px rgba(110, 74, 138, 0.15), 0 4px 20px rgba(0,0,0,0.06);
+            border: 1px solid rgba(110, 74, 138, 0.08);
+        }
+        @media print {
+            body { background: white; padding: 0; }
+            .receipt { box-shadow: none; border-radius: 0; border: none; }
+            .no-print { display: none !important; }
+        }
     </style>
 </head>
 <body>
-    <div class="receipt" id="receipt-container">
-        <div id="receipt-body">
-            <div class="loading" style="text-align: center; padding: 60px;">Loading your receipt...</div>
+    <div class="receipt-wrapper">
+        <!-- Action Buttons (no-print) -->
+        <div class="no-print flex gap-3 mb-6 justify-center">
+            <button onclick="window.print()"
+                class="flex items-center gap-2 px-6 py-3 bg-white rounded-2xl text-slate-700 font-black text-[10px] uppercase tracking-widest shadow-md border border-slate-100 hover:bg-slate-50 transition-all">
+                <i data-lucide="printer" class="w-4 h-4"></i> Print
+            </button>
+            <button onclick="shareReceipt()"
+                class="flex items-center gap-2 px-6 py-3 bg-[#25D366] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-md hover:opacity-90 transition-all">
+                <i data-lucide="message-circle" class="w-4 h-4"></i> Share
+            </button>
         </div>
+
+        <!-- Receipt Container -->
+        <div class="receipt" id="receipt-container">
+            <div id="receipt-body">
+                <div style="text-align:center; padding:60px 24px;">
+                    <div style="width:48px;height:48px;border:3px solid #7c3aed;border-top-color:transparent;border-radius:50%;margin:0 auto 16px;animation:spin 0.8s linear infinite;"></div>
+                    <p style="color:#94a3b8;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.15em;">Loading Receipt...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <p class="no-print text-center text-[10px] text-slate-400 font-bold mt-6 uppercase tracking-widest">
+            Lavish Lavender Bridal Boutique &bull; v2.1.0
+        </p>
     </div>
-    <script src="js/app.js?v=28"></script>
-    <script type="module" src="js/firebase.js?v=28"></script>
-    <script type="module" src="js/receipt.js?v=28"></script>
-    <script type="module">
-        window.loadReceipt();
+
+    <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+
+    <!-- Scripts: use standard (non-module) compat scripts consistent with firebase.js -->
+    <script src="js/app.js?v=2.2.0"></script>
+    <script src="js/firebase.js?v=2.2.0"></script>
+    <script src="js/receipt.js?v=2.2.0"></script>
+    <script>
+        window.addEventListener('firebase-ready', () => {
+            if (typeof window.loadReceipt === 'function') {
+                window.loadReceipt();
+            }
+        });
+
+        function shareReceipt() {
+            const params = new URLSearchParams(window.location.search);
+            const bill = params.get('bill') || '';
+            const url = window.location.href;
+            if (navigator.share) {
+                navigator.share({ title: 'Receipt — Lavish Lavender', text: `Your receipt for Bill ${bill}`, url });
+            } else {
+                navigator.clipboard?.writeText(url).then(() => {
+                    window.erpAlert && window.erpAlert('Receipt link copied to clipboard!', 'Link Copied', 'link');
+                });
+            }
+        }
+
+        if (window.lucide) lucide.createIcons();
     </script>
 </body>
 </html>

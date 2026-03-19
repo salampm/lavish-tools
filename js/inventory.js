@@ -260,10 +260,34 @@
     };
 
     window.confirmDeleteItem = async (id) => {
-        if(!confirm("DANGER: Permanently excise this SKU from the registry?")) return;
-        await ITEMS_COL().doc(id).delete();
-        document.querySelectorAll(".fixed.inset-0").forEach(m => m.remove());
-        window.renderApp();
+        const it = (window.erpState.items || []).find(x => x.id === id);
+        if (!it) return;
+
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-slate-900/80 backdrop-blur-xl flex justify-center items-center z-[600] p-4';
+        modal.innerHTML = `
+            <div class="bg-white w-full max-w-sm rounded-[40px] p-10 shadow-2xl animate-pop-in relative border border-rose-100">
+                <div class="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner">
+                    <i data-lucide="trash-2" class="w-8 h-8 text-rose-500"></i>
+                </div>
+                <div class="text-center mb-8">
+                    <h3 class="text-xl font-black text-slate-900 tracking-tighter uppercase">Remove Item</h3>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">${it.name}</p>
+                    <p class="text-xs text-slate-400 mt-3">This will permanently remove this SKU from the catalog. This action cannot be undone.</p>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="this.closest('.fixed').remove()" class="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-200 transition-all">Cancel</button>
+                    <button id="confirm-delete-item-btn" class="flex-1 py-4 bg-rose-500 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-rose-200 hover:bg-rose-600 transition-all">Remove Item</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        if (window.lucide) lucide.createIcons();
+
+        document.getElementById('confirm-delete-item-btn').onclick = async () => {
+            await ITEMS_COL().doc(id).delete();
+            document.querySelectorAll('.fixed.inset-0').forEach(m => m.remove());
+            window.renderApp();
+        };
     };
 
     window.exportItems = () => {
@@ -275,9 +299,10 @@
             "Stock": i.stock,
             "Unit": i.soldBy,
             "Cost": i.costPrice || 0,
-            "Price": i.sellingPrice
+            "Price": i.sellingPrice,
+            "Last Updated": i.lastUpdated ? new Date(i.lastUpdated).toLocaleDateString() : ''
         }));
-        if (data.length === 0) return alert("Inventory is empty");
+        if (data.length === 0) return window.erpAlert("Inventory catalog is empty. Add items first.", "Nothing to Export", "package");
 
         const csv = [
             Object.keys(data[0]).join(','),
@@ -293,15 +318,46 @@
     };
 
     window.deleteAllItems = async () => {
-        if(!confirm("CRITICAL: This will destroy the ENTIRE stock registry. Proceed?")) return;
-        const pin = prompt("Administrative Credentials required:");
-        if(pin !== '1234') return;
-        
-        for(let it of (window.erpState.items || [])) {
-            await ITEMS_COL().doc(it.id).delete();
-        }
-        alert("Stock Master Formalized.");
-        window.renderApp();
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-slate-900/80 backdrop-blur-xl flex justify-center items-center z-[600] p-4';
+        modal.innerHTML = `
+            <div class="bg-white w-full max-w-sm rounded-[40px] p-10 shadow-2xl animate-pop-in relative border border-rose-200">
+                <div class="w-16 h-16 bg-rose-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <i data-lucide="alert-triangle" class="w-8 h-8 text-rose-600"></i>
+                </div>
+                <div class="text-center mb-8">
+                    <h3 class="text-2xl font-black text-rose-600 tracking-tighter uppercase">⚠ Danger Zone</h3>
+                    <p class="text-sm font-bold text-slate-600 mt-3">This will permanently destroy the <span class="text-rose-600">entire stock registry</span>. This cannot be undone.</p>
+                    <p class="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">Enter Owner PIN to confirm</p>
+                </div>
+                <input id="del-all-pin" type="password" placeholder="••••••••" maxlength="20"
+                    class="w-full px-6 py-4 bg-slate-50 rounded-2xl text-center font-black text-lg tracking-[0.4em] outline-none focus:ring-2 focus:ring-rose-400 mb-6 shadow-inner">
+                <p id="del-all-err" class="text-[10px] text-rose-500 font-black uppercase text-center tracking-widest mb-4 hidden">Incorrect PIN</p>
+                <div class="flex gap-3">
+                    <button onclick="this.closest('.fixed').remove()" class="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-[10px] tracking-widest">Cancel</button>
+                    <button id="del-all-confirm-btn" class="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-rose-200">Wipe All</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        if (window.lucide) lucide.createIcons();
+
+        document.getElementById('del-all-confirm-btn').onclick = async () => {
+            const pin = document.getElementById('del-all-pin').value;
+            const creds = window.erpState.passwords || {};
+            const ownerPin = creds.owner || 'Swali4783';
+            if (pin !== ownerPin) {
+                document.getElementById('del-all-err').classList.remove('hidden');
+                return;
+            }
+            const btn = document.getElementById('del-all-confirm-btn');
+            btn.innerText = 'WIPING...'; btn.disabled = true;
+            for (let it of (window.erpState.items || [])) {
+                await ITEMS_COL().doc(it.id).delete();
+            }
+            modal.remove();
+            window.erpAlert('All stock records have been wiped.', 'Stock Cleared', 'check-circle');
+            window.renderApp();
+        };
     };
 
     window.importCSV = async (e) => {
@@ -329,7 +385,7 @@
             });
             count++;
         }
-        alert(`Batch synchronization complete. ${count} records processed.`);
+        window.erpAlert(`Import complete: ${count} product records added.`, 'Batch Complete', 'check-circle');
     };
 
 })();

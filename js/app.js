@@ -8,6 +8,14 @@ if ('serviceWorker' in navigator) {
     });
 }
 
+window.sanitizePhone = (phone) => {
+    if (!phone) return "";
+    let p = phone.toString().replace(/\D/g, ''); 
+    if (p.startsWith('91') && p.length === 12) p = p.substring(2);
+    if (p.length === 11 && p.startsWith('0')) p = p.substring(1);
+    return p;
+};
+
 // Local Cache Helpers
 window.saveLocalState = () => {
     try {
@@ -25,7 +33,9 @@ window.saveLocalState = () => {
                 discounts: window.erpState.discounts,
                 passwords: window.erpState.passwords,
                 staff: window.erpState.staff || [],
-                printerConfig: window.erpState.printerConfig
+                printerConfig: window.erpState.printerConfig,
+                dashboardConfig: window.erpState.dashboardConfig,
+                gstin: window.erpState.gstin
             },
             timestamp: Date.now()
         }));
@@ -91,7 +101,7 @@ window.erpState = {
         { id: 'tailoring', icon: 'Scissors', label: 'Tailoring', url: 'tailoring.html' },
         { id: 'receipts', icon: 'Receipt', label: 'Receipts Ledger', url: 'pos.html?tab=receipts' },
         { id: 'expenses', icon: 'Wallet', label: 'Expense Tracker', url: 'expenses.html' },
-        { id: 'inventory', icon: 'Package', label: 'Inventory', url: 'inventory.html' },
+        { id: 'inventory', icon: 'Package', label: 'Inventory', url: 'inventory.html', roles: ['Owner'] },
         { id: 'clients', icon: 'Users', label: 'Clients', url: 'pos.html?tab=clients' },
         { id: 'reports', icon: 'FileSpreadsheet', label: 'Master Reports', url: 'pos.html?tab=reports', roles: ['Owner'] },
         { id: 'settings', icon: 'Settings', label: 'Master Settings', url: 'pos.html?tab=settings', roles: ['Owner'] }
@@ -102,7 +112,67 @@ window.erpState = {
 };
 
 // --- AUTH SYSTEM ---
-window.showLoginModal = () => {
+    // --- UI HELPERS ---
+    window.erpAlert = (msg, title = "System Notification", icon = "bell") => {
+        const modal = document.createElement('div');
+        modal.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4";
+        modal.innerHTML = `
+            <div class="bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl animate-pop-in border border-slate-100 text-center relative overflow-hidden">
+                <div class="absolute -right-6 -top-6 w-32 h-32 bg-slate-50 rounded-full blur-3xl"></div>
+                <div class="w-16 h-16 bg-slate-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100 relative">
+                    <i data-lucide="${icon}" class="w-8 h-8"></i>
+                </div>
+                <h3 class="text-xl font-black text-slate-900 mb-2 uppercase tracking-tighter">${title}</h3>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest leading-relaxed mb-8 px-4">${msg}</p>
+                <button onclick="this.closest('.fixed').remove()" class="w-full py-5 bg-slate-900 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl shadow-slate-200 active:scale-95 transition-all">Understood</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        if (window.lucide) lucide.createIcons();
+    };
+
+    window.snapRedeemToMultiple = (sub) => {
+            const el = document.getElementById('cm_redeem_amt');
+            if (!el) return;
+            let val = parseInt(el.value || 0);
+            if (!val) return;
+            // Snap to nearest multiple of 500 (standard rounding or floor? User says "should be in multiple", let's floor)
+            val = Math.floor(val / 500) * 500;
+            // Cap at client balance floored to 500
+            const phone = document.getElementById('cm_client_phone')?.value || '';
+            const c = window.erpState.clients.find(x => window.sanitizePhone(x.phone) === window.sanitizePhone(phone));
+            const maxRedeem = c ? Math.floor((c.loyaltyPoints || 0) / 500) * 500 : 0;
+            val = Math.min(val, maxRedeem);
+            el.value = val > 0 ? val : '';
+            window.updateCMFinal(sub);
+        };
+    window.erpConfirm = (msg, title = "Action Required") => {
+        return new Promise((resolve) => {
+            const modal = document.createElement('div');
+            modal.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4";
+            modal.innerHTML = `
+                <div class="bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl animate-pop-in border border-slate-100 text-center relative overflow-hidden">
+                    <div class="absolute -right-6 -top-6 w-32 h-32 bg-rose-50 rounded-full blur-3xl"></div>
+                    <div class="w-16 h-16 bg-rose-50 text-rose-600 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-rose-100 relative">
+                        <i data-lucide="help-circle" class="w-8 h-8"></i>
+                    </div>
+                    <h3 class="text-xl font-black text-slate-900 mb-2 uppercase tracking-tighter">${title}</h3>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest leading-relaxed mb-8 px-4">${msg}</p>
+                    <div class="flex gap-3">
+                        <button id="erp_cancel" class="flex-1 py-5 bg-slate-100 text-slate-500 rounded-[24px] font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all">Cancel</button>
+                        <button id="erp_confirm" class="flex-1 py-5 bg-rose-600 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl shadow-rose-100 active:scale-95 transition-all">Confirm</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            if (window.lucide) lucide.createIcons();
+
+            document.getElementById('erp_cancel').onclick = () => { modal.remove(); resolve(false); };
+            document.getElementById('erp_confirm').onclick = () => { modal.remove(); resolve(true); };
+        });
+    };
+
+    window.showLoginModal = () => {
     const existing = document.getElementById('login-modal-overlay');
     if (existing) return;
 
@@ -420,8 +490,11 @@ window.generateThermalPrint = function(data) {
 
     html += printRow("Subtotal", fmt(data.subtotal));
     if (data.discount > 0) html += printRow("Discount", "- " + fmt(data.discount));
-    if (pConf.showTax && data.taxVal > 0) {
-        const taxAmt = (data.subtotal - data.discount) * (data.taxVal / 100);
+    if (data.redeemAmt > 0) html += printRow("Redemption", "- " + fmt(data.redeemAmt));
+    
+    if (pConf.showTax && (data.taxVal > 0)) {
+        const base = (data.subtotal || 0) - (data.discount || 0) - (data.redeemAmt || 0);
+        const taxAmt = base * (data.taxVal / 100);
         html += printRow("Tax (" + data.taxVal + "%)", fmt(Math.round(taxAmt)));
         html += `<div style='font-size:8px;text-align:right;'>GSTIN: ${window.erpState.gstin || 'N/A'}</div>`;
     }
@@ -438,7 +511,7 @@ window.generateThermalPrint = function(data) {
         const ls = data.loyaltySnapshot;
         html += `<div style='margin-top:4px;border:1px solid #000;padding:4px;text-align:center;'>`;
         html += `<div style='font-weight:bold;font-size:8px;text-transform:uppercase;'>Loyalty Summary</div>`;
-        html += `<div style='font-size:9px;'>${ls.earned} PT Erned | ${ls.total} Total PT | ${(ls.tier || 'Basic').toUpperCase()} Tier</div>`;
+        html += `<div style='font-size:9px;'>earned ${ls.earned} | total:${ls.total} | ${(ls.tier || 'Basic').toUpperCase()}</div>`;
         html += `</div>`;
         html += `<hr style='border:none;border-top:1px dashed #000;margin:8px 0;'>`;
     }

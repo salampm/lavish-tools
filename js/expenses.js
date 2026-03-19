@@ -227,8 +227,8 @@ window.autoSumExpMixed = () => {
             const amt = parseFloat(document.getElementById("exp_amount").value);
             const billNo = document.getElementById("exp_billNo").value.trim();
 
-            if (!amt || isNaN(amt)) { alert("Enter a valid amount"); return; }
-            if (requiresBill && !billNo) { alert("Bill No. is required for this category"); return; }
+            if (!amt || isNaN(amt)) { window.erpAlert('Please enter a valid amount.', 'Validation Error', 'alert-circle'); return; }
+            if (requiresBill && !billNo) { window.erpAlert('Bill / Ref No. is required for this expense category.', 'Validation Error', 'file-text'); return; }
 
             const desc = document.getElementById("exp_desc").value.trim() || "Unspecified Expenditure";
             const dateStr = document.getElementById("exp_date").value;
@@ -268,8 +268,8 @@ window.autoSumExpMixed = () => {
                 window.renderApp();
             } catch (e) {
                 console.error(e);
-                alert("Cloud Sync Error. Please retry.");
-                btn.innerText = existingExp ? "UPDATE RECORD" : "SAVE EXPENSE";
+                window.erpAlert('Cloud Sync Error. Please check connection and retry.', 'Sync Failed', 'wifi-off');
+                btn.innerText = existingExp ? 'UPDATE RECORD' : 'SAVE EXPENSE';
                 btn.disabled = false;
             }
         };
@@ -327,7 +327,7 @@ window.autoSumExpMixed = () => {
             const name = document.getElementById("new_cat_name").value.trim();
             const reqBill = document.getElementById("new_cat_bill").checked;
             
-            if (!name) { alert("Name required"); return; }
+            if (!name) { window.erpAlert('Category name is required.', 'Validation Error', 'alert-circle'); return; }
             
             saveBtn.innerText = existing ? "UPDATING..." : "CREATING...";
             saveBtn.disabled = true;
@@ -357,42 +357,85 @@ window.autoSumExpMixed = () => {
                 modal.remove();
             } catch(e) {
                 console.error(e);
-                alert("Error saving category.");
-                saveBtn.innerText = existing ? "Update" : "Create";
+                window.erpAlert('Error saving category. Please retry.', 'Save Failed', 'wifi-off');
+                saveBtn.innerText = existing ? 'Update' : 'Create';
                 saveBtn.disabled = false;
             }
         };
     };
 
     window.deleteCategory = async (idOrIdx) => {
-        // If it's a Firestore ID (contains letters or is longer)
-        const isFirestoreId = isNaN(idOrIdx) || idOrIdx.length > 5;
-        
-        if (!confirm("Are you sure you want to delete this category?")) return;
-        
-        if (isFirestoreId) {
-            try {
-                await window.FB.collection('expense_categories').doc(idOrIdx).delete();
+        const isFirestoreId = isNaN(idOrIdx) || String(idOrIdx).length > 5;
+
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-slate-900/80 backdrop-blur-xl flex justify-center items-center z-[600] p-4';
+        modal.innerHTML = `
+            <div class="bg-white w-full max-w-sm rounded-[40px] p-10 shadow-2xl animate-pop-in border border-rose-100">
+                <div class="w-14 h-14 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <i data-lucide="folder-x" class="w-7 h-7 text-rose-500"></i>
+                </div>
+                <div class="text-center mb-8">
+                    <h3 class="text-xl font-black text-slate-900 tracking-tighter uppercase">Delete Category</h3>
+                    <p class="text-xs text-slate-400 mt-2">This category will be removed. Existing expenses in this category will not be affected.</p>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="this.closest('.fixed').remove()" class="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-[10px] tracking-widest">Cancel</button>
+                    <button id="del-cat-confirm" class="flex-1 py-4 bg-rose-500 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-rose-200">Delete</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        if (window.lucide) lucide.createIcons();
+
+        document.getElementById('del-cat-confirm').onclick = async () => {
+            if (isFirestoreId) {
+                try {
+                    await window.FB.collection('expense_categories').doc(idOrIdx).delete();
+                    modal.remove();
+                    window.renderApp();
+                } catch(e) {
+                    console.error(e);
+                    window.erpAlert('Error deleting category. Please retry.', 'Delete Failed', 'wifi-off');
+                    modal.remove();
+                }
+            } else {
+                window.erpState.expenseCategories.splice(idOrIdx, 1);
+                modal.remove();
                 window.renderApp();
-            } catch(e) {
-                console.error(e);
-                alert("Error deleting category from cloud.");
             }
-        } else {
-            // Fallback for hardcoded categories
-            window.erpState.expenseCategories.splice(idOrIdx, 1);
-            window.renderApp();
-        }
+        };
     };
 
     window.deleteExpense = async (id) => {
-        if (!confirm("Permanently wipe this record from cloud ledger?")) return;
-        try {
-            await EXP_COL().doc(id).delete();
-            window.renderApp();
-        } catch(e) {
-            alert("Error deleting record");
-        }
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-slate-900/80 backdrop-blur-xl flex justify-center items-center z-[600] p-4';
+        modal.innerHTML = `
+            <div class="bg-white w-full max-w-sm rounded-[40px] p-10 shadow-2xl animate-pop-in border border-rose-100">
+                <div class="w-14 h-14 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <i data-lucide="trash-2" class="w-7 h-7 text-rose-500"></i>
+                </div>
+                <div class="text-center mb-8">
+                    <h3 class="text-xl font-black text-slate-900 tracking-tighter uppercase">Wipe Record</h3>
+                    <p class="text-xs text-slate-400 mt-2">This expense entry will be permanently removed from the cloud ledger.</p>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="this.closest('.fixed').remove()" class="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-[10px] tracking-widest">Cancel</button>
+                    <button id="del-exp-confirm" class="flex-1 py-4 bg-rose-500 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-rose-200">Delete</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        if (window.lucide) lucide.createIcons();
+
+        document.getElementById('del-exp-confirm').onclick = async () => {
+            try {
+                await EXP_COL().doc(id).delete();
+                modal.remove();
+                window.renderApp();
+            } catch(e) {
+                console.error(e);
+                window.erpAlert('Error removing record. Please retry.', 'Delete Failed', 'wifi-off');
+                modal.remove();
+            }
+        };
     };
 
     window.editExpense = (id) => {
