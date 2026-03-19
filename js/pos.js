@@ -625,42 +625,38 @@
             </div>
 
             <!-- Client Grid -->
-            <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                <div class="max-w-[1400px] mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div class="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+                <div class="max-w-[1400px] mx-auto grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
                     ${list.map(c => `
-                        <div onclick="window.openClientProfile('${c.id}')" class="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/10 hover:border-indigo-200 transition-all group cursor-pointer relative overflow-hidden">
-                            <div class="absolute -right-6 -top-6 w-24 h-24 bg-slate-50 rounded-full group-hover:bg-indigo-50 transition-colors duration-500"></div>
+                        <div onclick="window.openClientProfile('${c.id}')" class="bg-white p-4 md:p-8 rounded-[24px] md:rounded-[48px] border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/10 hover:border-indigo-200 transition-all group cursor-pointer relative overflow-hidden flex flex-col items-center text-center">
+                            <div class="absolute -right-6 -top-6 w-16 h-16 md:w-24 md:h-24 bg-slate-50 rounded-full group-hover:bg-indigo-50 transition-colors duration-500"></div>
                             
-                            <div class="flex items-center gap-5 mb-8 relative z-10">
-                                <div class="w-16 h-16 rounded-[24px] bg-slate-900 text-white flex items-center justify-center font-black text-2xl shadow-xl group-hover:bg-indigo-600 transition-colors duration-500">
-                                    ${c.name ? c.name.charAt(0).toUpperCase() : '?'}
-                                </div>
-                                <div class="min-w-0">
-                                    <h4 class="font-black text-slate-800 text-lg truncate uppercase tracking-tight leading-none mb-2">${c.name || 'Legacy Client'}</h4>
-                                    <div class="flex items-center gap-1.5 opacity-60">
-                                        <i data-lucide="phone" class="w-3 h-3 text-indigo-500"></i>
-                                        <p class="text-[11px] font-black font-mono tracking-wider">${c.phone}</p>
-                                    </div>
-                                </div>
+                            <div class="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-[24px] bg-slate-900 text-white flex items-center justify-center font-black text-xl md:text-2xl shadow-xl group-hover:bg-indigo-600 transition-colors duration-500 mb-4 md:mb-8 mx-auto relative z-10">
+                                ${c.name ? c.name.charAt(0).toUpperCase() : '?'}
+                            </div>
+                            
+                            <div class="min-w-0 mb-4 md:mb-6 flex-1">
+                                <h4 class="font-black text-slate-800 text-xs md:text-lg truncate uppercase tracking-tight leading-none mb-1 shadow-inner px-1">${c.name || 'Legacy Client'}</h4>
+                                <p class="text-[8px] md:text-[11px] font-black font-mono tracking-wider text-indigo-500">${c.phone}</p>
                             </div>
 
-                            <div class="flex items-center justify-between px-6 py-4 bg-slate-50 rounded-[28px] border border-slate-100 mb-6 relative z-10 group-hover:bg-white group-hover:border-indigo-100 transition-all">
-                                <div>
-                                    <p class="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Loyalty Pulse</p>
-                                    <p class="text-sm font-black text-slate-900">${(c.loyaltyPoints || 0).toLocaleString()} <span class="text-[9px] text-indigo-500 ml-0.5">PTS</span></p>
+                            <div class="w-full flex items-center justify-between px-3 md:px-6 py-2 md:py-4 bg-slate-50 rounded-xl md:rounded-[28px] border border-slate-100 mb-4 md:mb-6 relative z-10 group-hover:bg-white group-hover:border-indigo-100 transition-all">
+                                <div class="text-left">
+                                    <p class="text-[6px] md:text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Pulse</p>
+                                    <p class="text-[10px] md:text-sm font-black text-slate-900">${(c.loyaltyPoints || 0).toLocaleString()} <span class="text-[7px] md:text-[9px] text-indigo-500">PTS</span></p>
                                 </div>
                                 <div class="text-right">
-                                    <p class="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Tier</p>
-                                    <p class="text-[9px] font-black text-indigo-600 uppercase tracking-tighter">${(window.erpState.loyalty?.enabled !== false) ? (c.loyaltyTier || 'Basic Member') : 'Standard'}</p>
+                                    <p class="text-[6px] md:text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Tier</p>
+                                    <p class="text-[7px] md:text-[9px] font-black text-indigo-600 uppercase tracking-tighter">${(window.erpState.loyalty?.enabled !== false) ? (c.loyaltyTier || 'Basic') : 'Std'}</p>
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-2 gap-4 pt-6 border-t border-slate-50 relative z-10">
-                                <a href="tel:${c.phone}" onclick="event.stopPropagation()" class="py-3 bg-indigo-50 text-indigo-600 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-2">
-                                    <i data-lucide="phone-call" class="w-4 h-4"></i> Call
+                            <div class="grid grid-cols-2 gap-2 w-full pt-4 border-t border-slate-50 relative z-10">
+                                <a href="tel:${c.phone}" onclick="event.stopPropagation()" class="py-2.5 bg-indigo-50 text-indigo-600 rounded-lg text-[7px] md:text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-1.5">
+                                    <i data-lucide="phone-call" class="w-3 h-3 md:w-4 md:h-4"></i> Call
                                 </a>
-                                <button onclick="event.stopPropagation(); window.shareWhatsApp('', '${c.name}', '${c.phone}', 0)" class="py-3 bg-emerald-50 text-emerald-600 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-2">
-                                    <i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp
+                                <button onclick="event.stopPropagation(); window.shareWhatsApp('', '${c.name}', '${c.phone}', 0)" class="py-2.5 bg-emerald-50 text-emerald-600 rounded-lg text-[7px] md:text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-1.5">
+                                    <i data-lucide="message-circle" class="w-3 h-3 md:w-4 md:h-4"></i> WA
                                 </button>
                             </div>
                         </div>
@@ -682,9 +678,9 @@
     function renderTickets() {
         // ... Logic for saved tickets ...
         return `
-        <div class="p-8">
-            <h2 class="text-2xl font-black mb-6">Saved Tickets / Tables</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="p-4 md:p-8">
+            <h2 class="text-xl md:text-2xl font-black mb-6 uppercase tracking-tight">Saved Tickets / Tables</h2>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
                 ${(window.erpState.tickets || []).map((t, idx) => `
                     <div class="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
                         <div class="flex justify-between items-start mb-4">

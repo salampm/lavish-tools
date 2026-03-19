@@ -203,7 +203,7 @@
                     </button>
                 </div>
             </div>
-            <div id="tracker-list" class="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-10 custom-scrollbar pr-4 pb-20">
+            <div id="tracker-list" class="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 md:gap-10 custom-scrollbar pr-2 md:pr-4 pb-20">
                 ${active.map(o => renderOrderCard(o)).join('') || `<div class="col-span-full py-40 text-center text-slate-300 italic flex flex-col items-center justify-center opacity-40"><i data-lucide="scissors" class="w-16 h-16 mb-4"></i> No production items found</div>`}
             </div>
         </div>
@@ -244,7 +244,7 @@
                     </button>
                 </div>
             </div>
-            <div id="tracker-list" class="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-10 custom-scrollbar pr-4 pb-20">
+            <div id="tracker-list" class="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 md:gap-10 custom-scrollbar pr-2 md:pr-4 pb-20">
                 ${list.map(o => renderOrderCard(o)).join('') || `<div class="col-span-full py-40 text-center text-slate-300 italic flex flex-col items-center justify-center opacity-40"><i data-lucide="package-check" class="w-16 h-16 mb-4"></i> All ready orders picked up</div>`}
             </div>
         </div>
@@ -266,33 +266,32 @@
         const isOverdue = o.deliveryDate && new Date(o.deliveryDate) < new Date() && o.status !== 'Delivered';
 
         return `
-        <div id="card-${o.id}" onclick="window.openOrderDetails('${o.id}')" class="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex flex-col h-fit hover:shadow-xl transition-all cursor-pointer group">
-            <div class="flex justify-between items-start mb-4">
+        <div id="card-${o.id}" onclick="window.openOrderDetails('${o.id}')" class="bg-white p-4 md:p-6 rounded-[24px] md:rounded-[32px] border border-slate-100 shadow-sm flex flex-col h-fit hover:shadow-xl transition-all cursor-pointer group">
+            <div class="flex justify-between items-start mb-3 md:mb-4">
                 <div>
-                   <h3 class="font-black text-lg uppercase text-slate-900">${o.customerName}</h3>
-                   <span class="text-[10px] font-black text-violet-400 font-mono tracking-tighter uppercase block mt-0.5">№ ${o.billNo}</span>
+                   <h3 class="font-black text-xs md:text-lg uppercase text-slate-900 leading-tight line-clamp-1">${o.customerName}</h3>
+                   <span class="text-[8px] md:text-[10px] font-black text-violet-400 font-mono tracking-tighter uppercase block mt-0.5">№ ${o.billNo}</span>
                 </div>
-                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${window.fmtDate(o.deliveryDate)}</span>
+                <span class="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">${window.fmtDate(o.deliveryDate)}</span>
             </div>
 
-            <div class="space-y-1 mb-6">
-                ${(o.items || []).map(it => `
-                    <div class="flex justify-between text-xs font-bold text-slate-500">
-                        <!-- ISSUE #16 FIX: Show actual qty, not hardcoded 1x -->
-                        <span>${it.qty || 1}x ${it.name}</span>
-                        <span>${isOverdue ? '<i data-lucide="alert-circle" class="w-3 h-3 text-rose-500 inline mr-1"></i>' : ''} ${window.fmtDate(o.orderDate || o.timestamp)}</span>
+            <div class="space-y-1 mb-4 md:mb-6">
+                ${(o.items || []).slice(0, 2).map(it => `
+                    <div class="flex justify-between text-[10px] md:text-xs font-bold text-slate-500">
+                        <span class="truncate pr-2">${it.qty || 1}x ${it.name}</span>
+                        <span class="shrink-0 flex items-center">${isOverdue ? '<i data-lucide="alert-circle" class="w-2.5 h-2.5 text-rose-500 inline mr-0.5"></i>' : ''} ${window.fmtDate(o.orderDate || o.timestamp)}</span>
                     </div>
                 `).join('')}
-                ${(o.items || []).length === 0 ? '<div class="text-xs italic text-slate-300">No items specified</div>' : ''}
+                ${(o.items || []).length > 2 ? `<div class="text-[8px] font-black text-violet-400 uppercase tracking-widest">+ ${(o.items.length - 2)} more items</div>` : ''}
+                ${(o.items || []).length === 0 ? '<div class="text-xs italic text-slate-300">No items</div>' : ''}
             </div>
 
-            <div class="flex items-center justify-between pt-4 border-t border-slate-50">
+            <div class="flex items-center justify-between pt-3 md:pt-4 border-t border-slate-50">
                 <div class="flex flex-col">
-                    <span class="text-xl font-black ${bal > 0 ? 'text-rose-600' : 'text-slate-900'}">₹${bal.toLocaleString()}</span>
-                    <span class="text-[8px] font-black text-slate-300 uppercase tracking-widest leading-none mt-1">${bal > 0 ? 'Balance Due' : 'Fully Paid'}</span>
+                    <span class="text-sm md:text-xl font-black ${bal > 0 ? 'text-rose-600' : 'text-slate-900'}">₹${bal.toLocaleString()}</span>
                 </div>
                 <div class="flex gap-2">
-                    <span class="px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${statusColors[o.status] || statusColors['Pending']}">
+                    <span class="px-2 md:px-5 py-1.5 md:py-2.5 rounded-lg md:rounded-xl text-[7px] md:text-[10px] font-black uppercase tracking-widest ${statusColors[o.status] || statusColors['Pending']}">
                         ${o.status.replace('Order ', '').replace('Pickup', '')}
                     </span>
                 </div>
