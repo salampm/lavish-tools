@@ -1,4 +1,4 @@
-window.APP_VERSION = "v2.3.0";
+window.APP_VERSION = "v2.4.0";
 
 // --- CACHE & UPDATE MANAGEMENT ---
 // 1. Force unregister old Service Workers that often block updates
@@ -125,7 +125,7 @@ window.erpState = {
         { name: 'Marketing', requiresBill: false, icon: 'Target' }
     ],
     expenseTab: 'terminal',
-    dashboardFilter: 'monthly',
+    dashboardFilter: 'today',
     dashboardStart: null, dashboardEnd: null,
     isSidebarOpen: false, isItemsOpen: false, mobileCartOpen: false,
     search: '', user: null, categoryFilter: '',
@@ -259,6 +259,7 @@ window.erpState = {
     
     const tryLogin = () => {
         const val = passInput.value;
+        const filter = window.erpState.dashboardFilter || 'today';
         const creds = window.erpState.passwords || { staff: 'Lavish1234', owner: 'Swali4783' };
         const staffList = window.erpState.staff || [];
         

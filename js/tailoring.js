@@ -172,7 +172,7 @@
         window.renderApp();
     };
 
-    function renderTracker(orders) {
+    function renderTrackerListContent(orders) {
         const key = window.erpState.trackerSortKey || 'deliveryDate';
         const dir = window.erpState.trackerSortDir || 'desc';
 
@@ -187,6 +187,10 @@
             return valA < valB ? -1 : 1;
         });
 
+        return active.map(o => renderOrderCard(o)).join('') || `<div class="col-span-full py-40 text-center text-slate-300 italic flex flex-col items-center justify-center opacity-40"><i data-lucide="scissors" class="w-16 h-16 mb-4"></i> No production items found</div>`;
+    }
+
+    function renderTracker(orders) {
         return `
         <div class="p-8 h-full flex flex-col overflow-hidden bg-slate-50/50">
             <div class="mb-10 flex flex-col md:flex-row gap-6">
@@ -195,22 +199,22 @@
                     <input type="text" id="tracker-search" placeholder="Search production queue..." class="w-full pl-14 pr-6 py-4 bg-white border border-slate-100 rounded-[28px] text-sm font-bold shadow-sm outline-none focus:border-violet-200 transition-all" oninput="window.filterTracker(this.value)">
                 </div>
                 <div class="flex gap-3">
-                    <button onclick="window.toggleTrackerSort('billNo')" class="bg-white border border-slate-100 px-6 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${key === 'billNo' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
-                        <i data-lucide="hash" class="w-4 h-4"></i> Bill ${key === 'billNo' ? (dir === 'desc' ? '↓' : '↑') : ''}
+                    <button onclick="window.toggleTrackerSort('billNo')" class="bg-white border border-slate-100 px-6 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${window.erpState.trackerSortKey === 'billNo' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
+                        <i data-lucide="hash" class="w-4 h-4"></i> Bill ${window.erpState.trackerSortKey === 'billNo' ? (window.erpState.trackerSortDir === 'desc' ? '↓' : '↑') : ''}
                     </button>
-                    <button onclick="window.toggleTrackerSort('deliveryDate')" class="bg-white border border-slate-100 px-6 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${key === 'deliveryDate' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
-                        <i data-lucide="calendar" class="w-4 h-4"></i> Date ${key === 'deliveryDate' ? (dir === 'desc' ? '↓' : '↑') : ''}
+                    <button onclick="window.toggleTrackerSort('deliveryDate')" class="bg-white border border-slate-100 px-6 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${window.erpState.trackerSortKey === 'deliveryDate' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
+                        <i data-lucide="calendar" class="w-4 h-4"></i> Date ${window.erpState.trackerSortKey === 'deliveryDate' ? (window.erpState.trackerSortDir === 'desc' ? '↓' : '↑') : ''}
                     </button>
                 </div>
             </div>
             <div id="tracker-list" class="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 md:gap-10 custom-scrollbar pr-2 md:pr-4 pb-20">
-                ${active.map(o => renderOrderCard(o)).join('') || `<div class="col-span-full py-40 text-center text-slate-300 italic flex flex-col items-center justify-center opacity-40"><i data-lucide="scissors" class="w-16 h-16 mb-4"></i> No production items found</div>`}
+                ${renderTrackerListContent(orders)}
             </div>
         </div>
         `;
     }
 
-    function renderReady(orders) {
+    function renderReadyListContent(orders) {
         const key = window.erpState.trackerSortKey || 'deliveryDate';
         const dir = window.erpState.trackerSortDir || 'desc';
 
@@ -228,28 +232,33 @@
             return valA < valB ? -1 : 1;
         });
 
+        return list.map(o => renderOrderCard(o)).join('') || `<div class="col-span-full py-40 text-center text-slate-300 italic flex flex-col items-center justify-center opacity-40"><i data-lucide="package-check" class="w-16 h-16 mb-4"></i> All ready orders picked up</div>`;
+    }
+
+    function renderReady(orders) {
         return `
         <div class="p-8 h-full flex flex-col overflow-hidden bg-slate-50/50">
             <div class="mb-10 flex flex-col md:flex-row gap-6">
                 <div class="relative flex-1">
                     <i data-lucide="search" class="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5"></i>
-                    <input type="text" placeholder="Search ready orders..." class="w-full pl-14 pr-6 py-4 bg-white border border-slate-100 rounded-[28px] text-sm font-bold shadow-sm outline-none focus:border-violet-200 transition-all" oninput="window.filterTracker(this.value)">
+                    <input type="text" id="tracker-search" placeholder="Search ready orders..." class="w-full pl-14 pr-6 py-4 bg-white border border-slate-100 rounded-[28px] text-sm font-bold shadow-sm outline-none focus:border-violet-200 transition-all" oninput="window.filterTracker(this.value)">
                 </div>
                 <div class="flex gap-3">
-                    <button onclick="window.toggleTrackerSort('billNo')" class="bg-white border border-slate-100 px-6 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${key === 'billNo' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
-                        <i data-lucide="hash" class="w-4 h-4"></i> Bill ${key === 'billNo' ? (dir === 'desc' ? '↓' : '↑') : ''}
+                    <button onclick="window.toggleTrackerSort('billNo')" class="bg-white border border-slate-100 px-6 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${window.erpState.trackerSortKey === 'billNo' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
+                        <i data-lucide="hash" class="w-4 h-4"></i> Bill ${window.erpState.trackerSortKey === 'billNo' ? (window.erpState.trackerSortDir === 'desc' ? '↓' : '↑') : ''}
                     </button>
-                    <button onclick="window.toggleTrackerSort('deliveryDate')" class="bg-white border border-slate-100 px-6 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${key === 'deliveryDate' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
-                        <i data-lucide="calendar" class="w-4 h-4"></i> Date ${key === 'deliveryDate' ? (dir === 'desc' ? '↓' : '↑') : ''}
+                    <button onclick="window.toggleTrackerSort('deliveryDate')" class="bg-white border border-slate-100 px-6 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${window.erpState.trackerSortKey === 'deliveryDate' ? 'text-violet-600 border-violet-200 bg-violet-50' : 'text-slate-400'}">
+                        <i data-lucide="calendar" class="w-4 h-4"></i> Date ${window.erpState.trackerSortKey === 'deliveryDate' ? (window.erpState.trackerSortDir === 'desc' ? '↓' : '↑') : ''}
                     </button>
                 </div>
             </div>
             <div id="tracker-list" class="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 md:gap-10 custom-scrollbar pr-2 md:pr-4 pb-20">
-                ${list.map(o => renderOrderCard(o)).join('') || `<div class="col-span-full py-40 text-center text-slate-300 italic flex flex-col items-center justify-center opacity-40"><i data-lucide="package-check" class="w-16 h-16 mb-4"></i> All ready orders picked up</div>`}
+                ${renderReadyListContent(orders)}
             </div>
         </div>
         `;
     }
+
 
     function renderOrderCard(o) {
         // ISSUE #3 FIX: Include delivery discount in balance calculation
@@ -313,7 +322,42 @@
 
         const totalDue = dues.reduce((sum, o) => sum + o.bal, 0);
 
-        const cards = dues.map(o => {
+        return `
+        <div class="flex flex-col h-full bg-slate-50">
+            <!-- Header -->
+            <div class="sticky top-0 z-10 bg-white/80 backdrop-blur-md p-6 border-b border-slate-200">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 max-w-4xl mx-auto">
+                    <div>
+                        <h2 class="text-2xl font-black text-slate-800 tracking-tighter uppercase">Pending Collection</h2>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">${dues.length} orders with outstanding balance</p>
+                    </div>
+                    <div class="bg-rose-600 px-8 py-4 rounded-[24px] text-white shadow-xl shadow-rose-100 text-right flex-shrink-0">
+                        <p class="text-[9px] font-black uppercase tracking-widest opacity-70">Total Receivable</p>
+                        <p class="text-2xl font-black leading-tight">${fmt(totalDue)}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- List -->
+            <div class="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                <div id="pending-due-list" class="max-w-4xl mx-auto space-y-3">
+                    ${renderPendingDueListContent(orders)}
+                </div>
+            </div>
+        </div>`;
+    }
+
+    function renderPendingDueListContent(orders) {
+        const now = new Date();
+        const dues = orders
+            .map(o => {
+                const bal = Math.max(0, (o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0));
+                return { ...o, bal };
+            })
+            .filter(o => o.bal > 0)
+            .sort((a, b) => b.bal - a.bal);
+
+        return dues.map(o => {
             const isOverdue = o.deliveryDate && new Date(o.deliveryDate) < now;
             const isUrgent = o.deliveryDate && !isOverdue && (new Date(o.deliveryDate) - now) < (48 * 60 * 60 * 1000);
             const badgeColor = o.status === 'Ready' ? 'bg-emerald-100 text-emerald-700' 
@@ -352,35 +396,38 @@
                     </button>
                 </div>
             </div>`;
-        }).join('');
-
-        return `
-        <div class="flex flex-col h-full bg-slate-50">
-            <!-- Header -->
-            <div class="sticky top-0 z-10 bg-white/80 backdrop-blur-md p-6 border-b border-slate-200">
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 max-w-4xl mx-auto">
-                    <div>
-                        <h2 class="text-2xl font-black text-slate-800 tracking-tighter uppercase">Pending Collection</h2>
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">${dues.length} orders with outstanding balance</p>
-                    </div>
-                    <div class="bg-rose-600 px-8 py-4 rounded-[24px] text-white shadow-xl shadow-rose-100 text-right flex-shrink-0">
-                        <p class="text-[9px] font-black uppercase tracking-widest opacity-70">Total Receivable</p>
-                        <p class="text-2xl font-black leading-tight">${fmt(totalDue)}</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- List -->
-            <div class="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                <div class="max-w-4xl mx-auto space-y-3">
-                    ${cards || `<div class="py-32 text-center text-slate-300 font-black uppercase text-xs tracking-widest">
-                        <p class="text-5xl mb-4">🎉</p>
-                        <p>All balances cleared!</p>
-                    </div>`}
-                </div>
-            </div>
-        </div>`;
+        }).join('') || `<div class="py-32 text-center text-slate-300 font-black uppercase text-xs tracking-widest">
+                <p class="text-5xl mb-4">🎉</p>
+                <p>All balances cleared!</p>
+            </div>`;
     }
+
+    window.updateTailoringList = function() {
+        const orders = window.erpState.orders || [];
+        const tab = window.currentTailorTab;
+        
+        const trackerList = document.getElementById('tracker-list');
+        const pendingDueList = document.getElementById('pending-due-list');
+
+        if (trackerList) {
+            if (tab === 'tracker') {
+                trackerList.innerHTML = renderTrackerListContent(orders);
+            } else if (tab === 'ready') {
+                trackerList.innerHTML = renderReadyListContent(orders);
+            }
+            
+            // Re-apply filter if searching
+            const searchInput = document.getElementById('tracker-search');
+            if (searchInput && searchInput.value) {
+                window.filterTracker(searchInput.value);
+            }
+        } else if (pendingDueList && tab === 'pending-due') {
+            pendingDueList.innerHTML = renderPendingDueListContent(orders);
+        }
+
+        if (window.lucide) lucide.createIcons();
+    };
+
 
     // --- HISTORY VIEW ---
     window.toggleHistorySort = function() {
@@ -481,7 +528,7 @@
             <div class="mb-10 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
                 <div>
                     <h2 class="text-3xl font-black text-slate-900 tracking-tighter uppercase mb-1">Tailoring Insights <span class="text-violet-600">B.I.</span></h2>
-                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Boutique Intelligence v2.0</p>
+                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Boutique Intelligence v2.4.0</p>
                 </div>
 
                 <div class="flex items-center gap-4">

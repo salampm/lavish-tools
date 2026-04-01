@@ -9,11 +9,7 @@
         const searchVal = (window.erpState.search || '').toLowerCase();
         const catFilter = window.erpState.categoryFilter || '';
         
-        const list = (window.erpState.items || []).filter(i => {
-            const matchesSearch = !searchVal || (i.name && i.name.toLowerCase().includes(searchVal));
-            const matchesCat = !catFilter || i.category === catFilter;
-            return matchesSearch && matchesCat;
-        });
+        const list = window.getFilteredInventory();
 
         // Pre-calculate categories for filter
         const categories = [...new Set((window.erpState.items || []).map(i => i.category).filter(Boolean))];
@@ -29,10 +25,10 @@
                             <input id="inv-search-stable" type="text" 
                                 placeholder="Search by item name or description..." 
                                 value="${(window.erpState.search || '').replace(/"/g, '&quot;')}" 
-                                oninput="window.erpState.search=this.value;window.scheduleRender();" 
+                                oninput="window.erpState.search=this.value;window.updateInvItemsList();" 
                                 class="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-400 shadow-sm">
                         </div>
-                        <select onchange="window.erpState.categoryFilter=this.value;window.renderApp();" 
+                        <select onchange="window.erpState.categoryFilter=this.value;window.updateInvItemsList();" 
                             class="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none shadow-sm h-[42px]">
                             <option value="">All Categories</option>
                             ${categories.map(c => `<option value="${c}" ${catFilter === c ? 'selected' : ''}>${c}</option>`).join('')}
@@ -62,28 +58,53 @@
                         <div class="text-center">Action</div>
                     </div>
 
-                    <div class="divide-y divide-slate-50">
-                        ${list.map(i => `
-                        <div class="px-8 py-5 grid grid-cols-2 md:grid-cols-[1fr_120px_140px_140px_100px] gap-x-4 gap-y-2 items-center hover:bg-slate-50/50 transition-colors cursor-pointer" onclick="window.editItem('${i.id}')">
-                            <div class="flex-1">
-                                <p class="font-black text-slate-800 text-sm capitalize leading-tight mb-0.5">${i.name}</p>
-                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${i.sku} • ${i.category}</p>
-                                ${i.supplier ? `<p class="text-[9px] font-bold text-indigo-400 uppercase tracking-tighter mt-1">Supplier: ${i.supplier}</p>` : ''}
-                            </div>
-                            <div class="text-center">
-                                <span class="px-3 py-1 bg-slate-100 rounded-lg text-xs font-black text-slate-600">${i.stock} ${i.soldBy === 'weight' ? 'unit' : 'qty'}</span>
-                            </div>
-                            <div class="text-right font-black text-violet-600 text-base">${fmt(i.sellingPrice)}</div>
-                            <div class="text-right font-bold text-slate-400 text-sm">${fmt(i.costPrice || 0)}</div>
-                            <div class="flex justify-center">
-                                <button onclick="event.stopPropagation(); window.editItem('${i.id}')" class="p-2 text-slate-300 hover:text-violet-600 hover:bg-violet-50 rounded-xl transition-all"><i data-lucide="Pencil" class="w-4 h-4"></i></button>
-                            </div>
-                        </div>`).join('') || `<div class="py-24 text-center text-slate-300 italic font-bold border-2 border-dashed border-slate-100 rounded-[40px] m-8"><i data-lucide="Package" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>No items cataloged currently.</div>`}
+                    <div id="inv-items-container" class="divide-y divide-slate-50">
+                        ${window.renderInvItemsList(list)}
                     </div>
                 </div>
             </div>
         </div>
         `;
+    };
+
+    window.getFilteredInventory = function() {
+        const searchVal = (window.erpState.search || '').toLowerCase();
+        const catFilter = window.erpState.categoryFilter || '';
+        return (window.erpState.items || []).filter(i => {
+            const matchesSearch = !searchVal || (i.name && i.name.toLowerCase().includes(searchVal)) || (i.sku && i.sku.toLowerCase().includes(searchVal));
+            const matchesCat = !catFilter || i.category === catFilter;
+            return matchesSearch && matchesCat;
+        });
+    };
+
+    window.renderInvItemsList = function(list) {
+        return list.map(i => `
+            <div class="px-8 py-5 grid grid-cols-2 md:grid-cols-[1fr_120px_140px_140px_100px] gap-x-4 gap-y-2 items-center hover:bg-slate-50/50 transition-colors cursor-pointer" onclick="window.editItem('${i.id}')">
+                <div class="flex-1">
+                    <p class="font-black text-slate-800 text-sm capitalize leading-tight mb-0.5">${i.name}</p>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${i.sku} • ${i.category}</p>
+                    ${i.supplier ? `<p class="text-[9px] font-bold text-indigo-400 uppercase tracking-tighter mt-1">Supplier: ${i.supplier}</p> ` : ''}
+                </div>
+                <div class="text-center">
+                    <span class="px-3 py-1 bg-slate-100 rounded-lg text-xs font-black text-slate-600">${i.stock} ${i.soldBy === 'weight' ? 'unit' : 'qty'}</span>
+                </div>
+                <div class="text-right font-black text-violet-600 text-base">${fmt(i.sellingPrice)}</div>
+                <div class="text-right font-bold text-slate-400 text-sm">${fmt(i.costPrice || 0)}</div>
+                <div class="flex justify-center">
+                    <button onclick="event.stopPropagation(); window.editItem('${i.id}')" class="p-2 text-slate-300 hover:text-violet-600 hover:bg-violet-50 rounded-xl transition-all"><i data-lucide="Pencil" class="w-4 h-4"></i></button>
+                </div>
+            </div>`).join('') || `<div class="py-24 text-center text-slate-300 italic font-bold border-2 border-dashed border-slate-100 rounded-[40px] m-8"><i data-lucide="Package" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>No items cataloged matches filter.</div>`;
+    };
+
+    window.updateInvItemsList = function() {
+        const container = document.getElementById('inv-items-container');
+        if (!container) return window.renderApp(); // Fallback if UI not ready
+        
+        const list = window.getFilteredInventory();
+        container.innerHTML = window.renderInvItemsList(list);
+        
+        if (window.lucide) lucide.createIcons();
+        window.saveLocalCache(); 
     };
 
     window.openAddItem = function () {

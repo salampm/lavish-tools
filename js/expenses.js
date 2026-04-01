@@ -82,7 +82,7 @@ window.autoSumExpMixed = () => {
     function renderExpenseHistory() {
         const now = new Date();
         let start = new Date().setHours(0, 0, 0, 0);
-        const filter = window.erpState.dashboardFilter || 'monthly';
+        const filter = window.erpState.dashboardFilter || 'today';
         
         if (filter === 'weekly') {
             const day = now.getDay();
@@ -134,12 +134,21 @@ window.autoSumExpMixed = () => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-50">
-                            ${list.map(e => `
+                            ${list.map(e => {
+                                const breakdown = e.paymentBreakdown || {};
+                                let methodLabel = e.paymentMethod || 'Cash';
+                                if (methodLabel === 'Mixed') {
+                                    methodLabel = `Mixed (C: ${fmt(breakdown.cash || 0)} | U: ${fmt(breakdown.upi || 0)})`;
+                                }
+                                return `
                                 <tr class="hover:bg-slate-50/50 transition-colors">
                                     <td class="px-8 py-5 text-xs font-bold text-slate-500">${window.fmtDate(e.date)}</td>
                                     <td class="px-8 py-5">
                                         <p class="font-black text-slate-800 text-sm">${e.description || 'No description'}</p>
-                                        ${e.billNo ? `<p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Ref: ${e.billNo}</p>` : ''}
+                                        <div class="flex items-center gap-2 mt-1">
+                                            ${e.billNo ? `<p class="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Ref: ${e.billNo}</p>` : ''}
+                                            <span class="text-[8px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-50 px-1.5 py-0.5 rounded">${methodLabel}</span>
+                                        </div>
                                     </td>
                                     <td class="px-8 py-5 text-right font-black text-rose-500 text-base">${fmt(e.amount)}</td>
                                     <td class="px-8 py-5 text-center">
@@ -152,7 +161,7 @@ window.autoSumExpMixed = () => {
                                         </div>
                                     </td>
                                 </tr>
-                            `).join('')}
+                            `}).join('')}
                             ${list.length === 0 ? `<tr><td colspan="5" class="py-24 text-center text-slate-300 font-bold italic">No records found.</td></tr>` : ''}
                         </tbody>
                     </table>
@@ -169,6 +178,12 @@ window.autoSumExpMixed = () => {
         const catSettings = window.erpState.expenseCategories.find(c => c.name === catName) || {};
         const requiresBill = catSettings.requiresBill || false;
 
+        // Auto-generate Bill No if it's a new entry
+        let autoBillNo = "";
+        if (!existingExp) {
+            autoBillNo = "EXP-" + Date.now().toString().slice(-6);
+        }
+
         modal.innerHTML = `
             <div class="bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl animate-pop-in border border-slate-100 relative overflow-hidden">
                 <div class="mb-8">
@@ -184,7 +199,7 @@ window.autoSumExpMixed = () => {
                         </div>
                         <div class="space-y-1">
                             <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1">${requiresBill ? 'Bill / Ref No *' : 'Bill / Ref No'}</label>
-                            <input id="exp_billNo" type="text" value="${existingExp ? (existingExp.billNo || '') : ''}" placeholder="${requiresBill ? 'Required #' : '#'}" class="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-violet-400 shadow-inner">
+                            <input id="exp_billNo" type="text" value="${existingExp ? (existingExp.billNo || '') : autoBillNo}" placeholder="${requiresBill ? 'Required #' : '#'}" class="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-violet-400 shadow-inner">
                         </div>
                     </div>
                     
@@ -201,7 +216,7 @@ window.autoSumExpMixed = () => {
                         <div class="space-y-1">
                             <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1">Payment via</label>
                             <select id="exp_method" onchange="window.handleExpMethodChange(this.value)" class="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl font-black text-[10px] uppercase tracking-widest outline-none shadow-inner">
-                                <option value="Cash" ${existingExp && existingExp.paymentMethod === 'Cash' ? 'selected' : ''}>Cash</option>
+                                <option value="Cash" ${existingExp && existingExp.paymentMethod === 'Cash' || !existingExp ? 'selected' : ''}>Cash</option>
                                 <option value="UPI" ${existingExp && existingExp.paymentMethod === 'UPI' ? 'selected' : ''}>UPI / Online</option>
                                 <option value="Bank" ${existingExp && existingExp.paymentMethod === 'Bank' ? 'selected' : ''}>Bank Transfer</option>
                                 <option value="Mixed" ${existingExp && String(existingExp.paymentMethod).startsWith('Mixed') ? 'selected' : ''}>Mixed (Cash & UPI)</option>
@@ -210,8 +225,8 @@ window.autoSumExpMixed = () => {
                     </div>
                     
                     <div id="exp_mixed_inputs" class="${existingExp && String(existingExp.paymentMethod).startsWith('Mixed') ? '' : 'hidden'} grid grid-cols-2 gap-4">
-                        <div><input id="exp_mixed_cash" type="number" oninput="window.autoSumExpMixed()" placeholder="Cash ₹" class="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl font-bold text-xs outline-none focus:ring-2 focus:ring-violet-400"></div>
-                        <div><input id="exp_mixed_upi" type="number" oninput="window.autoSumExpMixed()" placeholder="UPI ₹" class="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl font-bold text-xs outline-none focus:ring-2 focus:ring-violet-400"></div>
+                        <div><input id="exp_mixed_cash" type="number" oninput="window.autoSumExpMixed()" value="${existingExp?.paymentBreakdown?.cash || ''}" placeholder="Cash ₹" class="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl font-bold text-xs outline-none focus:ring-2 focus:ring-violet-400"></div>
+                        <div><input id="exp_mixed_upi" type="number" oninput="window.autoSumExpMixed()" value="${existingExp?.paymentBreakdown?.upi || ''}" placeholder="UPI ₹" class="w-full px-4 py-3 bg-slate-50 border-none rounded-2xl font-bold text-xs outline-none focus:ring-2 focus:ring-violet-400"></div>
                     </div>
 
                     <div class="flex gap-4 pt-4">
