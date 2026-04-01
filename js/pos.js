@@ -27,8 +27,14 @@
             if (!confirm("This will clear your current cart and load the items from this bill for editing. Proceed?")) return;
         }
 
-        // Set state for editing
-        window.erpState.cart = JSON.parse(JSON.stringify(sale.items || []));
+        // Set state for editing with normalization to prevent NaN errors
+        window.erpState.cart = (sale.items || []).map(it => ({
+            ...it,
+            qty: parseFloat(it.qty || it.quantity || 1),
+            price: parseFloat(it.price || it.sellingPrice || 0),
+            cost: parseFloat(it.cost || it.costPrice || 0)
+        }));
+        
         window.erpState.editingInvoiceId = id;
         window.erpState.editingInvoiceBillNo = sale.billNo;
         window.erpState.customerPhone = sale.customerPhone || sale.phone || "";
@@ -39,6 +45,9 @@
         
         // Switch to POS tab
         window.erpState.tab = 'pos';
+        
+        // Remove the modal if this was called from inside the receipt
+        document.getElementById('receipt-modal')?.remove();
         
         window.erpAlert(`Editing Bill: ${sale.billNo}. You can now modify items and re-checkout to update the record.`, "Edit Mode", "pencil");
         window.renderApp();
@@ -51,6 +60,10 @@
         window.erpState.cart = [];
         window.erpState.customerPhone = "";
         window.erpState.customerName = "";
+        
+        // Return to receipts tab automatically
+        window.erpState.tab = 'receipts';
+        
         window.renderApp();
     };
 
@@ -496,8 +509,6 @@
                     </div>
                 </div>
             </header>
-            
-            })()}
             
             <div class="flex-1 overflow-y-auto px-4 md:px-8 pb-4 md:pb-8 custom-scrollbar">
                 <div class="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-visible flex flex-col max-w-[1400px] mx-auto">
@@ -2548,6 +2559,12 @@
         if (!sale) {
             sale = window.erpState.orders.find(o => o.id === id);
         }
+        if (!sale) {
+            sale = window.erpState.voidedSales?.find(o => o.id === id);
+        }
+        if (!sale) {
+            sale = window.erpState.voidedOrders?.find(o => o.id === id);
+        }
         if (!sale) return;
 
         // Unified Mapping with 0-safe checks
@@ -2565,27 +2582,27 @@
         ` : '';
 
         const modal = document.createElement("div");
+        modal.id = "receipt-modal";
         modal.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-[500] p-0 sm:p-4";
         modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
 
         modal.innerHTML = `
-            <div class="bg-white w-full sm:max-w-sm sm:rounded-[40px] rounded-t-[40px] shadow-2xl animate-slide-up sm:animate-pop-in border border-slate-100 overflow-hidden my-auto relative max-h-[90vh] overflow-y-auto custom-scrollbar">
-                <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mt-4 mb-2 sm:hidden"></div>
-                <button onclick="this.closest('.fixed').remove()" class="absolute top-8 right-8 w-10 h-10 bg-white/80 backdrop-blur-md border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all shadow-sm z-10">
-                    <i data-lucide="x" class="w-4 h-4"></i>
-                </button>
-                
-                <div class="bg-slate-50 border-b border-slate-100 p-8 flex items-center justify-between text-slate-800">
+            <div class="bg-white w-full sm:max-w-sm sm:rounded-[40px] rounded-t-[40px] shadow-2xl animate-slide-up sm:animate-pop-in border border-slate-100 overflow-hidden my-auto relative max-h-[90vh] flex flex-col">
+                <!-- Sticky Header with Close Button -->
+                <div class="px-8 py-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between sticky top-0 z-20">
                     <div>
-                        <h3 class="font-black text-xl leading-none">${sale.billNo}</h3>
-                        <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1.5">${new Date(sale.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                        <h3 class="font-black text-xl leading-none text-slate-800">${sale.billNo}</h3>
+                        <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1.5">${new Date(sale.date || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
                     </div>
+                    <button onclick="document.getElementById('receipt-modal')?.remove()" class="w-10 h-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all shadow-sm">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
                 </div>
-
-                <div class="p-8">
+                
+                <div class="overflow-y-auto custom-scrollbar p-8">
                     <div class="mb-6">
                         <h4 class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Customer Details</h4>
-                        <p class="font-black text-slate-900 text-lg leading-tight">${sale.customerName || 'Walk-in'}</p>
+                        <p class="font-black text-slate-900 text-lg leading-tight text-slate-800">${sale.customerName || 'Walk-in'}</p>
                         <p class="text-slate-400 font-bold text-sm mt-0.5">${sale.customerPhone || 'N/A'}</p>
                     </div>
                     
@@ -2593,7 +2610,7 @@
 
                     <div class="mb-8">
                         <h4 class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Summary</h4>
-                        <div class="space-y-2.5 max-h-40 overflow-y-auto custom-scrollbar pr-2">
+                        <div class="space-y-2.5 pr-2">
                             ${(sale.items || []).map(i => `
                                 <div class="flex justify-between items-center text-sm font-bold">
                                     <span class="text-slate-500">${i.name} <span class="text-[10px] text-slate-300 ml-1">x${i.qty}</span></span>
@@ -2609,7 +2626,7 @@
                         </div>
                         <div class="mt-4 pt-4 border-t border-dashed border-slate-100 flex justify-between items-center">
                             <span class="text-[10px] font-black text-slate-400 uppercase">Final Total</span>
-                            <span class="text-xl font-black text-violet-600">${fmt(sale.total)}</span>
+                            <span class="text-xl font-black text-violet-600">${fmt(sale.total || total)}</span>
                         </div>
                         ${balance > 0 ? `
                             <div class="flex justify-between items-center bg-rose-50 px-3 py-2 rounded-xl mt-3">
@@ -2631,7 +2648,7 @@
                         </a>
                     </div>
                     
-                    <button onclick="window.shareWhatsApp('${sale.billNo}','${sale.customerName}','${sale.customerPhone}',${sale.total},${balance})" class="w-full flex items-center justify-center gap-2 py-4 bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-emerald-600 transition-all mt-3">
+                    <button onclick="window.shareWhatsApp('${sale.billNo}','${sale.customerName}','${sale.customerPhone}',${total},${balance})" class="w-full flex items-center justify-center gap-2 py-4 bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-emerald-600 transition-all mt-3">
                         <i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp Receipt
                     </button>
 
@@ -2642,17 +2659,21 @@
                     ` : ''}
 
                     <div class="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
-                        <button onclick="window.editInvoice('${sale.id}')" class="text-[10px] font-black text-violet-600 uppercase tracking-widest hover:text-violet-800 flex items-center gap-1.5 transition-colors">
+                        <button onclick="document.getElementById('receipt-modal')?.remove(); window.editInvoice('${sale.id}')" class="text-[10px] font-black text-violet-600 uppercase tracking-widest hover:text-violet-800 flex items-center gap-1.5 transition-colors">
                             <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit Bill
                         </button>
                         <button onclick="window.refundItem('${sale.id}')" class="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-amber-500 flex items-center gap-1.5 transition-colors">
                             <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Refund
                         </button>
                     </div>
+
+                    <button onclick="document.getElementById('receipt-modal')?.remove()" class="w-full flex items-center justify-center gap-2 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-black transition-all mt-8">
+                        Close Receipt
+                    </button>
                 </div>
             </div>`;
         document.body.appendChild(modal);
-        lucide.createIcons();
+        if (window.lucide) lucide.createIcons();
     };
 
     window.refundItem = async (id) => {
