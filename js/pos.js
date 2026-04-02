@@ -147,7 +147,7 @@
             .map(it => {
                 const matchQ = !s || it.name.toLowerCase().includes(s) || (it.sku && it.sku.toLowerCase().includes(s));
                 return `
-            <button data-item-sku="${it.sku || ''}" data-item-name="${(it.name || '').replace(/"/g, '&quot;')}" data-item-cat="${it.category || ''}" style="${matchQ ? '' : 'display: none;'}" onclick="window.addCart('${it.sku}')" class="bg-white p-4 md:p-5 rounded-3xl md:rounded-[32px] border border-slate-100 shadow-sm hover:border-violet-500 hover:shadow-xl hover:shadow-violet-500/10 transition-all text-left flex flex-col h-36 md:h-44 relative group">
+            <button data-item-sku="${it.sku || ''}" data-item-id="${it.id}" data-item-name="${(it.name || '').replace(/"/g, '&quot;')}" data-item-cat="${it.category || ''}" style="${matchQ ? '' : 'display: none;'}" onclick="window.addCart('${it.id}')" class="bg-white p-4 md:p-5 rounded-3xl md:rounded-[32px] border border-slate-100 shadow-sm hover:border-violet-500 hover:shadow-xl hover:shadow-violet-500/10 transition-all text-left flex flex-col h-36 md:h-44 relative group">
                 <div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity hidden md:block">
                     <i data-lucide="plus-circle" class="w-5 h-5 text-violet-500"></i>
                 </div>
@@ -167,12 +167,15 @@
         <div class="flex-1 flex flex-col p-6 overflow-hidden">
             <div class="flex gap-4 mb-6">
                 <div class="relative flex-1">
-                    <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4"></i>
+                    <i data-lucide="search" class="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 w-5 h-5 pointer-events-none"></i>
                     <input type="text" id="pos-search-input"
-                        oninput="window.erpState.search=this.value; window.filterPOSGrid(this.value);" 
-                        placeholder="Search products by name or description..." 
-                        class="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 shadow-sm"
+                        oninput="this.nextElementSibling?.classList.toggle('hidden', this.value.length === 0); window.erpState.search=this.value; window.filterPOSGrid(this.value);" 
+                        placeholder="Search products..." 
+                        class="w-full pl-16 pr-14 py-5 bg-white border-2 border-slate-100 rounded-[32px] focus:outline-none focus:border-violet-500/40 shadow-xl shadow-slate-100/50 font-black text-xl md:text-base transition-all placeholder:text-slate-300 placeholder:font-bold"
                         value="${window.erpState.search || ''}">
+                    <button onclick="const i=document.getElementById('pos-search-input'); i.value=''; i.oninput();" class="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors ${window.erpState.search ? '' : 'hidden'}">
+                        <i data-lucide="x-circle" class="w-6 h-6"></i>
+                    </button>
                 </div>
                 <div class="flex gap-2">
                     <select onchange="window.erpState.categoryFilter=this.value; window.renderApp()" class="px-4 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-xs outline-none">
@@ -226,7 +229,7 @@
                         </div>
                         <div class="flex items-center gap-2">
                             <button onclick="window.adjustQty(${idx}, -1)" class="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:border-rose-400 hover:text-rose-500 transition-all">-</button>
-                            <span class="w-6 text-center font-black text-sm">${it.qty}</span>
+                            <span onclick="window.editCartItemQty(${idx})" class="w-8 text-center font-black text-sm cursor-pointer hover:text-violet-600 hover:underline" title="Click to edit quantity">${it.qty}</span>
                             <button onclick="window.adjustQty(${idx}, 1)" class="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:border-emerald-400 hover:text-emerald-500 transition-all">+</button>
                         </div>
                     </div>
@@ -339,17 +342,27 @@
 
     // --- POS ACTIONS ---
 
-    window.addCart = function (sku, bypassDye = false) {
-        const it = window.erpState.items.find(x => x.sku === sku);
+    window.addCart = function (idOrSku, bypassDye = false) {
+        // Priority 1: Match by Firestore ID (most reliable)
+        let it = window.erpState.items.find(x => x.id === idOrSku);
+        // Priority 2: Fallback to SKU for safety
+        if (!it) it = window.erpState.items.find(x => String(x.sku) === String(idOrSku));
+        
         if (!it) return;
 
         // Custom workflows for special items
-        if (!bypassDye && (it.category === 'DYE' || it.name.toLowerCase().includes('dye-work'))) {
+        if (!bypassDye && (
+            (it.category || '').toUpperCase() === 'DYING' || 
+            (it.category || '').toUpperCase() === 'DYE' || 
+            (it.category || '').toUpperCase() === 'DYE CHARGE' || 
+            (it.name || '').toLowerCase().includes('dye-work')
+        )) {
             return window.openDyeModal(it);
         }
         if (!bypassDye && (
             (it.category || '').toUpperCase() === 'STITCHING' || 
             (it.category || '').toUpperCase() === 'TAILORING' || 
+            (it.category || '').toUpperCase() === 'TAILORING CHARGE' || 
             (it.name || '').toLowerCase().includes('stitch') || 
             (it.name || '').toLowerCase().includes('tailor')
         )) {
@@ -375,20 +388,99 @@
             document.getElementById('v_ok').onclick = () => {
                 const p = parseFloat(document.getElementById('v_price').value || 0);
                 if (p <= 0) return alert("Enter valid price");
-                window.erpState.cart.push({ ...it, price: p, qty: 1, cost: it.costPrice });
+                
+                window.erpState.cart.push({ 
+                    id: it.id,
+                    sku: it.sku || '',
+                    name: it.name,
+                    price: p,
+                    cost: parseFloat(it.costPrice || 0),
+                    qty: 1,
+                    category: it.category
+                });
                 modal.remove();
+                window.saveLocalState();
                 window.renderApp();
             };
             return;
         }
 
-        const existing = window.erpState.cart.find(x => x.sku === sku);
+        // New Logic: Handle Weighted / Measured items (Fabric, etc)
+        if (it.soldBy === 'weight' || it.category === 'Fabric' || it.category === 'Fabric Unit') {
+            const modal = document.createElement("div");
+            modal.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[500] p-4";
+            modal.innerHTML = `
+                <div class="bg-white w-full max-w-xs rounded-[32px] p-8 shadow-2xl animate-pop-in">
+                    <h3 class="text-lg font-black text-slate-800 mb-2">${it.name}</h3>
+                    <p class="text-[10px] text-slate-400 font-black mb-6 uppercase tracking-[0.2em]">Enter Quantity (Meters / Unit)</p>
+                    <input id="qty_input" type="number" step="0.01" autofocus placeholder="0.00" class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-2xl text-center mb-6 outline-none focus:border-indigo-500">
+                    <div class="flex gap-3">
+                        <button onclick="this.closest('.fixed').remove()" class="flex-1 py-4 bg-slate-100 text-slate-400 rounded-2xl font-black uppercase text-[10px] tracking-widest">Cancel</button>
+                        <button id="qty_ok" class="flex-2 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100 active:scale-95 transition-all">Add to Cart</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+            const input = document.getElementById('qty_input');
+            setTimeout(() => input.focus(), 100);
+            
+            document.getElementById('qty_ok').onclick = () => {
+                const q = parseFloat(input.value || 0);
+                if (q <= 0) return alert("Please enter a valid quantity");
+                
+                const existing = window.erpState.cart.find(x => x.id === it.id);
+                if (existing) {
+                    existing.qty += q;
+                } else {
+                    window.erpState.cart.push({ 
+                        id: it.id,
+                        sku: it.sku || '', 
+                        name: it.name, 
+                        price: parseFloat(it.sellingPrice || 0), 
+                        cost: parseFloat(it.costPrice || 0), 
+                        qty: q,
+                        category: it.category,
+                        soldBy: 'weight'
+                    });
+                }
+                modal.remove();
+                window.saveLocalState();
+                window.renderApp();
+            };
+            return;
+        }
+
+        // Standard item addition (Piece based)
+        const existing = window.erpState.cart.find(x => x.id === it.id);
         if (existing) {
             existing.qty++;
         } else {
-            window.erpState.cart.push({ sku: it.sku, id: it.id, name: it.name, price: it.sellingPrice, cost: it.costPrice, qty: 1 });
+            window.erpState.cart.push({ 
+                id: it.id,
+                sku: it.sku || '', 
+                name: it.name, 
+                price: parseFloat(it.sellingPrice || 0), 
+                cost: parseFloat(it.costPrice || 0), 
+                qty: 1,
+                category: it.category
+            });
         }
+        window.saveLocalState();
         window.scheduleRender();
+    };
+
+    window.editCartItemQty = function(idx) {
+        const item = window.erpState.cart[idx];
+        const newQty = prompt(`Enter exact quantity for ${item.name} (e.g. 1.5, 2):`, item.qty);
+        if (newQty !== null) {
+            const q = parseFloat(newQty);
+            if (!isNaN(q) && q > 0) {
+                item.qty = q;
+                window.scheduleRender();
+            } else if (q === 0) {
+                window.erpState.cart.splice(idx, 1);
+                window.scheduleRender();
+            }
+        }
     };
 
     window.adjustQty = function (idx, delta) {

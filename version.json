@@ -1,5 +1,5 @@
 {
-  "version": "v2.4.0",
-  "build": 1711999999999,
-  "notes": "Invoice Editing, Dashboard Transparency, and Version 2.4.0 rollout."
+  "version": "v2.4.1",
+  "build": 1712064000000,
+  "notes": "POS Search legibility, Weighted item support, and ID-first Cart logic."
 }
