@@ -62,22 +62,22 @@
         window.addEventListener('firebase-ready', () => {
             window.FB.collection('items').onSnapshot((snap) => {
                 window.erpState.items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.renderApp();
+                window.scheduleRender();
             });
 
             window.FB.collection('sales').onSnapshot((snap) => {
                 window.erpState.sales = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.renderApp();
+                window.scheduleRender();
             });
 
             window.FB.root('orders').onSnapshot((snap) => {
                 window.erpState.orders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.renderApp();
+                window.scheduleRender();
             });
 
             window.FB.collection('expenses').onSnapshot((snap) => {
                 window.erpState.expenses = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.renderApp();
+                window.scheduleRender();
             });
 
             // Listen to general settings
@@ -92,7 +92,7 @@
                     if (data.staff) window.erpState.staff = data.staff;
                     if (data.printerConfig) window.erpState.printerConfig = data.printerConfig;
 
-                    window.renderApp();
+                    window.scheduleRender();
                 }
             });
         });

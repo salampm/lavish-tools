@@ -30,7 +30,7 @@
                     </button>
                     <div>
                         <h2 class="text-xl font-black text-slate-900 tracking-tight uppercase">Control Center</h2>
-                        <p class="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Business Intelligence ${window.APP_VERSION}</p>
+                        <p class="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Business Intelligence <span id="app-version"></span></p>
                     </div>
                 </div>
                 <div class="flex items-center gap-4">
@@ -407,15 +407,7 @@
                 }
             });
 
-            // Tailoring (Advances & Settlements)
-            (window.erpState.orders || []).forEach(o => {
-                const d = o.createdAt?.toDate ? o.createdAt.toDate().getTime() : (o.orderDate ? new Date(o.orderDate).getTime() : 0);
-                if (d >= start && d <= end) {
-                    const b = o.advanceBreakdown || {};
-                    cashIn += (b.cash || 0);
-                    upiIn += (b.upi || 0);
-                }
-            });
+
 
             // Expenses (Operation Burn)
             expenses.forEach(e => {
@@ -453,12 +445,22 @@
                 const diffElU = document.getElementById('upi_diff');
 
                 if (diffElC) {
-                    diffElC.innerText = `Diff: ${cashDiff >= 0 ? '+' : ''}${window.fmt(cashDiff)}`;
-                    diffElC.className = `text-[9px] font-black uppercase mt-1 tracking-widest ${cashDiff === 0 ? 'text-slate-500' : (cashDiff > 0 ? 'text-emerald-400' : 'text-rose-400')}`;
+                    if (closeCash > 0) {
+                        diffElC.innerText = `Diff: ${cashDiff >= 0 ? '+' : ''}${window.fmt(cashDiff)}`;
+                        diffElC.className = `text-[9px] font-black uppercase mt-1 tracking-widest ${cashDiff === 0 ? 'text-slate-500' : (cashDiff > 0 ? 'text-emerald-400' : 'text-rose-400')}`;
+                    } else {
+                         diffElC.innerText = `Diff: ₹0`;
+                         diffElC.className = `text-[9px] font-black uppercase mt-1 tracking-widest text-slate-400 opacity-30`;
+                    }
                 }
                 if (diffElU) {
-                    diffElU.innerText = `Diff: ${upiDiff >= 0 ? '+' : ''}${window.fmt(upiDiff)}`;
-                    diffElU.className = `text-[9px] font-black uppercase mt-1 tracking-widest ${upiDiff === 0 ? 'text-slate-500' : (upiDiff > 0 ? 'text-indigo-400' : 'text-rose-400')}`;
+                    if (closeUPI > 0) {
+                        diffElU.innerText = `Diff: ${upiDiff >= 0 ? '+' : ''}${window.fmt(upiDiff)}`;
+                        diffElU.className = `text-[9px] font-black uppercase mt-1 tracking-widest ${upiDiff === 0 ? 'text-slate-500' : (upiDiff > 0 ? 'text-indigo-400' : 'text-rose-400')}`;
+                    } else {
+                        diffElU.innerText = `Diff: ₹0`;
+                        diffElU.className = `text-[9px] font-black uppercase mt-1 tracking-widest text-slate-400 opacity-30`;
+                    }
                 }
 
                 document.getElementById('cash_delta').innerText = `In: ₹${window.fmt(cashIn)} | Out: ₹${window.fmt(cashOut)}`;
@@ -595,7 +597,7 @@
                     <h3 class="text-4xl font-black ${urgentOrders > 0 ? 'text-orange-600' : 'text-slate-900'} relative z-10 text-center">${urgentOrders}</h3>
                     <div class="flex items-center justify-center gap-2 mt-3 relative z-10">
                         <span class="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>
-                        <p class="text-[9px] font-bold text-slate-500 uppercase uppercase tracking-widest">Next 48 Hours</p>
+                        <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Next 48 Hours</p>
                     </div>
                 </div>
 
@@ -633,9 +635,9 @@
             document.getElementById('stock-bar').style.width = stockPct + "%";
             document.getElementById('total-items').innerText = totalItems;
 
-            // Recent Sales feed
+            // Recent Sales feed (using filtered 'sales' variable)
             const recentSales = document.getElementById('recent-sales');
-            const latest = (window.erpState.sales || []).sort((a,b) => (b.date || 0) - (a.date || 0)).slice(0, 5);
+            const latest = sales.sort((a,b) => (b.date || 0) - (a.date || 0)).slice(0, 5);
             recentSales.innerHTML = latest.map(s => `
                 <div class="flex items-center justify-between p-4 bg-slate-50/50 rounded-2xl hover:bg-white hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-0.5 transition-all cursor-pointer group" onclick="window.openReceipt('${s.id}')">
                     <div class="flex items-center gap-3">
@@ -652,9 +654,9 @@
                 </div>
             `).join('') || `<p class="text-center text-slate-300 italic py-10">No recent activity</p>`;
 
-            // Top Items based on frequency in sales
+            // Top Items based on frequency in filtered sales
             const itemMap = {};
-            (window.erpState.sales || []).forEach(s => {
+            sales.forEach(s => {
                 (s.items || []).forEach(it => {
                     itemMap[it.name] = (itemMap[it.name] || 0) + (it.qty || 1);
                 });
@@ -829,23 +831,23 @@
                     window.erpState.counter = 2499;
                 }
                 window.saveLocalState();
-                window.renderApp();
+                window.scheduleRender();
                 updateChart();
             });
             window.FB.root('orders').onSnapshot(snap => {
                 window.erpState.orders = snap.docs.map(doc => ({id: doc.id, ...doc.data()}));
                 window.saveLocalState();
-                window.renderApp();
+                window.scheduleRender();
             });
             window.FB.collection('expenses').onSnapshot(snap => {
                 window.erpState.expenses = snap.docs.map(doc => ({id: doc.id, ...doc.data()}));
                 window.saveLocalState();
-                window.renderApp();
+                window.scheduleRender();
             });
             window.FB.collection('items').onSnapshot(snap => {
                 window.erpState.items = snap.docs.map(doc => ({id: doc.id, ...doc.data()}));
                 window.saveLocalState();
-                window.renderApp();
+                window.scheduleRender();
             });
 
             window.FB.collection('expense_categories').onSnapshot((snap) => {
@@ -867,13 +869,13 @@
                 });
                 window.erpState.expenseCategories = merged;
                 window.saveLocalState();
-                window.renderApp();
+                window.scheduleRender();
             });
 
             window.FB.root('clients').onSnapshot((snap) => {
                 window.erpState.clients = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.renderApp();
+                window.scheduleRender();
             });
 
             // Listen to general settings
@@ -900,7 +902,7 @@
                     }
 
                     window.saveLocalState();
-                    window.renderApp();
+                    window.scheduleRender();
                 }
             });
 
@@ -1341,7 +1343,7 @@
             // Footer Care Notes (exactly as requested)
             html += `<div style='text-align:center;font-size:11px;color:#555;line-height:1.5;margin-bottom:16px;'>`;
             html += `Dry Wash Only, No Exchange, No Refund<br>`;
-            html += `Thank your for purchase,<br>`;
+            html += `Thank you for your purchase,<br>`;
             html += `Please come back again.`;
             html += `</div>`;
 
@@ -1388,6 +1390,10 @@
                 setTimeout(() => { w.close(); }, 500);
             }, 500);
         };
+
+        if (document.getElementById('app-version')) {
+            document.getElementById('app-version').innerText = window.APP_VERSION || 'v2.4.1';
+        }
     </script>
     <div id="toast-container" class="hidden"></div>
 </body>

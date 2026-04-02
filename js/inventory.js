@@ -19,8 +19,8 @@
             <div class="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-md p-5 md:p-8 pb-6 border-b border-slate-200">
                 <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     <!-- Search & Category Filter -->
-                    <div class="flex flex-1 items-center gap-3 w-full">
-                        <div class="relative flex-1 md:max-w-xs">
+                    <div class="flex flex-col md:flex-row flex-1 items-center gap-3 w-full">
+                        <div class="relative flex-1 w-full md:max-w-xs">
                             <i data-lucide="Search" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4"></i>
                             <input id="inv-search-stable" type="text" 
                                 placeholder="Search by item name or description..." 
@@ -28,11 +28,13 @@
                                 oninput="window.erpState.search=this.value;window.updateInvItemsList();" 
                                 class="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-400 shadow-sm">
                         </div>
-                        <select onchange="window.erpState.categoryFilter=this.value;window.updateInvItemsList();" 
-                            class="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none shadow-sm h-[42px]">
-                            <option value="">All Categories</option>
-                            ${categories.map(c => `<option value="${c}" ${catFilter === c ? 'selected' : ''}>${c}</option>`).join('')}
-                        </select>
+                        <div class="flex gap-2 w-full md:w-auto">
+                            <select onchange="window.erpState.categoryFilter=this.value;window.updateInvItemsList();" 
+                                class="flex-1 md:flex-none px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none shadow-sm h-[42px]">
+                                <option value="">All Categories</option>
+                                ${categories.map(c => `<option value="${c}" ${catFilter === c ? 'selected' : ''}>${c}</option>`).join('')}
+                            </select>
+                        </div>
                     </div>
 
                     <!-- Actions: Export, Delete All, Import, Add Item -->

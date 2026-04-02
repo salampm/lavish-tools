@@ -694,7 +694,7 @@
                 activeBtn.classList.remove('border-transparent');
                 activeBtn.classList.add('border-violet-600', 'text-violet-600');
             }
-            window.renderApp();
+            window.scheduleRender();
         };
 
         window.renderApp = function() {
@@ -731,7 +731,7 @@
             window.FB.root('orders').onSnapshot((snap) => {
                 window.erpState.orders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.renderApp();
+                window.scheduleRender();
 
                 if (viewOrderId && !window.selectedOrderId && window.erpState.orders.find(o => o.id === viewOrderId)) {
                     setTimeout(() => window.openOrderDetails(viewOrderId), 50);
@@ -740,25 +740,25 @@
             window.FB.root('clients').onSnapshot((snap) => {
                 window.erpState.clients = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.renderApp();
+                window.scheduleRender();
             });
 
             window.FB.collection('sales').onSnapshot((snap) => {
                 window.erpState.sales = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.renderApp();
+                window.scheduleRender();
             });
 
             window.FB.collection('items').onSnapshot((snap) => {
                 window.erpState.items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.renderApp();
+                window.scheduleRender();
             });
 
             window.FB.collection('expenses').onSnapshot((snap) => {
                 window.erpState.expenses = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.renderApp();
+                window.scheduleRender();
             });
 
             // Listen to general settings
@@ -774,7 +774,7 @@
                     if (data.printerConfig) window.erpState.printerConfig = data.printerConfig;
                     
                     window.saveLocalState();
-                    window.renderApp();
+                    window.scheduleRender();
                 }
             });
             
@@ -784,7 +784,7 @@
 
         // Render from cache immediately
         window.loadLocalState();
-        window.renderApp();
+        window.scheduleRender();
     </script>
     <!-- Global Action Popups -->
     <div id="toast-container" class="hidden"></div>

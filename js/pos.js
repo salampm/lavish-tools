@@ -165,11 +165,12 @@
     function renderPOSTerminal() {
         return `
         <div class="flex-1 flex flex-col p-6 overflow-hidden">
-            <div class="flex gap-4 mb-6">
+            <div class="flex flex-col md:flex-row gap-4 mb-6">
                 <div class="relative flex-1">
                     <i data-lucide="search" class="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 w-5 h-5 pointer-events-none"></i>
                     <input type="text" id="pos-search-input"
                         oninput="this.nextElementSibling?.classList.toggle('hidden', this.value.length === 0); window.erpState.search=this.value; window.filterPOSGrid(this.value);" 
+                        onkeydown="if(event.key === 'Enter') { window.addCart(this.value); this.value=''; window.erpState.search=''; window.filterPOSGrid(''); }"
                         placeholder="Search products..." 
                         class="w-full pl-16 pr-14 py-5 bg-white border-2 border-slate-100 rounded-[32px] focus:outline-none focus:border-violet-500/40 shadow-xl shadow-slate-100/50 font-black text-xl md:text-base transition-all placeholder:text-slate-300 placeholder:font-bold"
                         value="${window.erpState.search || ''}">
@@ -178,7 +179,7 @@
                     </button>
                 </div>
                 <div class="flex gap-2">
-                    <select onchange="window.erpState.categoryFilter=this.value; window.renderApp()" class="px-4 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-xs outline-none">
+                    <select onchange="window.erpState.categoryFilter=this.value; window.renderApp()" class="flex-1 md:flex-none px-4 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-xs outline-none">
                         <option value="">All Categories</option>
                         ${[...new Set(window.erpState.items.map(i => i.category).filter(Boolean))].map(c => `<option value="${c}" ${window.erpState.categoryFilter === c ? 'selected' : ''}>${c}</option>`).join('')}
                     </select>
@@ -220,13 +221,15 @@
             <div class="flex-1 overflow-y-auto p-4 md:p-6 space-y-3 md:space-y-4 custom-scrollbar">
                 ${window.erpState.cart.map((it, idx) => `
                     <div class="flex gap-4 p-4 bg-slate-50 border border-slate-100 md:rounded-[24px] rounded-2xl relative group hover:bg-white hover:border-violet-200 transition-all">
-                        <div class="flex-1">
-                            <h4 class="font-black text-slate-800 text-xs mb-1 line-clamp-1">${it.name}</h4>
-                            <div class="flex items-center gap-2 text-[10px] font-bold text-slate-500">
-                                <span class="text-violet-600 font-black">${fmt(it.price)}</span>
-                                <button onclick="window.openEditCartItemPrice(${idx})" class="text-violet-400 hover:text-violet-600 hover:underline">Edit</button>
+                            <div class="flex flex-col gap-0.5">
+                                <h4 class="font-black text-slate-800 text-xs truncate max-w-[140px]">${it.name}</h4>
+                                <div class="flex items-center gap-2 text-[10px] font-bold text-slate-500">
+                                    <span class="text-violet-600 font-black">
+                                        ${it.qty !== 1 ? `${it.qty}${it.unit || (it.soldBy === 'weight' ? 'm' : '')} x ${fmt(it.price)} = ${fmt(it.price * it.qty)}` : fmt(it.price)}
+                                    </span>
+                                    <button onclick="window.openEditCartItemPrice(${idx})" class="text-violet-400 hover:text-violet-600 hover:underline">Edit</button>
+                                </div>
                             </div>
-                        </div>
                         <div class="flex items-center gap-2">
                             <button onclick="window.adjustQty(${idx}, -1)" class="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:border-rose-400 hover:text-rose-500 transition-all">-</button>
                             <span onclick="window.editCartItemQty(${idx})" class="w-8 text-center font-black text-sm cursor-pointer hover:text-violet-600 hover:underline" title="Click to edit quantity">${it.qty}</span>
@@ -369,79 +372,86 @@
             return window.openStitchingModal(it);
         }
 
-        // Logic for variable price items (price 0 items)
-        if (it.sellingPrice === 0) {
+        // Logic for Weighted or Variable Price/Cost items
+        const isWeighted = 
+            it.soldBy === 'weight' || 
+            it.soldBy === 'meter' || 
+            it.soldBy === 'kg' || 
+            String(it.unit || '').toLowerCase().includes('meter') || 
+            String(it.unit || '').toLowerCase().includes('kg') || 
+            (it.category || '').toLowerCase().includes('fabric') ||
+            (it.category || '').toLowerCase().includes('unit');
+            
+        const needsPricing = (parseFloat(it.sellingPrice || 0) === 0 || parseFloat(it.costPrice || 0) === 0);
+
+        if (isWeighted || needsPricing) {
             const modal = document.createElement("div");
             modal.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[500] p-4";
             modal.innerHTML = `
-                <div class="bg-white w-full max-w-xs rounded-[32px] p-8 shadow-2xl animate-pop-in">
-                    <h3 class="text-lg font-black text-slate-800 mb-2">${it.name}</h3>
-                    <p class="text-xs text-slate-500 font-bold mb-6">Variable price item. Enter selling price:</p>
-                    <input id="v_price" type="number" placeholder="₹ Amount" class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-xl mb-6 outline-none focus:border-violet-500">
+                <div class="bg-white w-full max-w-xs rounded-[32px] p-8 shadow-2xl animate-pop-in border border-slate-100">
+                    <h3 class="text-lg font-black text-slate-800 mb-1 truncate">${it.name}</h3>
+                    <p class="text-[9px] text-slate-400 font-bold mb-6 uppercase tracking-widest">${isWeighted ? 'Measurement Required' : 'Manual Pricing Required'}</p>
+                    
+                    <div class="space-y-4 mb-6">
+                        <div>
+                            <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 block">Quantity (${isWeighted ? 'Meters / Units' : 'Pieces'})</label>
+                            <input id="q_input" type="number" step="0.01" value="${isWeighted ? '' : '1'}" placeholder="0.00" 
+                                class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-2xl text-center outline-none focus:border-violet-500 transition-all">
+                        </div>
+                        
+                        ${needsPricing ? `
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 block">Price / unit</label>
+                                <input id="p_input" type="number" step="0.01" value="${it.sellingPrice || ''}" placeholder="0.00" 
+                                    class="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-black text-lg text-center outline-none focus:border-violet-500 transition-all">
+                            </div>
+                            <div>
+                                <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 block">Cost / unit</label>
+                                <input id="c_input" type="number" step="0.01" value="${it.costPrice || ''}" placeholder="0.00" 
+                                    class="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-black text-lg text-center outline-none focus:border-violet-500 transition-all">
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+
                     <div class="flex gap-3">
-                        <button onclick="this.closest('.fixed').remove()" class="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-bold uppercase text-xs tracking-widest">Cancel</button>
-                        <button id="v_ok" class="flex-1 py-4 bg-violet-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg shadow-violet-200">Add to Cart</button>
+                        <button onclick="this.closest('.fixed').remove()" class="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-200 transition-all">Cancel</button>
+                        <button id="q_ok" class="flex-2 py-4 bg-violet-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-violet-100 active:scale-95 transition-all">Add to Cart</button>
                     </div>
                 </div>`;
             document.body.appendChild(modal);
-            document.getElementById('v_price').focus();
-            document.getElementById('v_ok').onclick = () => {
-                const p = parseFloat(document.getElementById('v_price').value || 0);
-                if (p <= 0) return alert("Enter valid price");
+            
+            const qInput = document.getElementById('q_input');
+            const pInput = document.getElementById('p_input');
+            const cInput = document.getElementById('c_input');
+            
+            // Auto-focus logic: focus quantity if weighted, otherwise focus price if it's missing
+            setTimeout(() => {
+                if (isWeighted || !needsPricing) qInput.focus();
+                else pInput.focus();
+            }, 150);
+            
+            document.getElementById('q_ok').onclick = () => {
+                const q = parseFloat(qInput.value || 0);
+                const p = needsPricing ? parseFloat(pInput.value || 0) : parseFloat(it.sellingPrice || 0);
+                const c = needsPricing ? parseFloat(cInput.value || 0) : parseFloat(it.costPrice || 0);
+                
+                if (q <= 0) return alert("Please enter a valid quantity");
+                if (needsPricing && p <= 0) return alert("Please enter a valid price");
                 
                 window.erpState.cart.push({ 
                     id: it.id,
-                    sku: it.sku || '',
-                    name: it.name,
-                    price: p,
-                    cost: parseFloat(it.costPrice || 0),
-                    qty: 1,
-                    category: it.category
+                    sku: it.sku || '', 
+                    name: it.name, 
+                    price: p, 
+                    cost: c, 
+                    qty: q,
+                    category: it.category,
+                    unit: it.unit || '',
+                    soldBy: isWeighted ? 'weight' : 'piece'
                 });
-                modal.remove();
-                window.saveLocalState();
-                window.renderApp();
-            };
-            return;
-        }
-
-        // New Logic: Handle Weighted / Measured items (Fabric, etc)
-        if (it.soldBy === 'weight' || it.category === 'Fabric' || it.category === 'Fabric Unit') {
-            const modal = document.createElement("div");
-            modal.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[500] p-4";
-            modal.innerHTML = `
-                <div class="bg-white w-full max-w-xs rounded-[32px] p-8 shadow-2xl animate-pop-in">
-                    <h3 class="text-lg font-black text-slate-800 mb-2">${it.name}</h3>
-                    <p class="text-[10px] text-slate-400 font-black mb-6 uppercase tracking-[0.2em]">Enter Quantity (Meters / Unit)</p>
-                    <input id="qty_input" type="number" step="0.01" autofocus placeholder="0.00" class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-2xl text-center mb-6 outline-none focus:border-indigo-500">
-                    <div class="flex gap-3">
-                        <button onclick="this.closest('.fixed').remove()" class="flex-1 py-4 bg-slate-100 text-slate-400 rounded-2xl font-black uppercase text-[10px] tracking-widest">Cancel</button>
-                        <button id="qty_ok" class="flex-2 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100 active:scale-95 transition-all">Add to Cart</button>
-                    </div>
-                </div>`;
-            document.body.appendChild(modal);
-            const input = document.getElementById('qty_input');
-            setTimeout(() => input.focus(), 100);
-            
-            document.getElementById('qty_ok').onclick = () => {
-                const q = parseFloat(input.value || 0);
-                if (q <= 0) return alert("Please enter a valid quantity");
                 
-                const existing = window.erpState.cart.find(x => x.id === it.id);
-                if (existing) {
-                    existing.qty += q;
-                } else {
-                    window.erpState.cart.push({ 
-                        id: it.id,
-                        sku: it.sku || '', 
-                        name: it.name, 
-                        price: parseFloat(it.sellingPrice || 0), 
-                        cost: parseFloat(it.costPrice || 0), 
-                        qty: q,
-                        category: it.category,
-                        soldBy: 'weight'
-                    });
-                }
                 modal.remove();
                 window.saveLocalState();
                 window.renderApp();
@@ -449,8 +459,8 @@
             return;
         }
 
-        // Standard item addition (Piece based)
-        const existing = window.erpState.cart.find(x => x.id === it.id);
+        // Standard item addition (Piece based - existing logic)
+        const existing = window.erpState.cart.find(x => x.id === it.id && x.price === parseFloat(it.sellingPrice || 0));
         if (existing) {
             existing.qty++;
         } else {
@@ -461,7 +471,9 @@
                 price: parseFloat(it.sellingPrice || 0), 
                 cost: parseFloat(it.costPrice || 0), 
                 qty: 1,
-                category: it.category
+                category: it.category,
+                unit: it.unit || '',
+                soldBy: 'piece'
             });
         }
         window.saveLocalState();
@@ -632,23 +644,23 @@
                                  <div onclick="window.openReceipt('${s.id}')" class="px-8 py-5 grid grid-cols-2 md:grid-cols-[140px_120px_1fr_250px_90px_90px] gap-4 items-center hover:bg-violet-50/30 cursor-pointer transition-all group border-l-4 border-transparent hover:border-violet-500">
                                      <div class="flex flex-col">
                                          <div class="flex items-center gap-2 mb-1">
-                                             <p class="text-base font-black text-slate-800 leading-tight group-hover:text-violet-600 transition-all">${s.billNo || 'INV-000'}</p>
+                                             <p class="text-base font-black text-slate-800 leading-tight group-hover:text-violet-600 transition-all">${window.esc(s.billNo || 'INV-000')}</p>
                                              <span class="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${s._type === 'sale' ? 'bg-indigo-50 text-indigo-500' : 'bg-emerald-50 text-emerald-600'}">
                                                  ${s._type === 'sale' ? 'POS' : 'TLR'}
                                              </span>
                                          </div>
                                          ${isRefund ? '<span class="w-fit px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[7px] font-black uppercase tracking-tighter">Refunded Case</span>' : ''}
-                                         <span class="text-[8px] font-black text-indigo-400 uppercase tracking-widest mt-1">${methodLabel}</span>
+                                         <span class="text-[8px] font-black text-indigo-400 uppercase tracking-widest mt-1">${window.esc(methodLabel)}</span>
                                      </div>
                                      <div class="flex flex-col">
                                          <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">${s._orderDate}</p>
                                      </div>
                                      <div class="min-w-0">
-                                         <p class="text-sm font-black text-slate-700 capitalize truncate mb-1">${s.customerName || 'Walk-in Client'}</p>
-                                         <p class="text-[10px] font-bold text-slate-400 truncate tracking-tight">${s.customerPhone || '-'}</p>
+                                         <p class="text-sm font-black text-slate-700 capitalize truncate mb-1">${window.esc(s.customerName || 'Walk-in Client')}</p>
+                                         <p class="text-[10px] font-bold text-slate-400 truncate tracking-tight">${window.esc(s.customerPhone || '-')}</p>
                                      </div>
                                      <div class="min-w-0">
-                                         <p class="text-[10px] font-bold text-slate-600 line-clamp-1 leading-tight uppercase mb-1">${itemNames || 'Service Rendered'}</p>
+                                         <p class="text-[10px] font-bold text-slate-600 line-clamp-1 leading-tight uppercase mb-1">${window.esc(itemNames || 'Service Rendered')}</p>
                                          <div class="flex items-center gap-2">
                                              <span class="px-2 py-0.5 bg-slate-50 text-slate-400 rounded-full text-[8px] font-black uppercase tracking-widest">${(s.items || []).length} units</span>
                                              ${s.status ? `<span class="px-2 py-0.5 bg-violet-50 text-violet-400 rounded-full text-[8px] font-black uppercase tracking-widest">${s.status}</span>` : ''}
@@ -738,7 +750,7 @@
                                 <div onclick="window.openReceipt('${s.id}')" class="px-8 py-5 grid grid-cols-2 md:grid-cols-[140px_1fr_140px] gap-x-4 gap-y-2 items-center hover:bg-slate-50/50 cursor-pointer transition-colors group">
                                     <div>
                                         <div class="flex items-center gap-2">
-                                            <p class="text-base font-black text-slate-800 leading-tight group-hover:text-rose-600 transition-colors">${s.billNo}</p>
+                                            <p class="text-base font-black text-slate-800 leading-tight group-hover:text-rose-600 transition-colors">${window.esc(s.billNo)}</p>
                                             <span class="px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest ${s._type === 'sale' ? 'bg-indigo-50 text-indigo-500' : 'bg-emerald-50 text-emerald-600'}">
                                                 ${s._type === 'sale' ? 'POS' : 'TLR'}
                                             </span>
@@ -746,8 +758,8 @@
                                         <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">${s._displayDate}</p>
                                     </div>
                                     <div class="min-w-0">
-                                        <p class="text-sm font-black text-slate-700 capitalize truncate">${s.customerName || 'Client'}</p>
-                                        <p class="text-[10px] font-bold text-slate-400">${s.customerPhone || '-'}</p>
+                                        <p class="text-sm font-black text-slate-700 capitalize truncate">${window.esc(s.customerName || 'Client')}</p>
+                                        <p class="text-[10px] font-bold text-slate-400">${window.esc(s.customerPhone || '-')}</p>
                                     </div>
                                     <div class="flex items-center gap-4 justify-end">
                                         <div class="text-right">
@@ -814,8 +826,8 @@
                             </div>
                             
                             <div class="min-w-0 mb-4 md:mb-6 flex-1">
-                                <h4 class="font-black text-slate-800 text-xs md:text-lg truncate uppercase tracking-tight leading-none mb-1 shadow-inner px-1">${c.name || 'Legacy Client'}</h4>
-                                <p class="text-[8px] md:text-[11px] font-black font-mono tracking-wider text-indigo-500">${c.phone}</p>
+                                <h4 class="font-black text-slate-800 text-xs md:text-lg truncate uppercase tracking-tight leading-none mb-1 shadow-inner px-1">${window.esc(c.name || 'Legacy Client')}</h4>
+                                <p class="text-[8px] md:text-[11px] font-black font-mono tracking-wider text-indigo-500">${window.esc(c.phone)}</p>
                             </div>
 
                             <div class="w-full flex items-center justify-between px-3 md:px-6 py-2 md:py-4 bg-slate-50 rounded-xl md:rounded-[28px] border border-slate-100 mb-4 md:mb-6 relative z-10 group-hover:bg-white group-hover:border-indigo-100 transition-all">
@@ -833,7 +845,7 @@
                                 <a href="tel:${c.phone}" onclick="event.stopPropagation()" class="py-2.5 bg-indigo-50 text-indigo-600 rounded-lg text-[7px] md:text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-1.5">
                                     <i data-lucide="phone-call" class="w-3 h-3 md:w-4 md:h-4"></i> Call
                                 </a>
-                                <button onclick="event.stopPropagation(); window.shareWhatsApp('', '${c.name}', '${c.phone}', 0)" class="py-2.5 bg-emerald-50 text-emerald-600 rounded-lg text-[7px] md:text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-1.5">
+                                <button onclick="event.stopPropagation(); window.shareWhatsApp('', '${window.esc(c.name)}', '${window.esc(c.phone)}', 0)" class="py-2.5 bg-emerald-50 text-emerald-600 rounded-lg text-[7px] md:text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-1.5">
                                     <i data-lucide="message-circle" class="w-3 h-3 md:w-4 md:h-4"></i> WA
                                 </button>
                             </div>
@@ -1537,7 +1549,7 @@
 
     window.viewStaffLogs = async () => {
         const pin = prompt("Owner PIN required to view audit logs:");
-        if (pin !== (window.erpState.passwords?.owner || 'Swali4783')) return alert("Access Denied");
+        if (pin !== (window.erpState.passwords?.owner || '')) return alert("Access Denied");
 
         const snap = await window.FB.collection('audit_logs').orderBy('timestamp', 'desc').limit(50).get();
         const logs = snap.docs.map(d => d.data());
@@ -1837,7 +1849,8 @@
             staff: window.erpState.staff || [],
             printerConfig: window.erpState.printerConfig,
             gstin: window.erpState.gstin,
-            dashboardConfig: window.erpState.dashboardConfig
+            dashboardConfig: window.erpState.dashboardConfig,
+            updatedAt: Date.now()
         };
         try {
             await window.FB.collection('settings').doc('general').set(settings, { merge: true });
@@ -1907,8 +1920,8 @@
                     <!-- Cart items summary -->
                     <div class="mb-4 space-y-1 ${window.erpState.cart.length > 3 ? 'max-h-24 overflow-y-auto pr-1 custom-scrollbar' : ''}">
                         ${window.erpState.cart.map(c => `
-                            <div class="flex justify-between items-center text-[10px]">
-                                <span class="text-slate-500 font-bold truncate flex-1">${c.name} ×${c.qty}</span>
+                            <div class="flex justify-between items-center text-[10px] py-0.5">
+                                <span class="text-slate-500 font-bold truncate flex-1">${c.name} <span class="text-violet-500 ml-1">×${c.qty}${c.unit || (c.soldBy === 'weight' ? 'm' : '')}</span></span>
                                 <span class="font-black text-slate-700 ml-2">${fmt(c.price * c.qty)}</span>
                             </div>
                         `).join('')}
@@ -2194,7 +2207,7 @@
         // Use a branded PIN modal instead of browser prompt
         window._showPINModal((staffCode) => {
             const staff = (window.erpState.staff || []).find(s => s.code === staffCode);
-            const isOwner = staffCode === (window.erpState.passwords?.owner || 'Swali4783');
+            const isOwner = staffCode === (window.erpState.passwords?.owner || '');
             if (!staff && !isOwner) { window.erpAlert('Invalid Authorization Code. Please try again.', 'Access Denied', 'lock'); return false; }
             window._runCheckout(phone, name, advance, method, discountAmt, redeemAmt, hasStitching, stitchingNo, staffCode);
             return true;
@@ -2249,7 +2262,7 @@
     // ─── Actual checkout execution (called after PIN confirmed) ─────────────
     window._runCheckout = async (phone, name, advance, method, discountAmt, redeemAmt, hasStitching, stitchingNo, staffCode) => {
         const staff = (window.erpState.staff || []).find(s => s.code === staffCode);
-        const isOwner = staffCode === (window.erpState.passwords?.owner || 'Swali4783');
+        const isOwner = staffCode === (window.erpState.passwords?.owner || '');
         const recordedBy = isOwner ? 'Owner' : staff.name;
 
         const btn = document.querySelector("#charge-modal-overlay button.bg-violet-600") || document.querySelector("button[onclick='window._completeCheckout()']");
@@ -2343,6 +2356,24 @@
                 saleRef = { id: window.erpState.editingInvoiceId };
             } else {
                 saleRef = await DATA_PATH('sales').add(saleData);
+
+                // FIX 17: Stock decrement logic for NEW sales
+                if (!isEdit) {
+                    for (const cartItem of window.erpState.cart) {
+                        if (cartItem.id) {
+                            const invItem = window.erpState.items.find(x => x.id === cartItem.id);
+                            if (invItem && typeof invItem.stock === 'number') {
+                                try {
+                                    await window.FB.collection('items').doc(cartItem.id).update({
+                                        stock: Math.max(0, invItem.stock - cartItem.qty)
+                                    });
+                                } catch (stockErr) {
+                                    console.error('Stock update failed for', cartItem.name, stockErr);
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // Auto-create Tailoring Order if has stitching
@@ -2610,8 +2641,7 @@
             btn.innerText = "RECORDING..."; btn.disabled = true;
 
             try {
-                const isSale = !!window.erpState.sales.find(x => x.id === id);
-                const collection = isSale ? DATA_PATH('sales') : DATA_PATH('orders');
+                const collection = isSale ? DATA_PATH('sales') : window.FB.root('orders');
                 
                 const currentPaid = s.advancePaid || 0;
                 const newPaid = currentPaid + amt;
@@ -2922,7 +2952,7 @@
             const pin = document.getElementById('void_pin').value;
             const creds = window.erpState.passwords || { owner: 'Swali4783' };
             
-            if (pin === (creds.owner || 'Swali4783')) {
+            if (pin === (creds.owner || '')) {
                 if (!(await window.erpConfirm("Are you 100% sure? This will VOID all linked data and REVERSE loyalty points.", "Confirm Void"))) return;
                 try {
                     const sale = (window.erpState.sales || []).find(s => s.id === id);
@@ -3062,11 +3092,7 @@
 
     // --- MISC UTILS ---
     // Helper for WhatsApp placeholders
-    function fillTemplate(tpl, data) {
-        return tpl.replace(/{(\w+)}/g, (match, key) => {
-            return data[key] !== undefined ? data[key] : match;
-        });
-    }
+
 
     window.lookupClient = (p) => {
         const clean = p; // Already sanitized by oninput
@@ -3198,41 +3224,9 @@
         if (target) window.open(`https://wa.me/${target}?text=${msg}`, '_blank');
     };
 
-    window.saveGeneralSettings = async () => {
-        try {
-            await window.FB.collection('settings').doc('general').set({
-                printerWidth: window.erpState.printerWidth || '58',
-                printerConfig: window.erpState.printerConfig || null,
-                whatsappTemplates: window.erpState.whatsappTemplates || null,
-                taxes: window.erpState.taxes,
-                discounts: window.erpState.discounts,
-                menuOrder: (window.erpState.menuItems || []).map(i => i.id),
-                passwords: window.erpState.passwords,
-                staff: window.erpState.staff || [],
-                loyalty: window.erpState.loyalty,
-                updatedAt: Date.now()
-            }, { merge: true });
-        } catch (e) {
-            console.error("Failed to save settings:", e);
-        }
-    };
 
-    window.saveLoyaltySettings = () => {
-        const enabled = document.getElementById('loyalty_enabled').checked;
-        const pts = parseFloat(document.getElementById('loyalty_pts').value) || 5;
-        const elite = parseFloat(document.getElementById('loyalty_elite').value) || 10000;
-        const gold = parseFloat(document.getElementById('loyalty_gold').value) || 50000;
 
-        window.erpState.loyalty = {
-            enabled: enabled,
-            pointsPer100: pts,
-            eliteThreshold: elite,
-            goldThreshold: gold
-        };
-        
-        window.saveGeneralSettings();
-        alert("Loyalty parameters updated.");
-    };
+
 
     window.updatePasswords = () => {
         const staff = document.getElementById('pass_staff').value.trim();
@@ -3260,7 +3254,7 @@
                     <div>
                         <h3 class="text-xl font-black text-slate-900 tracking-tighter uppercase mb-0.5">Enroll Staff</h3>
                         <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Add New Terminal Operator</p>
-                    </p>
+                    </div>
                 </div>
 
                 <div class="space-y-5 mb-8 relative">
@@ -3312,36 +3306,7 @@
         window.renderApp();
     };
 
-    window.addTaxRule = () => {
-        const lab = document.getElementById('new_tax_label').value.trim();
-        const val = parseFloat(document.getElementById('new_tax_val').value);
-        if(!lab || isNaN(val)) return;
-        window.erpState.taxes.push({ label: lab, val });
-        window.saveGeneralSettings();
-        window.renderApp();
-    };
 
-    window.deleteTaxRule = (idx) => {
-        window.erpState.taxes.splice(idx, 1);
-        window.saveGeneralSettings();
-        window.renderApp();
-    };
-
-    window.addDiscountRule = () => {
-        const lab = document.getElementById('new_disc_label').value.trim();
-        const val = parseFloat(document.getElementById('new_disc_val').value);
-        const type = document.getElementById('new_disc_type').value;
-        if(!lab || isNaN(val)) return;
-        window.erpState.discounts.push({ label: lab, val, type });
-        window.saveGeneralSettings();
-        window.renderApp();
-    };
-
-    window.deleteDiscountRule = (idx) => {
-        window.erpState.discounts.splice(idx, 1);
-        window.saveGeneralSettings();
-        window.renderApp();
-    };
 
     window.openClientProfile = (id) => {
         const c = (window.erpState.clients || []).find(x => x.id === id);
@@ -4020,7 +3985,7 @@
 
     window.deleteCustomer = async (id) => {
         const pin = prompt("Owner PIN required to delete client record:");
-        if (pin !== (window.erpState.passwords?.owner || 'Swali4783')) return alert("Access Denied");
+        if (pin !== (window.erpState.passwords?.owner || '')) return alert("Access Denied");
         
         if (!confirm("Are you absolutely sure? This will permanently delete the client record and their loyalty points. Transaction history will remain but as 'Walk-in' (by phone match).")) return;
 

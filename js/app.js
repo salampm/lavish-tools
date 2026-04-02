@@ -1,4 +1,4 @@
-window.APP_VERSION = "v2.4.0";
+window.APP_VERSION = "v2.4.1";
 
 // --- CACHE & UPDATE MANAGEMENT ---
 // 1. Force unregister old Service Workers that often block updates
@@ -157,7 +157,7 @@ window.erpState = {
     ],
     isOnline: navigator.onLine,
     pendingSyncCount: 0,
-    passwords: { staff: 'Lavish1234', owner: 'Swali4783' }
+    passwords: { staff: '', owner: '' }
 };
 
 // --- AUTH SYSTEM ---
@@ -352,7 +352,32 @@ window.fmtDate = (d) => {
     return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
 };
 
+window.esc = (str) => {
+    if (typeof str !== 'string') return str;
+    return str.replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[m]));
+};
 
+window.getTs = (field) => {
+    if (!field) return 0;
+    if (typeof field === 'number') return field;
+    if (field.toMillis) return field.toMillis();
+    if (field.toDate) return field.toDate().getTime();
+    if (field instanceof Date) return field.getTime();
+    const d = new Date(field);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+};
+
+
+
+window.scheduleRender = () => {
+    if (window._renderTimer) return;
+    window._renderTimer = setTimeout(() => {
+        if (typeof window.renderApp === 'function') window.renderApp();
+        window._renderTimer = null;
+    }, 50);
+};
 
 window.navBtn = (item) => {
     const currentLoc = window.location.pathname.toLowerCase();

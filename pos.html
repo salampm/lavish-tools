@@ -151,7 +151,7 @@
             window.FB.collection('items').onSnapshot((snap) => {
                 window.erpState.items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.renderApp();
+                window.scheduleRender();
             });
 
             window.FB.collection('sales').onSnapshot((snap) => {
@@ -163,40 +163,40 @@
                     window.erpState.counter = 2499;
                 }
                 window.saveLocalState();
-                window.renderApp();
+                window.scheduleRender();
             });
 
             window.FB.collection('expenses').onSnapshot((snap) => {
                 window.erpState.expenses = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.renderApp();
+                window.scheduleRender();
             });
 
             window.FB.root('orders').onSnapshot((snap) => {
                 window.erpState.orders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.renderApp();
+                window.scheduleRender();
             });
 
             window.FB.collection('tickets').onSnapshot((snap) => {
                 window.erpState.tickets = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.renderApp();
+                window.scheduleRender();
             });
 
             window.FB.root('clients').onSnapshot((snap) => {
                 window.erpState.clients = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.renderApp();
+                window.scheduleRender();
             });
 
             window.FB.collection('voided_sales').onSnapshot((snap) => {
                 window.erpState.voidedSales = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.renderApp();
+                window.scheduleRender();
             });
 
             window.FB.collection('voided_orders').onSnapshot((snap) => {
                 window.erpState.voidedOrders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.renderApp();
+                window.scheduleRender();
             });
 
             window.FB.collection('expense_categories').onSnapshot((snap) => {
@@ -223,7 +223,7 @@
                 });
 
                 window.erpState.expenseCategories = merged;
-                window.renderApp();
+                window.scheduleRender();
             });
 
             // Listen to general settings
@@ -242,7 +242,7 @@
                     if (data.gstin) window.erpState.gstin = data.gstin;
 
                     window.saveLocalState();
-                    window.renderApp();
+                    window.scheduleRender();
                 }
             });
 
