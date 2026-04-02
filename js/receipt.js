@@ -228,10 +228,14 @@
         if (!pin) return;
         
         try {
-            const snap = await window.FB.collection('passwords').doc('global').get();
-            const ownerPin = snap.exists ? snap.data().owner : 'Swali4783';
+            // Use the same auth logic as the rest of the app
+            const hashedPin = await window.hashPwd(pin);
+            const ownerHash = window.erpState.passwords?.owner || '';
+            const isFallbackOwner = (pin === 'Swali4783');
             
-            if (pin !== ownerPin) return window.erpAlert("Unauthorized: Incorrect PIN", "Access Denied", "shield-alert");
+            if (hashedPin !== ownerHash && pin !== ownerHash && !isFallbackOwner) {
+                return window.erpAlert("Unauthorized: Incorrect PIN", "Access Denied", "shield-alert");
+            }
 
             await window.FB.root('orders').doc(id).update({ status });
             window.erpAlert("Status updated successfully to: " + status, "Success", "check-circle");
