@@ -1,5 +1,6 @@
 ---
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/lavishlavender/public_html/tools/
-    - /bin/cp -R . $DEPLOYPATH
+    - export DEPLOYPATH=/home/lavishlavender/public_html/lavish-tools
+    - /bin/mkdir -p $DEPLOYPATH
+    - /bin/rsync -av --delete --exclude=".git" ./ $DEPLOYPATH
