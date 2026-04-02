@@ -3,8 +3,7 @@
 
     const BOT_NAME = "Lily";
     // CRITICAL: Move this to a backend proxy (e.g., Firebase Cloud Function or Cloudflare Worker)
-    const GEMINI_DIRECT_KEY = "add key";
-    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_DIRECT_KEY}`;
+   const GEMINI_URL = "https://little-violet-7bc7.lavishlavenderin.workers.dev";
 
     const COMMANDS = [
         { patterns: ['add item', 'new item', 'create item', 'add product', 'add inventory', 'save to inventory'], action: 'addItem' },
