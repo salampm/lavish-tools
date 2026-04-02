@@ -280,9 +280,12 @@
     <script src="js/firebase.js?v=2.4.1"></script>
     <script src="js/pos.js?v=2.4.1"></script>
     <script>
-        if (window.erpState.role !== 'Owner') {
-            location.href = 'pos.html';
-        }
+        // Only redirect once role is explicitly determined
+        window.addEventListener('firebase-ready', () => {
+            if (window.erpState.role && window.erpState.role !== 'Owner') {
+                location.href = 'pos.html';
+            }
+        });
 
         window.toggleHistOps = function() {
             const ops = document.getElementById('hist-ops');

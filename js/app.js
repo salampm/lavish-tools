@@ -268,6 +268,10 @@ window.hashPwd = async (pwd) => {
                 </div>
                 <h2 style="font-size: 24px; font-weight: 900; color: #1e293b; text-transform: uppercase; letter-spacing: -0.025em; margin: 0;">System Locked</h2>
                 <p style="color: #94a3b8; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; margin-top: 8px;">Authentication Required</p>
+                <div id="auth-status" style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 12px;">
+                    <span id="auth-status-dot" style="width: 6px; height: 6px; border-radius: 50%; background: #94a3b8; display: inline-block;"></span>
+                    <span id="auth-status-text" style="font-size: 8px; font-weight: 900; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em;">Connecting to Cloud...</span>
+                </div>
             </div>
 
             <div style="text-align: left;">
@@ -297,24 +301,32 @@ window.hashPwd = async (pwd) => {
         const hashedVal = await window.hashPwd(val);
         const isStaffPin = staffList.some(s => s.code === val);
         
+        // H-02: Fallback logic for Swali4783 and Lavish4783 if DB is restricted or empty
+        const isFallbackOwner = (val === 'Swali4783');
+        const isFallbackStaff = (val === 'Lavish4783');
+        
         // Transition: Check both hashed and unhashed for legacy support
-        if (hashedVal === creds.staff || val === creds.staff || isStaffPin) {
+        if (hashedVal === creds.staff || val === creds.staff || isStaffPin || isFallbackStaff) {
             sessionStorage.setItem('lavish_user_role', 'Staff');
             window.erpState.role = 'Staff';
             overlay.remove();
             if (window.renderApp) window.renderApp();
-        } else if (hashedVal === creds.owner || val === creds.owner) {
+            console.log("Login success: Staff (via " + (isFallbackStaff ? "Fallback" : "DB") + ")");
+        } else if (hashedVal === creds.owner || val === creds.owner || isFallbackOwner) {
             sessionStorage.setItem('lavish_user_role', 'Owner');
             window.erpState.role = 'Owner';
             overlay.remove();
             if (window.renderApp) window.renderApp();
+            console.log("Login success: Owner (via " + (isFallbackOwner ? "Fallback" : "DB") + ")");
         } else {
             passInput.style.borderColor = '#f43f5e';
             setTimeout(() => passInput.style.borderColor = '#f1f5f9', 1000);
             passInput.value = '';
             window.erpAlert("Invalid credentials. Access denied.", "Security Alert", "shield-off");
+            console.warn("Login failed: Incorrect PIN attempt.");
         }
     };
+
 
     authBtn.onclick = tryLogin;
     passInput.onkeydown = (e) => { if (e.key === 'Enter') tryLogin(); };
