@@ -9,7 +9,8 @@
     <meta http-equiv="Expires" content="0">
     <title>Lavish Lavender - Tailoring Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@0.344.0"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="css/style.css?v=2.4.1">
     <style>
         .sub-tab-btn {
@@ -299,8 +300,10 @@
                 <button onclick="window.closeEditModal()" class="bg-slate-50 p-2.5 rounded-full text-slate-400 hover:bg-slate-100"><i data-lucide="X" class="w-5 h-5"></i></button>
             </div>
             <div class="space-y-5">
-                <div><label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Customer Name</label><input id="edit-name" type="text" class="tailor-input"></div>
-                <div><label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Phone</label><input id="edit-phone" type="tel" class="tailor-input"></div>
+                <div class="space-y-3">
+                    <input id="edit-name" type="text" oninput="this.value = window.sanitizeText(this.value)" class="tailor-input" placeholder="Client Name">
+                    <div><label class="text-[9px] font-black text-slate-400 uppercase block mb-1.5">Phone</label><input id="edit-phone" type="tel" oninput="this.value = window.sanitizePhone(this.value)" class="tailor-input"></div>
+                </div>
                 <div>
                     <label class="text-[9px] font-black text-slate-400 uppercase block mb-2 font-bold">Items</label>
                     <div id="edit-items-container" class="space-y-3 mb-3"></div>
@@ -731,7 +734,7 @@
             window.FB.root('orders').onSnapshot((snap) => {
                 window.erpState.orders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.scheduleRender();
+                window.batchedRender();
 
                 if (viewOrderId && !window.selectedOrderId && window.erpState.orders.find(o => o.id === viewOrderId)) {
                     setTimeout(() => window.openOrderDetails(viewOrderId), 50);
@@ -740,25 +743,25 @@
             window.FB.root('clients').onSnapshot((snap) => {
                 window.erpState.clients = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             window.FB.collection('sales').onSnapshot((snap) => {
                 window.erpState.sales = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             window.FB.collection('items').onSnapshot((snap) => {
                 window.erpState.items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             window.FB.collection('expenses').onSnapshot((snap) => {
                 window.erpState.expenses = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             // Listen to general settings
@@ -784,9 +787,10 @@
 
         // Render from cache immediately
         window.loadLocalState();
-        window.scheduleRender();
+        window.renderApp();
     </script>
     <!-- Global Action Popups -->
     <div id="toast-container" class="hidden"></div>
+    <script src="js/chatbot.js?v=2.4.1"></script>
 </body>
 </html>

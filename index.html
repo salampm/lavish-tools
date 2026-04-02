@@ -10,7 +10,7 @@
     <title>Lavish Lavender - Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@0.344.0"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="css/style.css?v=2.4.1">
 </head>
@@ -643,7 +643,7 @@
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-500 shadow-sm font-black text-xs group-hover:bg-indigo-600 group-hover:text-white transition-colors">LL</div>
                         <div>
-                            <p class="text-xs font-black text-slate-800 uppercase">${s.customerName || 'Walk-in Client'}</p>
+                            <p class="text-xs font-black text-slate-800 uppercase">${window.esc(s.customerName || 'Walk-in Client')}</p>
                             <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">${window.fmtDate(s.date)} • ${s.billNo}</p>
                         </div>
                     </div>
@@ -667,7 +667,7 @@
                 <div class="flex items-center justify-between p-4 border border-slate-50 rounded-2xl">
                     <div class="flex items-center gap-3">
                         <div class="w-2 h-2 rounded-full bg-indigo-500"></div>
-                        <span class="text-xs font-black text-slate-700 uppercase">${name}</span>
+                        <span class="text-xs font-black text-slate-700 uppercase">${window.esc(name)}</span>
                     </div>
                     <span class="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black">${qty} sold</span>
                 </div>
@@ -689,8 +689,8 @@
                         <div class="flex items-center gap-3">
                             <div class="w-8 h-8 rounded-full bg-${color}-100 flex items-center justify-center text-${color}-600 font-black text-[10px] group-hover:bg-${color}-600 group-hover:text-white transition-colors">${o.customerName ? o.customerName[0].toUpperCase() : 'T'}</div>
                             <div>
-                                <p class="text-[11px] font-black text-slate-800 uppercase leading-tight">${o.customerName || 'Guest'}</p>
-                                <p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest">${o.billNo} • ${window.fmtDate(o.deliveryDate)}</p>
+                                <p class="text-[11px] font-black text-slate-800 uppercase leading-tight">${window.esc(o.customerName || 'Guest')}</p>
+                                <p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest">${window.esc(o.billNo)} • ${window.fmtDate(o.deliveryDate)}</p>
                             </div>
                         </div>
                         <div class="text-right">
@@ -793,10 +793,10 @@
                                     <tr class="hover:bg-slate-50 transition-colors">
                                         <td class="px-4 py-4 text-[10px] font-bold text-slate-500 whitespace-nowrap">${window.fmtDate(x.date)}</td>
                                         <td class="px-4 py-4">
-                                            <p class="text-xs font-black text-slate-800 uppercase">${x.name}</p>
+                                            <p class="text-xs font-black text-slate-800 uppercase">${window.esc(x.name)}</p>
                                             <div class="flex items-center gap-2 mt-1">
-                                                <span class="text-[8px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-50 px-1.5 py-0.5 rounded leading-none">${x.cat}</span>
-                                                ${x.ref ? `<span class="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none">#${x.ref}</span>` : ''}
+                                                <span class="text-[8px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-50 px-1.5 py-0.5 rounded leading-none">${window.esc(x.cat)}</span>
+                                                ${x.ref ? `<span class="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none">#${window.esc(x.ref)}</span>` : ''}
                                             </div>
                                         </td>
                                         <td class="px-4 py-4 text-right font-black text-sm ${type === 'Inflow' ? 'text-emerald-500' : 'text-rose-500'}">₹${window.fmt(x.amount)}</td>
@@ -831,23 +831,23 @@
                     window.erpState.counter = 2499;
                 }
                 window.saveLocalState();
-                window.scheduleRender();
+                window.batchedRender();
                 updateChart();
             });
             window.FB.root('orders').onSnapshot(snap => {
                 window.erpState.orders = snap.docs.map(doc => ({id: doc.id, ...doc.data()}));
                 window.saveLocalState();
-                window.scheduleRender();
+                window.batchedRender();
             });
             window.FB.collection('expenses').onSnapshot(snap => {
                 window.erpState.expenses = snap.docs.map(doc => ({id: doc.id, ...doc.data()}));
                 window.saveLocalState();
-                window.scheduleRender();
+                window.batchedRender();
             });
             window.FB.collection('items').onSnapshot(snap => {
                 window.erpState.items = snap.docs.map(doc => ({id: doc.id, ...doc.data()}));
                 window.saveLocalState();
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             window.FB.collection('expense_categories').onSnapshot((snap) => {
@@ -869,13 +869,13 @@
                 });
                 window.erpState.expenseCategories = merged;
                 window.saveLocalState();
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             window.FB.root('clients').onSnapshot((snap) => {
                 window.erpState.clients = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             // Listen to general settings
@@ -1125,16 +1125,17 @@
 
             let qtyToRefund = item.qty;
             if (item.qty > 1) {
-                const ans = prompt(`How many ${item.name} to refund? (Max ${item.qty})`, item.qty);
+                const ans = await window.erpPrompt(`How many ${item.name} to refund? (Max ${item.qty})`, item.qty, 'Refund Quantity');
                 if (ans === null) return;
                 qtyToRefund = parseFloat(ans);
                 if (isNaN(qtyToRefund) || qtyToRefund <= 0 || qtyToRefund > item.qty) {
-                    alert("Invalid quantity");
+                    window.erpAlert("Invalid quantity", "Error", "alert-circle");
                     return;
                 }
             }
 
-            if (!confirm(`Confirm refund for ${qtyToRefund}x ${item.name}? This will restock the item and deduct ${window.fmt(item.price * qtyToRefund)} from the bill total.`)) return;
+            const ok = await window.erpConfirm(`Confirm refund for ${qtyToRefund}x ${item.name}? This will restock the item and deduct ${window.fmt(item.price * qtyToRefund)} from the bill total.`, 'Process Refund');
+            if (!ok) return;
 
             try {
                 // 1. Update stock
@@ -1165,28 +1166,33 @@
                     refundLog: [...(sale.refundLog || []), { item: item.name, amount: refundValue, date: Date.now() }]
                 });
 
-                alert("Refund processed successfully.");
+                window.erpAlert("Refund processed successfully.", "Success", "check-circle");
                 document.querySelectorAll(".fixed .animate-pop-in").forEach(x => x.closest('.fixed').remove());
                 window.renderApp();
             } catch (e) {
-                alert("Error processing refund.");
+                window.erpAlert("Error processing refund.", "Error", "x-circle");
                 console.error(e);
             }
         };
 
         window.voidBill = async (id) => {
-            const pin = prompt("Admin PIN required to void bill:");
-            if (pin === '1234') {
-                if (confirm("Permanently delete this bill?")) {
+            const pin = await window.erpPrompt("Owner PIN required to void bill:", "", "Authentication Required");
+            if (pin === null) return;
+            const hashedPin = await window.hashPwd(pin);
+            const ownerHash = window.erpState.passwords?.owner || '';
+            
+            if (hashedPin === ownerHash) {
+                const ok = await window.erpConfirm("Permanently delete this bill?", "Confirm Deletion");
+                if (ok) {
                     try {
                         await window.FB.collection('sales').doc(id).delete();
-                        alert("Bill deleted.");
+                        window.erpAlert("Bill deleted.", "Success", "check-circle");
                         document.querySelectorAll(".fixed .animate-pop-in").forEach(x => x.closest('.fixed').remove());
                         window.renderApp();
-                    } catch (e) { alert("Delete failed"); }
+                    } catch (e) { window.erpAlert("Delete failed", "Error", "x-circle"); }
                 }
-            } else if (pin !== null) {
-                alert("Incorrect PIN.");
+            } else {
+                window.erpAlert("Incorrect Security PIN.", "Access Denied", "shield-off");
             }
         };
 
@@ -1253,148 +1259,31 @@
         window.printThermal = (billNo) => {
             const sale = window.erpState.sales.find(s => s.billNo === billNo);
             if (!sale) return;
-            const items = sale.items || [];
-            const pConf = window.erpState.printerConfig || { width: '58', logo: '', header: 'Lavish lavender', footer: 'Visit Again!', showCustomer: true, showTax: true };
-            const width = pConf.width || '58';
-            const widthPx = width === '80' ? '80mm' : '58mm';
-
-            const dateObj = new Date(sale.date);
-            const dateStr = dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-            const timeStr = dateObj.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-
-            const w = window.open('', '_blank', `width=${width === '80' ? 450 : 350},height=600`);
-            
-            let html = `<html><body style='font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;width:${widthPx};font-size:12px;margin:0 auto;padding:10px 5px;line-height:1.4;color:#111;text-align:center;'>`;
-
-            if (pConf.logo) {
-                html += `<div style='margin-bottom:10px;'><img src='${pConf.logo}' style='max-width:140px;max-height:80px;'></div>`;
-            }
-            html += `<div style='font-weight:bold;font-size:15px;margin-bottom:4px;'>${pConf.header || 'Lavish lavender'}</div>`;
-            if (pConf.address) {
-                const lines = pConf.address.split('\n');
-                lines.forEach(line => {
-                    html += `<div style='font-size:12px;color:#444;'>${line.trim()}</div>`;
-                });
-            }
-            
-            html += `<hr style='border:none;border-top:1px dashed #ccc;margin:16px 0;'>`;
-
-            // Big Total
-            html += `<div style='font-size:28px;font-weight:500;margin-bottom:4px;letter-spacing:-0.5px;'>₹${sale.total || 0}</div>`;
-            html += `<div style='font-size:12px;color:#666;'>Total</div>`;
-
-            html += `<hr style='border:none;border-top:1px dashed #ccc;margin:16px 0;'>`;
-
-            // Employee & POS
-            const employeeName = sale.recordedBy || window.erpState.role || 'Owner';
-            html += `<div style='text-align:left;font-size:12px;margin-bottom:4px;'>Employee: ${employeeName}</div>`;
-            html += `<div style='text-align:left;font-size:12px;'>POS: Tab 2</div>`;
-
-            html += `<hr style='border:none;border-top:1px dashed #ccc;margin:16px 0;'>`;
-
-            // Items list formatted to match Loyverse
-            html += `<div style='text-align:left;'>`;
-            items.forEach(i => {
-                html += `<div style='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;'>`;
-                html += `  <div style='flex:1;padding-right:10px;'>`;
-                html += `    <div style='font-size:12px;color:#111;'>${i.name}</div>`;
-                html += `    <div style='font-size:11px;color:#666;margin-top:2px;'>${i.qty} &times; ₹${i.price}</div>`;
-                html += `  </div>`;
-                html += `  <div style='font-size:12px;color:#111;'>₹${i.price * i.qty}</div>`;
-                html += `</div>`;
-            });
-
-            // Summary lines
-            html += `<div style='display:flex;justify-content:space-between;font-weight:bold;font-size:12px;margin-top:20px;margin-bottom:10px;'>`;
-            html += `  <span>Total</span>`;
-            html += `  <span>₹${sale.total || 0}</span>`;
-            html += `</div>`;
-
-            // Advance paid / Cash
-            const paid = sale.advancePaid || (sale.total || 0);
-            html += `<div style='display:flex;justify-content:space-between;font-size:12px;margin-bottom:10px;'>`;
-            html += `  <span>Cash</span>`;
-            html += `  <span>₹${paid}</span>`; 
-            html += `</div>`;
-
-            // Balance Due
-            const balance = sale.balanceDue || 0;
-            if (balance > 0) {
-                html += `<div style='display:flex;justify-content:space-between;font-size:12px;margin-bottom:10px;'>`;
-                html += `  <span>Balance</span>`;
-                html += `  <span style="color:#d97706;font-weight:bold;">₹${balance}</span>`; 
-                html += `</div>`;
-            }
-            
-            // Tax explicit breakdown (if applicable/enabled)
-            if (pConf.showTax && sale.taxValue > 0) {
-                const subtotal = sale.subtotal || 0;
-                const discount = sale.discount || 0;
-                const total = sale.total || 0;
-                html += `<div style='display:flex;justify-content:space-between;font-size:12px;color:#666;margin-top:10px;'>`;
-                html += `  <span>Tax (${sale.taxValue}%)</span>`;
-                html += `  <span>₹${total - (subtotal - discount)}</span>`;
-                html += `</div>`;
-            }
-
-            html += `</div>`; // Close text-align:left
-            html += `<hr style='border:none;border-top:1px dashed #ccc;margin:16px 0;'>`;
-
-            // Footer Care Notes (exactly as requested)
-            html += `<div style='text-align:center;font-size:11px;color:#555;line-height:1.5;margin-bottom:16px;'>`;
-            html += `Dry Wash Only, No Exchange, No Refund<br>`;
-            html += `Thank you for your purchase,<br>`;
-            html += `Please come back again.`;
-            html += `</div>`;
-
-            // Date and Receipt Number
-            html += `<div style='display:flex;justify-content:space-between;font-size:11px;color:#555;'>`;
-            html += `  <span>${dateStr} ${timeStr}</span>`;
-            html += `  <span>№ ${billNo}</span>`;
-            html += `</div>`;
-            
-            if (window.erpState.gstin) {
-                html += `<div style='text-align:center;font-size:10px;color:#555;margin-top:16px;'>GSTIN: ${window.erpState.gstin}</div>`;
-            }
-
-            // Loyalty Info optionally at the bottom
-            if (sale.loyaltySnapshot) {
-                const ls = sale.loyaltySnapshot;
-                html += `<div style='text-align:center;font-size:10px;color:#111;background:#f8fafc;padding:8px;border-radius:8px;margin-top:16px;'>`;
-                html += `<div style='margin-bottom:4px;'><strong style='color:#d97706'>${(ls.tier || 'Basic').toUpperCase()} TIER</strong></div>`;
-                html += `Earned: ${ls.earned} pts | Total: ${ls.total} pts`;
-                html += `</div>`;
-            }
-
-            html += `<div style='text-align:center;font-size:10px;color:#999;margin-top:30px;'>`;
-            html += `&copy; 2026 Loyverse. All rights reserved.`;
-            html += `</div>`;
-
-            html += "</body></html>";
-
-            const style = `<style>
-                @media print { 
-                  @page { margin: 0; size: ${widthPx} auto; } 
-                  body { margin: 0; padding: 0; width: ${widthPx}; overflow: hidden; } 
-                  html, body { height: auto !important; margin: 0 !important; padding: 0 !important; } 
-                  * { -webkit-print-color-adjust: exact; }
-                } 
-                body { width: ${widthPx}; padding: 0; margin: 0; }
-            </style>`;
-
-            w.document.write(style + html);
-            w.document.close();
-            w.focus();
-            setTimeout(() => {
-                w.print();
-                setTimeout(() => { w.close(); }, 500);
-            }, 500);
+            const printData = {
+                billNo: sale.billNo,
+                customerName: sale.customerName,
+                customerPhone: sale.customerPhone,
+                date: sale.date || sale.createdAt,
+                recordedBy: sale.recordedBy || 'Owner',
+                items: sale.items || [],
+                subtotal: sale.subtotal || 0,
+                discount: sale.discount || 0,
+                redeemAmt: sale.redeemedPoints || 0,
+                taxVal: sale.taxValue || 0,
+                total: sale.total || 0,
+                paid: sale.advancePaid || 0,
+                balance: sale.balanceDue || 0,
+                loyaltySnapshot: sale.loyaltySnapshot,
+                tailoringRefs: [...new Set((sale.items || []).map(i => i.tailoringRef || i.tailoringBillNo).filter(Boolean))]
+            };
+            window.generateThermalPrint(printData);
         };
 
-        if (document.getElementById('app-version')) {
-            document.getElementById('app-version').innerText = window.APP_VERSION || 'v2.4.1';
-        }
+        // Load cache first for instant start
+        window.loadLocalState();
+        window.renderApp();
     </script>
     <div id="toast-container" class="hidden"></div>
+    <script src="js/chatbot.js?v=2.4.1"></script>
 </body>
 </html>

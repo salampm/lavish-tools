@@ -9,7 +9,7 @@
     <meta http-equiv="Expires" content="0">
     <title>Lavish Lavender - Retail POS</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@0.344.0"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="css/style.css?v=2.4.1">
 </head>
@@ -151,7 +151,7 @@
             window.FB.collection('items').onSnapshot((snap) => {
                 window.erpState.items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             window.FB.collection('sales').onSnapshot((snap) => {
@@ -163,40 +163,40 @@
                     window.erpState.counter = 2499;
                 }
                 window.saveLocalState();
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             window.FB.collection('expenses').onSnapshot((snap) => {
                 window.erpState.expenses = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             window.FB.root('orders').onSnapshot((snap) => {
                 window.erpState.orders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             window.FB.collection('tickets').onSnapshot((snap) => {
                 window.erpState.tickets = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             window.FB.root('clients').onSnapshot((snap) => {
                 window.erpState.clients = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.saveLocalState();
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             window.FB.collection('voided_sales').onSnapshot((snap) => {
                 window.erpState.voidedSales = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             window.FB.collection('voided_orders').onSnapshot((snap) => {
                 window.erpState.voidedOrders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             window.FB.collection('expense_categories').onSnapshot((snap) => {
@@ -223,7 +223,7 @@
                 });
 
                 window.erpState.expenseCategories = merged;
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             // Listen to general settings
@@ -246,33 +246,22 @@
                 }
             });
 
-            // Initial Tab Selection based on URL or Default
-            const urlParams = new URLSearchParams(window.location.search);
-            const initialTab = urlParams.get('tab') || 'pos';
-            window.setPOSTab(initialTab);
-        });
-
-        // Load cache first for instant start
+        // Initialize Application
         window.loadLocalState();
-        
-        // Wrap renderApp to preserve scroll in Settings
-        const originalRenderApp = window.renderApp;
-        window.renderApp = function() {
-            const scrollEls = document.querySelectorAll('.overflow-y-auto');
-            const positions = Array.from(scrollEls).map(el => ({ id: el.id, top: el.scrollTop }));
-            
-            originalRenderApp();
-            
-            // Restore scroll
-            setTimeout(() => {
-                positions.forEach(pos => {
-                    const el = pos.id ? document.getElementById(pos.id) : document.querySelector('.overflow-y-auto');
-                    if (el) el.scrollTop = pos.top;
-                });
-            }, 50);
-        };
-        
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('tab')) window.erpState.tab = urlParams.get('tab');
         window.renderApp();
-    </script>
+             
+        // Sync tab selection with URL history for better navigation
+        window.addEventListener('popstate', () => {
+             const newParams = new URLSearchParams(window.location.search);
+             if (newParams.get('tab')) {
+                 window.erpState.tab = newParams.get('tab');
+                 window.renderApp();
+             }
+        });
+    });
+</script>
+    <script src="js/chatbot.js?v=2.4.1"></script>
 </body>
 </html>

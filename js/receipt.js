@@ -43,7 +43,16 @@
             }
 
             if (snap.empty) {
-                container.innerHTML = `<div class="error" style="text-align:center; padding:40px; color:#ef4444;">Receipt not found for bill: ${billNo}</div>`;
+                container.innerHTML = `
+                <div class="p-16 text-center">
+                    <div class="w-20 h-20 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner">
+                        <i data-lucide="file-warning" class="w-10 h-10"></i>
+                    </div>
+                    <h3 class="text-slate-900 font-black text-2xl tracking-tighter mb-3 uppercase">Receipt Not Found</h3>
+                    <p class="text-slate-400 text-sm font-medium mb-10 max-w-[280px] mx-auto">This bill #${window.esc(billNo)} might have been voided, archived, or is in a different silo.</p>
+                    <button onclick="window.location.href='index.html'" class="px-10 py-4 bg-slate-900 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-2xl active:scale-95 transition-all">Back to Dashboard</button>
+                </div>`;
+                if (window.lucide) lucide.createIcons();
                 return;
             }
 
@@ -90,8 +99,8 @@
                 <div class="p-10 pb-16 relative">
                     <button onclick="window.closeReceipt()" class="absolute top-8 right-8 bg-slate-50 p-3 rounded-full text-slate-300 hover:text-slate-900 transition-all"><i data-lucide="x" class="w-5 h-5"></i></button>
                     
-                    <p class="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-2 leading-none">${o.billNo}</p>
-                    <h2 class="text-3xl font-bold text-slate-900 leading-tight mb-8" style="font-family: 'Cormorant Garamond', serif;">${o.customerName}</h2>
+                    <p class="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-2 leading-none">${window.esc(o.billNo)}</p>
+                    <h2 class="text-3xl font-bold text-slate-900 leading-tight mb-8" style="font-family: 'Cormorant Garamond', serif;">${window.esc(o.customerName)}</h2>
 
                     <div class="flex gap-2 mb-6">
                         <a href="tel:${o.phone}" class="flex-1 bg-slate-50 py-4.5 rounded-2xl text-[10px] font-black uppercase text-slate-500 border border-slate-100 flex items-center justify-center gap-2 transition-all hover:bg-slate-100"><i data-lucide="phone" class="w-4 h-4"></i> Call</a>
@@ -128,7 +137,7 @@
                     ${o.items ? `
                     <div class="mb-10 bg-slate-50 p-6 rounded-[36px] border border-slate-100">
                         <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Tailoring Items</p>
-                        ${o.items.map(i => `<div class="flex justify-between py-2 border-b border-slate-200 last:border-0"><span class="text-sm font-bold text-slate-700">${i.name}</span><span class="text-sm font-black text-slate-800">${formatMoney(i.price)}</span></div>`).join('')}
+                        ${o.items.map(i => `<div class="flex justify-between py-2 border-b border-slate-200 last:border-0"><span class="text-sm font-bold text-slate-700">${window.esc(i.name)}</span><span class="text-sm font-black text-slate-800">${formatMoney(i.price)}</span></div>`).join('')}
                     </div>` : ''}
 
                     ${o.loyaltySnapshot ? `
@@ -162,8 +171,8 @@
                 <div class="p-8 pb-12">
                     <div class="flex justify-between items-start mb-8">
                         <div>
-                            <p class="text-[9px] font-black text-violet-400 uppercase tracking-widest leading-none mb-1.5">${o.billNo}</p>
-                            <h2 class="text-2xl font-black text-slate-900 leading-tight">${o.customerName || 'Guest Customer'}</h2>
+                            <p class="text-[9px] font-black text-violet-400 uppercase tracking-widest leading-none mb-1.5">${window.esc(o.billNo)}</p>
+                            <h2 class="text-2xl font-black text-slate-900 leading-tight">${window.esc(o.customerName || 'Guest Customer')}</h2>
                         </div>
                         <div class="text-right">
                              <p class="text-[10px] font-bold text-slate-400">${date}</p>
@@ -175,8 +184,8 @@
                         ${(o.items || o.posItems || []).map(i => `
                             <div class="flex justify-between items-center py-3.5 border-b border-slate-50 last:border-0">
                                 <div class="flex flex-col">
-                                    <span class="text-[15px] font-bold text-slate-800">${i.name}</span>
-                                    <span class="text-[11px] text-slate-400 font-bold italic">${i.qty || 1} x ${formatMoney(i.price)}</span>
+                                    <span class="text-[15px] font-bold text-slate-800">${window.esc(i.name)}</span>
+                                    <span class="text-[11px] text-slate-400 font-bold italic">${(i.qty || 1)} x ${formatMoney(i.price)}</span>
                                 </div>
                                 <span class="text-[15px] font-black text-slate-900">${formatMoney((i.qty || 1) * i.price)}</span>
                             </div>
@@ -215,19 +224,27 @@
     };
 
     window.updateStatus = async (id, status) => {
+        const pin = await window.erpPrompt("Owner PIN required to update status:", "", "Authentication Required");
+        if (!pin) return;
+        
         try {
+            const snap = await window.FB.collection('passwords').doc('global').get();
+            const ownerPin = snap.exists ? snap.data().owner : 'Swali4783';
+            
+            if (pin !== ownerPin) return window.erpAlert("Unauthorized: Incorrect PIN", "Access Denied", "shield-alert");
+
             await window.FB.root('orders').doc(id).update({ status });
-            alert("Status updated locally to: " + status);
-            window.location.reload();
+            window.erpAlert("Status updated successfully to: " + status, "Success", "check-circle");
+            setTimeout(() => window.location.reload(), 1500);
         } catch (err) {
             console.error(err);
-            alert("Failed to update status.");
+            window.erpAlert("Failed to update status. Check connection.", "Error", "x-circle");
         }
     };
 
     window.returnToQueue = async () => {
         if (!window.currentOrder) return;
-        const reason = prompt("Enter alteration reason:");
+        const reason = await window.erpPrompt("Enter alteration reason:", "", "Alteration Log");
         if (!reason) return;
         const log = window.currentOrder.notesLog || [];
         log.push({ text: `[ALTERATION] ${reason}`, timestamp: new Date().toLocaleString() });
@@ -236,11 +253,11 @@
                 status: 'Stitching', 
                 notesLog: log 
             });
-            alert("Moved back to tracker for alteration.");
-            window.location.reload(); 
+            window.erpAlert("Moved back to tracker for alteration.", "Action Complete", "rotate-ccw");
+            setTimeout(() => window.location.reload(), 1500); 
         } catch (err) {
             console.error(err);
-            alert("Failed to update status.");
+            window.erpAlert("Failed to update status.", "Error", "x-circle");
         }
     };
 })();

@@ -2,9 +2,14 @@ window.APP_VERSION = "v2.4.1";
 
 // --- CACHE & UPDATE MANAGEMENT ---
 // 1. Force unregister old Service Workers that often block updates
+// Legacy SW cleanup — remove after one deployment cycle
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(registrations => {
-        for (let registration of registrations) registration.unregister();
+        for (let reg of registrations) {
+            if (reg.scope && reg.scope.includes(location.origin)) {
+                reg.unregister();
+            }
+        }
     });
 }
 
@@ -36,18 +41,21 @@ window.showUpdateNotification = (v) => {
         <div class="min-w-0">
             <p class="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-1">New Update Available</p>
             <p class="text-white font-bold text-sm">Version ${v} is ready for you</p>
+            <div class="flex items-center gap-4">
+                <button onclick="window.hardReloadApp()" class="px-6 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-violet-700 transition-all shadow-lg shadow-violet-500/20 whitespace-nowrap">Reload</button>
+                <button onclick="this.closest('#update-toast').remove()" class="p-3 text-slate-500 hover:text-white transition-colors rounded-xl" title="Dismiss">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
         </div>
-        <button onclick="window.hardReloadApp()" class="px-6 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-violet-700 transition-all shadow-lg shadow-violet-500/20 whitespace-nowrap">Reload</button>
     `;
     document.body.appendChild(toast);
     if (window.lucide) lucide.createIcons();
 };
 
 window.hardReloadApp = () => {
-    // Clear erp_cache to ensure fresh data if it's a breaking update
-    // But keep crucial settings if possible. For now, just a force reload is safer.
     localStorage.removeItem('erp_cache');
-    window.location.reload(true);
+    window.location.reload();
 };
 
 // Check for updates on startup
@@ -57,12 +65,18 @@ window.addEventListener('load', () => {
 
 window.sanitizePhone = (phone) => {
     if (!phone) return "";
-    let p = phone.toString().replace(/\D/g, ''); 
-    // Remove common prefixes for 10-digit Indian numbers
-    if (p.length === 12 && p.startsWith('91')) p = p.substring(2);
-    else if (p.length === 11 && p.startsWith('0')) p = p.substring(1);
-    else if (p.length === 13 && p.startsWith('0091')) p = p.substring(4);
+    let p = phone.toString().replace(/\D/g, '');
+    if (p.startsWith('0091')) p = p.substring(4);
+    else if (p.startsWith('91') && p.length > 10) p = p.substring(2);
+    else if (p.startsWith('0') && p.length === 11) p = p.substring(1);
+    // Ensure max 10 digits for Indian numbers
+    if (p.length > 10) p = p.slice(-10);
     return p;
+};
+
+window.sanitizeText = (t) => {
+    if (!t) return "";
+    return t.toString().replace(/<[^>]*>?/gm, '');
 };
 
 // Local Cache Helpers
@@ -89,6 +103,16 @@ window.saveLocalState = () => {
             timestamp: Date.now()
         }));
     } catch (e) { console.warn("Cache save failed", e); }
+};
+
+let _savePending = false;
+window.debouncedSave = () => {
+    if (_savePending) return;
+    _savePending = true;
+    setTimeout(() => {
+        _savePending = false;
+        window.saveLocalState();
+    }, 2000);
 };
 
 window.loadLocalState = () => {
@@ -125,6 +149,7 @@ window.erpState = {
         { name: 'Marketing', requiresBill: false, icon: 'Target' }
     ],
     expenseTab: 'terminal',
+    expenseFilter: 'today',
     dashboardFilter: 'today',
     dashboardStart: null, dashboardEnd: null,
     isSidebarOpen: false, isItemsOpen: false, mobileCartOpen: false,
@@ -145,15 +170,15 @@ window.erpState = {
         reminder: 'Hi {customerName}, 🌸 Friendly reminder from *Lavish Lavender* for bill *{billNo}*.\n\nPending: *Rs.{balance}*.\n\n✨ *Loyalty Status*\n{totalPoints} Total PT | {tier} Tier\n\nVisit again! 🙏'
     },
     menuItems: [
-        { id: 'dashboard', icon: 'LayoutDashboard', label: 'Dashboard', url: 'index.html', roles: ['Owner'] },
-        { id: 'pos', icon: 'HandCoins', label: 'Retail POS', url: 'pos.html' },
-        { id: 'tailoring', icon: 'Scissors', label: 'Tailoring', url: 'tailoring.html' },
-        { id: 'receipts', icon: 'Receipt', label: 'Receipts Ledger', url: 'pos.html?tab=receipts' },
-        { id: 'expenses', icon: 'Wallet', label: 'Expense Tracker', url: 'expenses.html' },
-        { id: 'inventory', icon: 'Package', label: 'Inventory', url: 'inventory.html', roles: ['Owner'] },
-        { id: 'clients', icon: 'Users', label: 'Clients', url: 'pos.html?tab=clients' },
-        { id: 'reports', icon: 'FileSpreadsheet', label: 'Master Reports', url: 'pos.html?tab=reports', roles: ['Owner'] },
-        { id: 'settings', icon: 'Settings', label: 'Master Settings', url: 'pos.html?tab=settings', roles: ['Owner'] }
+        { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard', url: 'index.html', roles: ['Owner'] },
+        { id: 'pos', icon: 'hand-coins', label: 'Retail POS', url: 'pos.html' },
+        { id: 'tailoring', icon: 'scissors', label: 'Tailoring', url: 'tailoring.html' },
+        { id: 'receipts', icon: 'receipt', label: 'Receipts Ledger', url: 'pos.html?tab=receipts' },
+        { id: 'expenses', icon: 'wallet', label: 'Expense Tracker', url: 'expenses.html' },
+        { id: 'inventory', icon: 'package', label: 'Inventory', url: 'inventory.html', roles: ['Owner'] },
+        { id: 'clients', icon: 'users', label: 'Clients', url: 'pos.html?tab=clients' },
+        { id: 'reports', icon: 'file-spreadsheet', label: 'Master Reports', url: 'pos.html?tab=reports', roles: ['Owner'] },
+        { id: 'settings', icon: 'settings', label: 'Master Settings', url: 'pos.html?tab=settings', roles: ['Owner'] }
     ],
     isOnline: navigator.onLine,
     pendingSyncCount: 0,
@@ -167,17 +192,18 @@ window.erpState = {
         modal.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4";
         modal.innerHTML = `
             <div class="bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl animate-pop-in border border-slate-100 text-center relative overflow-hidden">
-                <div class="absolute -right-6 -top-6 w-32 h-32 bg-slate-50 rounded-full blur-3xl"></div>
-                <div class="w-16 h-16 bg-slate-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100 relative">
+                <div class="absolute -right-6 -top-6 w-32 h-32 bg-violet-50 rounded-full blur-3xl"></div>
+                <div class="w-16 h-16 bg-violet-50 text-violet-600 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-violet-100 relative">
                     <i data-lucide="${icon}" class="w-8 h-8"></i>
                 </div>
-                <h3 class="text-xl font-black text-slate-900 mb-2 uppercase tracking-tighter">${title}</h3>
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest leading-relaxed mb-8 px-4">${msg}</p>
-                <button onclick="this.closest('.fixed').remove()" class="w-full py-5 bg-slate-900 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl shadow-slate-200 active:scale-95 transition-all">Understood</button>
+                <h3 class="text-xl font-black text-slate-900 mb-2 uppercase tracking-tighter">${window.esc(title)}</h3>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest leading-relaxed mb-8 px-4">${window.esc(msg)}</p>
+                <button id="erp_alert_close" class="w-full py-5 bg-violet-600 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl shadow-violet-100 active:scale-95 transition-all">Understood</button>
             </div>
         `;
         document.body.appendChild(modal);
         if (window.lucide) lucide.createIcons();
+        document.getElementById('erp_alert_close').onclick = () => modal.remove();
     };
 
     window.snapRedeemToMultiple = (sub) => {
@@ -200,26 +226,32 @@ window.erpState = {
             const modal = document.createElement('div');
             modal.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4";
             modal.innerHTML = `
-                <div class="bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl animate-pop-in border border-slate-100 text-center relative overflow-hidden">
-                    <div class="absolute -right-6 -top-6 w-32 h-32 bg-rose-50 rounded-full blur-3xl"></div>
-                    <div class="w-16 h-16 bg-rose-50 text-rose-600 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-rose-100 relative">
-                        <i data-lucide="help-circle" class="w-8 h-8"></i>
-                    </div>
-                    <h3 class="text-xl font-black text-slate-900 mb-2 uppercase tracking-tighter">${title}</h3>
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest leading-relaxed mb-8 px-4">${msg}</p>
-                    <div class="flex gap-3">
-                        <button id="erp_cancel" class="flex-1 py-5 bg-slate-100 text-slate-500 rounded-[24px] font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all">Cancel</button>
-                        <button id="erp_confirm" class="flex-1 py-5 bg-rose-600 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl shadow-rose-100 active:scale-95 transition-all">Confirm</button>
-                    </div>
+            <div class="bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl animate-pop-in border border-slate-100 text-center relative overflow-hidden">
+                <div class="absolute -right-6 -top-6 w-32 h-32 bg-slate-50 rounded-full blur-3xl"></div>
+                <div class="w-16 h-16 bg-slate-50 text-slate-400 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100 relative">
+                    <i data-lucide="help-circle" class="w-8 h-8"></i>
                 </div>
-            `;
+                <h3 class="text-xl font-black text-slate-900 mb-2 uppercase tracking-tighter">${window.esc(title)}</h3>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest leading-relaxed mb-8 px-4">${window.esc(msg)}</p>
+                <div class="flex gap-3">
+                    <button id="erp_confirm_cancel" class="flex-1 py-5 bg-slate-100 text-slate-500 rounded-[24px] font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all">Cancel</button>
+                    <button id="erp_confirm_ok" class="flex-1 py-5 bg-violet-600 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl shadow-violet-100 active:scale-95 transition-all">Confirm</button>
+                </div>
+            </div>
+        `;
             document.body.appendChild(modal);
             if (window.lucide) lucide.createIcons();
 
-            document.getElementById('erp_cancel').onclick = () => { modal.remove(); resolve(false); };
-            document.getElementById('erp_confirm').onclick = () => { modal.remove(); resolve(true); };
+            document.getElementById('erp_confirm_cancel').onclick = () => { modal.remove(); resolve(false); };
+            document.getElementById('erp_confirm_ok').onclick = () => { modal.remove(); resolve(true); };
         });
     };
+
+window.hashPwd = async (pwd) => {
+    const enc = new TextEncoder().encode(pwd + 'lavish-salt-2024');
+    const hash = await crypto.subtle.digest('SHA-256', enc);
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+};
 
     window.showLoginModal = () => {
     const existing = document.getElementById('login-modal-overlay');
@@ -257,20 +289,21 @@ window.erpState = {
     const passInput = document.getElementById('auth_pass');
     const authBtn = document.getElementById('auth_btn');
     
-    const tryLogin = () => {
+    const tryLogin = async () => {
         const val = passInput.value;
-        const filter = window.erpState.dashboardFilter || 'today';
-        const creds = window.erpState.passwords || { staff: 'Lavish1234', owner: 'Swali4783' };
+        const creds = window.erpState.passwords || {};
         const staffList = window.erpState.staff || [];
         
+        const hashedVal = await window.hashPwd(val);
         const isStaffPin = staffList.some(s => s.code === val);
         
-        if (val === creds.staff || isStaffPin) {
+        // Transition: Check both hashed and unhashed for legacy support
+        if (hashedVal === creds.staff || val === creds.staff || isStaffPin) {
             sessionStorage.setItem('lavish_user_role', 'Staff');
             window.erpState.role = 'Staff';
             overlay.remove();
             if (window.renderApp) window.renderApp();
-        } else if (val === creds.owner) {
+        } else if (hashedVal === creds.owner || val === creds.owner) {
             sessionStorage.setItem('lavish_user_role', 'Owner');
             window.erpState.role = 'Owner';
             overlay.remove();
@@ -279,7 +312,7 @@ window.erpState = {
             passInput.style.borderColor = '#f43f5e';
             setTimeout(() => passInput.style.borderColor = '#f1f5f9', 1000);
             passInput.value = '';
-            alert("Security Breach: Invalid Password");
+            window.erpAlert("Invalid credentials. Access denied.", "Security Alert", "shield-off");
         }
     };
 
@@ -308,56 +341,44 @@ window.switchRole = (target) => {
     window.showLoginModal();
 };
 
-// Offline First Cache System
-window.loadLocalCache = () => {
-    try {
-        const cache = localStorage.getItem('lavish_local_cache');
-        if (cache) {
-            const parsed = JSON.parse(cache);
-            ['items', 'sales', 'orders', 'clients', 'suppliers', 'expenses', 'expenseCategories', 'tickets'].forEach(k => {
-                if (parsed[k] && parsed[k].length > 0) window.erpState[k] = parsed[k];
-            });
-            if (parsed.settings) {
-                window.erpState.printerWidth = parsed.settings.printerWidth || '58';
-                window.erpState.whatsappTemplates = parsed.settings.whatsappTemplates || window.erpState.whatsappTemplates;
-                if (parsed.settings.taxes) window.erpState.taxes = parsed.settings.taxes;
-                if (parsed.settings.discounts) window.erpState.discounts = parsed.settings.discounts;
-                if (parsed.settings.passwords) window.erpState.passwords = parsed.settings.passwords;
-            }
-        }
-    } catch(e) {}
-};
-window.saveLocalCache = () => {
-    try {
-        const cacheObj = { settings: { 
-            printerWidth: window.erpState.printerWidth, 
-            whatsappTemplates: window.erpState.whatsappTemplates, 
-            taxes: window.erpState.taxes, 
-            discounts: window.erpState.discounts,
-            passwords: window.erpState.passwords 
-        } };
-        ['items', 'sales', 'orders', 'clients', 'suppliers', 'expenses', 'expenseCategories', 'tickets'].forEach(k => {
-            cacheObj[k] = window.erpState[k];
-        });
-        localStorage.setItem('lavish_local_cache', JSON.stringify(cacheObj));
-    } catch(e) {}
-};
-window.loadLocalCache();
-
 // Common Helpers
-window.fmt = (v) => '₹' + (v || 0).toLocaleString('en-IN');
-window.fmtDate = (d) => {
-    if(!d) return 'N/A';
-    const date = new Date(d);
-    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+    window.fmt = (n) => '₹' + (n || 0).toLocaleString('en-IN');
+    
+    // M-15: XSS Protection Helper (Robust Version)
+    window.esc = (str) => {
+        if (!str) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    };
+
+    // M-01: Shared History Sort State
+    window.toggleHistorySort = () => {
+        window.erpState.historySort = window.erpState.historySort === 'desc' ? 'asc' : 'desc';
+        if (window.renderApp) window.renderApp();
+    };
+window.fmtDate = (d, includeYear = true) => {
+    if (!d) return 'N/A';
+    let dt;
+    try {
+        if (d && typeof d === 'object' && typeof d.toDate === 'function') {
+            dt = d.toDate();
+        } else {
+            dt = new Date(d);
+        }
+        if (!dt || isNaN(dt.getTime())) return 'N/A';
+        const opts = { day: '2-digit', month: 'short' };
+        if (includeYear) opts.year = 'numeric';
+        return dt.toLocaleDateString('en-IN', opts);
+    } catch (e) {
+        return 'N/A';
+    }
 };
 
-window.esc = (str) => {
-    if (typeof str !== 'string') return str;
-    return str.replace(/[&<>"']/g, m => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[m]));
-};
+
 
 window.getTs = (field) => {
     if (!field) return 0;
@@ -371,13 +392,7 @@ window.getTs = (field) => {
 
 
 
-window.scheduleRender = () => {
-    if (window._renderTimer) return;
-    window._renderTimer = setTimeout(() => {
-        if (typeof window.renderApp === 'function') window.renderApp();
-        window._renderTimer = null;
-    }, 50);
-};
+
 
 window.navBtn = (item) => {
     const currentLoc = window.location.pathname.toLowerCase();
@@ -515,7 +530,6 @@ window.addEventListener('pageshow', (e) => {
     }
 });
 
-// RAF Debounce for rendering
 let _renderScheduled = false;
 window.scheduleRender = () => {
     if (_renderScheduled) return;
@@ -523,8 +537,48 @@ window.scheduleRender = () => {
     requestAnimationFrame(() => {
         _renderScheduled = false;
         if (window.renderApp) window.renderApp();
-        if (window.saveLocalCache) window.saveLocalCache();
     });
+};
+
+window.erpPrompt = (msg, defaultVal = '', title = 'Input Required') => {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4";
+        modal.innerHTML = `
+            <div class="bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl animate-pop-in border border-slate-100 text-center relative overflow-hidden">
+                <div class="absolute -right-6 -top-6 w-32 h-32 bg-violet-50 rounded-full blur-3xl"></div>
+                <div class="w-16 h-16 bg-violet-50 text-violet-600 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-violet-100 relative">
+                    <i data-lucide="text-cursor-input" class="w-8 h-8"></i>
+                </div>
+                <h3 class="text-xl font-black text-slate-900 mb-2 uppercase tracking-tighter">${window.esc(title)}</h3>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest leading-relaxed mb-6 px-4">${window.esc(msg)}</p>
+                <input id="erp_prompt_input" type="text" value="${String(defaultVal).replace(/"/g, '&quot;')}"
+                    class="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-base outline-none focus:border-violet-500 transition-all mb-6 text-center">
+                <div class="flex gap-3">
+                    <button id="erp_prompt_cancel" class="flex-1 py-5 bg-slate-100 text-slate-500 rounded-[24px] font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all">Cancel</button>
+                    <button id="erp_prompt_ok" class="flex-1 py-5 bg-violet-600 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl shadow-violet-100 active:scale-95 transition-all">Confirm</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        if (window.lucide) lucide.createIcons();
+        const input = document.getElementById('erp_prompt_input');
+        input.focus();
+        input.select();
+        document.getElementById('erp_prompt_cancel').onclick = () => { modal.remove(); resolve(null); };
+        document.getElementById('erp_prompt_ok').onclick = () => { modal.remove(); resolve(input.value); };
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { modal.remove(); resolve(input.value); } });
+    });
+};
+
+let _snapshotDirty = false;
+window.batchedRender = () => {
+    if (_snapshotDirty) return;
+    _snapshotDirty = true;
+    setTimeout(() => {
+        _snapshotDirty = false;
+        window.scheduleRender();
+    }, 300);
 };
 // UNIVERSAL THERMAL PRINT ENGINE
 window.generateThermalPrint = function(data) {
@@ -546,116 +600,122 @@ window.generateThermalPrint = function(data) {
     const timeStr = dateObj.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
     const w = window.open('', '_blank', `width=${pConf.width == '80' ? '450' : '350'},height=600`);
-    if (!w) return alert("Popup blocked! Please allow popups for printing.");
+    if (!w) return window.erpAlert("Popup blocked. Please allow popups for printing.", "Popup Blocked", "external-link");
 
-    let html = `<html><body style='font-family:monospace;width:${paperWidth};font-size:10px;margin:0;padding:5px 12px;line-height:1.2;color:#000;'>`;
+    let html = `<html><body style='font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;width:${paperWidth};font-size:11px;margin:0;padding:5px 12px;line-height:1.4;color:#111;'>`;
 
     // Logo
     if (pConf.logo) {
-        html += `<div style='text-align:center;margin-bottom:8px;'><img src='${pConf.logo}' style='width:40mm;filter:grayscale(1) contrast(1.5);'></div>`;
+        html += `<div style='text-align:center;margin-bottom:8px;'><img src='${pConf.logo}' style='width:35mm;filter:grayscale(1) contrast(1.2);'></div>`;
     }
 
     // Header Section
-    html += `<div style='text-align:center;font-weight:bold;font-size:16px;letter-spacing:1px;'>${pConf.header}</div>`;
-    html += `<div style='text-align:center;font-size:10px;margin-bottom:2px;'>${pConf.subTitle}</div>`;
+    html += `<div style='text-align:center;font-weight:900;font-size:16px;letter-spacing:-0.5px;'>${window.esc(pConf.header.toUpperCase())}</div>`;
+    if (pConf.subTitle) html += `<div style='text-align:center;font-size:10px;font-weight:700;margin-bottom:2px;color:#444;'>${window.esc(pConf.subTitle)}</div>`;
     
     (pConf.address || "").split(',').forEach(line => {
-        html += `<div style='text-align:center;font-size:9px;'>${line.trim()}</div>`;
+        html += `<div style='text-align:center;font-size:9px;color:#666;'>${window.esc(line.trim())}</div>`;
     });
     
-    html += `<div style='text-align:center;font-size:9px;'>${pConf.phone} | ${pConf.website}</div>`;
+    html += `<div style='text-align:center;font-size:9px;font-weight:bold;margin-top:2px;'>${window.esc(pConf.phone)}</div>`;
+    if (pConf.website) html += `<div style='text-align:center;font-size:9px;color:#888;'>${window.esc(pConf.website)}</div>`;
 
     // Extra Top Fields
     if (pConf.extraFields) {
         pConf.extraFields.filter(f => f.position === 'top').forEach(f => {
-            html += `<div style='text-align:center;font-size:9px;font-weight:bold;margin-top:2px;'>${f.label}: ${f.value}</div>`;
+            html += `<div style='text-align:center;font-size:9px;font-weight:black;margin-top:2px;text-transform:uppercase;'>${window.esc(f.label)}: ${window.esc(f.value)}</div>`;
         });
     }
 
-    html += `<hr style='border:none;border-top:1px dashed #000;margin:5px 0;'>`;
+    html += `<hr style='border:none;border-top:1px dashed #ccc;margin:8px 0;'>`;
 
     // Meta Section
-    html += `<div>Bill No: ${data.billNo}</div>`;
-    html += `<div>Date: ${dateStr} Time: ${timeStr}</div>`;
-    if (pConf.showStaff && data.recordedBy) html += `<div>Staff: ${data.recordedBy}</div>`;
-    if (pConf.showCustomer) {
-        if (data.customerName) html += `<div>Customer: ${data.customerName}</div>`;
-        if (data.customerPhone) html += `<div>Phone: ${data.customerPhone}</div>`;
+    html += `<div style='display:flex;justify-content:space-between;font-weight:bold;margin-bottom:2px;'><span>№ ${window.esc(data.billNo)}</span><span>${window.esc(dateStr)}</span></div>`;
+    html += `<div style='display:flex;justify-content:space-between;color:#666;'><span>Staff: ${window.esc(data.recordedBy || 'Admin')}</span><span>${window.esc(timeStr)}</span></div>`;
+    
+    if (pConf.showCustomer && (data.customerName || data.customerPhone)) {
+        html += `<div style='margin-top:4px;border-left:2px solid #eee;padding-left:6px;'>`;
+        if (data.customerName) html += `<div style='font-weight:bold;'>${window.esc(data.customerName.toUpperCase())}</div>`;
+        if (data.customerPhone) html += `<div>${window.esc(data.customerPhone)}</div>`;
+        html += `</div>`;
     }
 
     // Tailoring References
     if (data.tailoringRefs && data.tailoringRefs.length > 0) {
-        html += `<div style='font-weight:bold;margin-top:2px;'>Tailoring Ref: ${data.tailoringRefs.join(', ')}</div>`;
+        html += `<div style='font-weight:bold;margin-top:4px;font-size:10px;'>Jobs: ${window.esc(data.tailoringRefs.join(', '))}</div>`;
     }
 
-    html += `<hr style='border:none;border-top:1px dashed #000;margin:5px 0;'>`;
+    html += `<hr style='border:none;border-top:1px dashed #ccc;margin:8px 0;'>`;
 
     // Items
-    html += `<table style='width:100%;font-size:10px;text-align:left;'>`;
-    html += `<tr style='font-weight:bold;'><td>Item</td><td style='text-align:center;'>Qty</td><td style='text-align:right;'>Amt</td></tr>`;
-    html += `<tr><td colspan='3' style='border-top:1px dashed #000;'></td></tr>`;
+    html += `<table style='width:100%;font-size:11px;text-align:left;border-collapse:collapse;'>`;
+    html += `<tr style='font-weight:900;text-transform:uppercase;font-size:9px;color:#666;'><td style='padding-bottom:4px;'>Item</td><td style='text-align:center;'>Qty</td><td style='text-align:right;'>Amt</td></tr>`;
 
     (data.items || []).forEach(i => {
-        html += `<tr>`;
-        html += `<td style='padding:2px 0;'>${i.name}</td>`;
-        html += `<td style='text-align:center;'>x${i.qty || 1}</td>`;
-        html += `<td style='text-align:right;'>${fmt((i.price || 0) * (i.qty || 1))}</td>`;
-        html += `</tr>`;
+        html += `<tr><td style='padding:4px 0;' colspan='2'><div style='font-weight:bold;'>${window.esc(i.name)}</div>`;
+        if (i.tailoringRef) html += `<div style='font-size:9px;color:#666;'>Job: ${window.esc(i.tailoringRef)}</div>`;
+        html += `</td></tr>`;
+        html += `<tr style='font-size:10px;color:#444;'><td style='padding-bottom:6px;'>${i.qty} x ${fmt(i.price)}</td><td style='text-align:right;padding-bottom:6px;'>${fmt(i.qty * i.price)}</td></tr>`;
     });
     html += `</table>`;
-    html += `<hr style='border:none;border-top:1px dashed #000;margin:5px 0;'>`;
+    html += `<hr style='border:none;border-top:1px dashed #ccc;margin:8px 0;'>`;
 
-    const printRow = (l, v, b = false, c = '#000') =>
-        `<div style='display:flex;justify-content:space-between;${b ? "font-weight:bold;" : ""}color:${c};'><span>${l}</span><span>${v}</span></div>`;
+    const printRow = (l, v, b = false, c = '#111') =>
+        `<div style='display:flex;justify-content:space-between;${b ? "font-weight:900;font-size:12px;margin:4px 0;" : "margin-bottom:2px;"}color:${c};'><span>${l}</span><span>${v}</span></div>`;
 
-    html += printRow("Subtotal", fmt(data.subtotal));
-    if (data.discount > 0) html += printRow("Discount", "- " + fmt(data.discount));
-    if (data.redeemAmt > 0) html += printRow("Redemption", "- " + fmt(data.redeemAmt));
+    html += printRow("SUBTOTAL", fmt(data.subtotal));
+    if (data.discount > 0) html += printRow("DISCOUNT", "- " + fmt(data.discount), false, "#dc2626");
+    if (data.redeemAmt > 0) html += printRow("REDEMPTION", "- " + fmt(data.redeemAmt), false, "#dc2626");
     
     if (pConf.showTax && (data.taxVal > 0)) {
         const base = (data.subtotal || 0) - (data.discount || 0) - (data.redeemAmt || 0);
         const taxAmt = base * (data.taxVal / 100);
-        html += printRow("Tax (" + data.taxVal + "%)", fmt(Math.round(taxAmt)));
-        html += `<div style='font-size:8px;text-align:right;'>GSTIN: ${window.erpState.gstin || 'N/A'}</div>`;
+        html += printRow("TAX (" + data.taxVal + "%)", fmt(Math.round(taxAmt)));
     }
     
-    html += `<hr style='border:none;border-top:1px dashed #000;margin:3px 0;'>`;
-    html += printRow("TOTAL", fmt(data.total), true);
-    html += printRow("Paid", fmt(data.paid));
-    if (data.balance > 0) html += printRow("Balance Due", fmt(data.balance), true, "#dc2626");
+    html += `<hr style='border:none;border-top:2px solid #111;margin:6px 0;'>`;
+    html += printRow("TOTAL AMOUNT", fmt(data.total), true);
+    html += printRow("PAID", fmt(data.paid));
+    if (data.balance > 0) html += printRow("BALANCE DUE", fmt(data.balance), true, "#dc2626");
 
-    html += `<hr style='border:none;border-top:1px dashed #000;margin:5px 0;'>`;
+    html += `<hr style='border:none;border-top:1px dashed #ccc;margin:8px 0;'>`;
 
     // Loyalty
     if (data.loyaltySnapshot) {
         const ls = data.loyaltySnapshot;
-        html += `<div style='margin-top:4px;border:1px solid #000;padding:4px;text-align:center;'>`;
-        html += `<div style='font-weight:bold;font-size:8px;text-transform:uppercase;'>Loyalty Summary</div>`;
-        html += `<div style='font-size:9px;'>earned ${ls.earned} | total:${ls.total} | ${(ls.tier || 'Basic').toUpperCase()}</div>`;
+        html += `<div style='margin-top:4px;background:#f8fafc;border:1px solid #e2e8f0;padding:6px;text-align:center;border-radius:4px;'>`;
+        html += `<div style='font-weight:900;font-size:9px;text-transform:uppercase;color:#475569;margin-bottom:2px;'>Loyalty Status</div>`;
+        html += `<div style='font-size:10px;font-weight:bold;color:#1e293b;'>${(ls.tier || 'Basic').toUpperCase()} TIER</div>`;
+        html += `<div style='font-size:9px;color:#64748b;'>earned ${ls.earned} | total:${ls.total} pts</div>`;
         html += `</div>`;
-        html += `<hr style='border:none;border-top:1px dashed #000;margin:8px 0;'>`;
+        html += `<hr style='border:none;border-top:1px dashed #ccc;margin:8px 0;'>`;
     }
 
     // Care Note
     if (pConf.note) {
         pConf.note.split('\n').forEach(line => {
-            html += `<div style='text-align:center;font-size:9px;font-weight:bold;'>${line.trim()}</div>`;
+            html += `<div style='text-align:center;font-size:9px;font-weight:bold;'>${window.esc(line.trim())}</div>`;
         });
-        html += `<hr style='border:none;border-top:1px dashed #000;margin:8px 0;'>`;
+        html += `<hr style='border:none;border-top:1px dashed #ccc;margin:8px 0;'>`;
     }
 
-    // Footers
-    if (pConf.footer1) html += `<div style='text-align:center;font-size:10px;'>${pConf.footer1}</div>`;
-    if (pConf.footer2) html += `<div style='text-align:center;font-size:10px;'>${pConf.footer2}</div>`;
-    if (pConf.footer3) html += `<div style='text-align:center;font-size:10px;'>${pConf.footer3}</div>`;
+    // Footer
+    html += `<div style='text-align:center;font-size:10px;font-weight:bold;'>${window.esc(pConf.footer1 || 'Thank you!')}</div>`;
+    if (pConf.footer2) html += `<div style='text-align:center;font-size:9px;margin-top:2px;'>${window.esc(pConf.footer2)}</div>`;
+    if (pConf.footer3) html += `<div style='text-align:center;font-size:9px;margin-top:2px;'>${window.esc(pConf.footer3)}</div>`;
 
+    // Extra Bottom Fields
     if (pConf.extraFields) {
         pConf.extraFields.filter(f => f.position === 'bottom').forEach(f => {
-            html += `<div style='text-align:center;font-size:9px;font-weight:bold;margin-top:4px;'>${f.label}: ${f.value}</div>`;
+            html += `<div style='text-align:center;font-size:9px;font-weight:bold;margin-top:2px;'>${window.esc(f.label)}: ${window.esc(f.value)}</div>`;
         });
     }
 
-    html += `<div style='text-align:center;margin-top:10px;'>* * * * * * * * * * * * * *</div>`;
+    if (window.erpState.gstin) {
+        html += `<div style='text-align:center;font-size:9px;color:#999;margin-top:8px;'>GSTIN: ${window.erpState.gstin}</div>`;
+    }
+
+    html += `<div style='text-align:center;margin-top:15px;color:#ccc;font-size:8px;letter-spacing:1px;'>* * * * * * * * * *</div>`;
     html += `</body></html>`;
 
     const style = `<style>

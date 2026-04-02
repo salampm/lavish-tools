@@ -1,5 +1,6 @@
 
 // POS Shared Logic & State Management
+window.APP_VERSION = "v2.4.1";
 (function() {
     // Re-bind helpers for convenience
     const fmt = window.fmt;
@@ -15,7 +16,7 @@
     window.erpState.editingInvoiceBillNo = null;
 
     // --- EDIT INVOICE LOGIC ---
-    window.editInvoice = (id) => {
+    window.editInvoice = async (id) => {
         let sale = window.erpState.sales.find(s => s.id === id);
         if (!sale) {
             sale = window.erpState.orders.find(o => o.id === id);
@@ -23,8 +24,8 @@
         if (!sale) return;
 
         // Confirmation to prevent accidental cart loss
-        if (window.erpState.cart.length > 0 && !window.erpState.editingInvoiceId) {
-            if (!confirm("This will clear your current cart and load the items from this bill for editing. Proceed?")) return;
+        if (window.erpState.cart && window.erpState.cart.length > 0 && !window.erpState.editingInvoiceId) {
+            if (!(await window.erpConfirm("This will clear your current cart and load the items from this bill for editing. Proceed?", "Edit Invoice"))) return;
         }
 
         // Set state for editing with normalization to prevent NaN errors
@@ -53,8 +54,16 @@
         window.renderApp();
     };
 
-    window.cancelEdit = () => {
-        if (!confirm("Discard changes and exit edit mode?")) return;
+    window.clearCartConfirm = async () => {
+        if (await window.erpConfirm('Clear entire cart?', 'Clear Cart')) {
+            window.erpState.cart = [];
+            window.erpState.mobileCartOpen = false;
+            window.renderApp();
+        }
+    };
+
+    window.cancelEdit = async () => {
+        if (!(await window.erpConfirm("Discard changes and exit edit mode?", "Confirm"))) return;
         window.erpState.editingInvoiceId = null;
         window.erpState.editingInvoiceBillNo = null;
         window.erpState.cart = [];
@@ -147,12 +156,12 @@
             .map(it => {
                 const matchQ = !s || it.name.toLowerCase().includes(s) || (it.sku && it.sku.toLowerCase().includes(s));
                 return `
-            <button data-item-sku="${it.sku || ''}" data-item-id="${it.id}" data-item-name="${(it.name || '').replace(/"/g, '&quot;')}" data-item-cat="${it.category || ''}" style="${matchQ ? '' : 'display: none;'}" onclick="window.addCart('${it.id}')" class="bg-white p-4 md:p-5 rounded-3xl md:rounded-[32px] border border-slate-100 shadow-sm hover:border-violet-500 hover:shadow-xl hover:shadow-violet-500/10 transition-all text-left flex flex-col h-36 md:h-44 relative group">
+            <button data-item-sku="${it.sku || ''}" data-item-id="${it.id}" data-item-name="${window.esc(it.name)}" data-item-cat="${it.category || ''}" style="${matchQ ? '' : 'display: none;'}" onclick="window.addCart('${it.id}')" class="bg-white p-4 md:p-5 rounded-3xl md:rounded-[32px] border border-slate-100 shadow-sm hover:border-violet-500 hover:shadow-xl hover:shadow-violet-500/10 transition-all text-left flex flex-col h-36 md:h-44 relative group">
                 <div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity hidden md:block">
                     <i data-lucide="plus-circle" class="w-5 h-5 text-violet-500"></i>
                 </div>
                 <span class="text-[9px] md:text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">${it.category || 'GENERAL'}</span>
-                <h3 class="font-bold text-slate-800 text-xs md:text-sm mb-auto line-clamp-2 leading-tight">${it.name}</h3>
+                <h3 class="font-bold text-slate-800 text-xs md:text-sm mb-auto line-clamp-2 leading-tight">${window.esc(it.name)}</h3>
                 <div class="mt-2 text-right md:text-left">
                     <p class="text-violet-600 font-black text-base md:text-lg">${fmt(it.sellingPrice)}</p>
                     ${it.stock <= 5 ? `<p class="text-[8px] md:text-[9px] font-black text-rose-500 uppercase mt-1">Low Stock: ${it.stock}</p>` : `<p class="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase mt-1">Stock: ${it.stock}</p>`}
@@ -220,17 +229,17 @@
 
             <div class="flex-1 overflow-y-auto p-4 md:p-6 space-y-3 md:space-y-4 custom-scrollbar">
                 ${window.erpState.cart.map((it, idx) => `
-                    <div class="flex gap-4 p-4 bg-slate-50 border border-slate-100 md:rounded-[24px] rounded-2xl relative group hover:bg-white hover:border-violet-200 transition-all">
-                            <div class="flex flex-col gap-0.5">
-                                <h4 class="font-black text-slate-800 text-xs truncate max-w-[140px]">${it.name}</h4>
+                    <div class="flex items-center justify-between gap-4 p-4 bg-slate-50 border border-slate-100 md:rounded-[24px] rounded-2xl relative group hover:bg-white hover:border-violet-200 transition-all">
+                            <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+                                <h4 class="font-black text-slate-800 text-xs truncate">${it.name}</h4>
                                 <div class="flex items-center gap-2 text-[10px] font-bold text-slate-500">
-                                    <span class="text-violet-600 font-black">
+                                    <span class="text-violet-600 font-black truncate">
                                         ${it.qty !== 1 ? `${it.qty}${it.unit || (it.soldBy === 'weight' ? 'm' : '')} x ${fmt(it.price)} = ${fmt(it.price * it.qty)}` : fmt(it.price)}
                                     </span>
-                                    <button onclick="window.openEditCartItemPrice(${idx})" class="text-violet-400 hover:text-violet-600 hover:underline">Edit</button>
+                                    <button onclick="window.openEditCartItemPrice(${idx})" class="text-violet-400 hover:text-violet-600 hover:underline shrink-0">Edit</button>
                                 </div>
                             </div>
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 shrink-0">
                             <button onclick="window.adjustQty(${idx}, -1)" class="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:border-rose-400 hover:text-rose-500 transition-all">-</button>
                             <span onclick="window.editCartItemQty(${idx})" class="w-8 text-center font-black text-sm cursor-pointer hover:text-violet-600 hover:underline" title="Click to edit quantity">${it.qty}</span>
                             <button onclick="window.adjustQty(${idx}, 1)" class="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:border-emerald-400 hover:text-emerald-500 transition-all">+</button>
@@ -285,7 +294,7 @@
                     <button onclick="window.saveTicket()" class="flex-1 py-3 justify-center bg-white border border-slate-200 text-slate-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Save Ticket</button>
                     ${window.erpState.editingInvoiceId 
                         ? `<button onclick="window.cancelEdit()" class="px-5 py-3 justify-center bg-rose-50 text-rose-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all">Exit Edit</button>`
-                        : `<button onclick="if(confirm('Clear entire cart?')){window.erpState.cart=[]; window.erpState.mobileCartOpen=false; window.renderApp();}" class="px-5 py-3 justify-center bg-rose-50 text-rose-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all">Clear</button>`
+                        : `<button onclick="window.clearCartConfirm()" class="px-5 py-3 justify-center bg-rose-50 text-rose-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all">Clear</button>`
                     }
                 </div>
             </div>
@@ -437,8 +446,8 @@
                 const p = needsPricing ? parseFloat(pInput.value || 0) : parseFloat(it.sellingPrice || 0);
                 const c = needsPricing ? parseFloat(cInput.value || 0) : parseFloat(it.costPrice || 0);
                 
-                if (q <= 0) return alert("Please enter a valid quantity");
-                if (needsPricing && p <= 0) return alert("Please enter a valid price");
+                if (q <= 0) return window.erpAlert("Please enter a valid quantity.", "Validation", "alert-circle");
+                if (needsPricing && p <= 0) return window.erpAlert("Please enter a valid price.", "Validation", "alert-circle");
                 
                 window.erpState.cart.push({ 
                     id: it.id,
@@ -480,9 +489,9 @@
         window.scheduleRender();
     };
 
-    window.editCartItemQty = function(idx) {
+    window.editCartItemQty = async function(idx) {
         const item = window.erpState.cart[idx];
-        const newQty = prompt(`Enter exact quantity for ${item.name} (e.g. 1.5, 2):`, item.qty);
+        const newQty = await window.erpPrompt(`Enter exact quantity for ${window.esc(item.name)} (e.g. 1.5, 2):`, item.qty, 'Edit Quantity');
         if (newQty !== null) {
             const q = parseFloat(newQty);
             if (!isNaN(q) && q > 0) {
@@ -497,14 +506,20 @@
 
     window.adjustQty = function (idx, delta) {
         const item = window.erpState.cart[idx];
-        item.qty += delta;
-        if (item.qty <= 0) window.erpState.cart.splice(idx, 1);
+        if (!item) return;
+        item.qty = (parseFloat(item.qty) || 0) + delta;
+        if (item.qty <= 0) {
+            window.erpState.cart.splice(idx, 1);
+        } else {
+            item.qty = parseFloat(item.qty.toFixed(2));
+        }
+        window.saveLocalState();
         window.scheduleRender();
     };
 
-    window.openEditCartItemPrice = function(idx) {
+    window.openEditCartItemPrice = async function(idx) {
         const item = window.erpState.cart[idx];
-        const newPrice = prompt(`Edit price for ${item.name}:`, item.price);
+        const newPrice = await window.erpPrompt(`Edit price for ${window.esc(item.name)}:`, item.price, 'Edit Price');
         if (newPrice !== null) {
             const p = parseFloat(newPrice);
             if (!isNaN(p) && p >= 0) {
@@ -1509,11 +1524,11 @@
                             <div class="grid grid-cols-2 gap-6 mb-8">
                                 <div>
                                     <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Global Staff Pwd</label>
-                                    <input id="pass_staff" type="text" value="${creds.staff}" class="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-base outline-none focus:border-indigo-500 shadow-inner">
+                                    <input id="pass_staff" type="password" value="" placeholder="Enter new staff password" autocomplete="off" class="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-base outline-none focus:border-indigo-500 shadow-inner">
                                 </div>
                                 <div>
                                     <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Owner Pwd</label>
-                                    <input id="pass_owner" type="text" value="${creds.owner}" class="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-base outline-none focus:border-indigo-500 shadow-inner">
+                                    <input id="pass_owner" type="password" value="" placeholder="Enter new owner password" autocomplete="off" class="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-base outline-none focus:border-indigo-500 shadow-inner">
                                 </div>
                             </div>
                             <button onclick="window.updatePasswords()" class="w-full py-6 bg-slate-900 text-white rounded-[28px] font-black uppercase text-xs tracking-[0.2em] shadow-xl hover:bg-indigo-600 transition-all active:scale-95 flex items-center justify-center gap-3">
@@ -1535,6 +1550,20 @@
     }
 
     // --- Activity & Logging ---
+    window.updatePasswords = async () => {
+        const staff = document.getElementById('pass_staff').value.trim();
+        const owner = document.getElementById('pass_owner').value.trim();
+        if (!staff || !owner) return window.erpAlert("Passwords cannot be empty.", "Validation Error", "alert-circle");
+        
+        window.erpState.passwords = {
+            staff: await window.hashPwd(staff),
+            owner: await window.hashPwd(owner)
+        };
+        await window.saveGeneralSettings();
+        window.erpAlert("Credentials hashed and synchronized.", "Security Updated", "shield-check");
+        window.renderApp();
+    };
+
     window.logActivity = async (staffName, action, details) => {
         try {
             await window.FB.collection('audit_logs').add({
@@ -1548,8 +1577,10 @@
     };
 
     window.viewStaffLogs = async () => {
-        const pin = prompt("Owner PIN required to view audit logs:");
-        if (pin !== (window.erpState.passwords?.owner || '')) return alert("Access Denied");
+        const pin = await window.erpPrompt("Owner PIN required to view audit logs:", "", "Authentication Required");
+        if (pin === null) return;
+        const hashedPin = await window.hashPwd(pin);
+        if (hashedPin !== (window.erpState.passwords?.owner || '')) return window.erpAlert("Incorrect PIN.", "Access Denied", "shield-off");
 
         const snap = await window.FB.collection('audit_logs').orderBy('timestamp', 'desc').limit(50).get();
         const logs = snap.docs.map(d => d.data());
@@ -1632,7 +1663,7 @@
 
         await window.saveGeneralSettings();
         window.renderApp();
-        alert("Master Printer Configuration Saved!");
+        window.erpAlert("Master Printer Configuration Saved!", "System Notification", "bell");
     };
 
     window.addExtraPrinterField = (pos) => {
@@ -1770,10 +1801,10 @@
         try {
             await window.FB.collection('settings').doc('general').set({ gstin: val }, { merge: true });
             window.saveLocalState();
-            alert("GSTIN Updated Successfully!");
+            window.erpAlert("GSTIN Updated Successfully!", "System Notification", "bell");
         } catch (e) {
             console.error(e);
-            alert("Error updating GSTIN");
+            window.erpAlert("Error updating GSTIN", "System Notification", "bell");
         }
     };
 
@@ -1793,14 +1824,14 @@
             window.updatePrinterConfig({ logo: url });
         } catch (e) {
             console.error(e);
-            alert("Logo upload failed.");
+            window.erpAlert("Logo upload failed.", "System Notification", "bell");
         } finally {
             btn.innerText = orig; btn.disabled = false;
         }
     };
 
     window.resetWATemplates = async () => {
-        if (!confirm("Are you sure? This will replace your current templates with the new standard format (including loyalty tags).")) return;
+        if (!(await window.erpConfirm("Are you sure? This will replace your current templates with the new standard format (including loyalty tags).", "Reset Templates"))) return;
         
         const newDefaults = {
             booking: '*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nYour order has been successfully booked.\n\n*Bill No:* {billNo}\n*Amount:* Rs.{totalCost}\n*Advance:* Rs.{advancePaid}\n*Balance:* Rs.{balance}\n\n*Pickup Date:* {deliveryDate}\n\n✨ *Loyalty Status*\n{pointsEarned} PT Erned | {totalPoints} Total PT | {tier} Tier\n\nThank you for choosing Lavish Lavender. 🙏',
@@ -1812,11 +1843,11 @@
         window.erpState.whatsappTemplates = newDefaults;
         try {
             await window.FB.collection('settings').doc('general').set({ whatsappTemplates: newDefaults }, { merge: true });
-            alert("Templates Reset Successfully! You can now customize them further.");
+            window.erpAlert("Templates Reset Successfully! You can now customize them further.", "System Notification", "bell");
             window.renderApp();
         } catch (e) {
             console.error(e);
-            alert("Error resetting templates.");
+            window.erpAlert("Error resetting templates.", "System Notification", "bell");
         }
     };
 
@@ -1831,10 +1862,10 @@
         window.renderApp();
         try {
             await window.FB.collection('settings').doc('general').set({ whatsappTemplates: temps }, { merge: true });
-            alert("Templates saved successfully!");
+            window.erpAlert("WhatsApp templates saved.", "Saved", "check-circle");
         } catch(e) { 
             console.error(e); 
-            alert("Error saving templates.");
+            window.erpAlert("Error saving templates.", "Error", "wifi-off");
         }
     };
 
@@ -1864,14 +1895,14 @@
     window.addTaxRule = async () => {
         const label = document.getElementById('new_tax_label').value;
         const val = parseFloat(document.getElementById('new_tax_val').value);
-        if(!label || isNaN(val)) return alert("Enter valid label and value");
+        if(!label || isNaN(val)) return window.erpAlert("Enter valid label and value", "System Notification", "bell");
         window.erpState.taxes.push({ label, val });
         await window.saveGeneralSettings();
         window.renderApp();
     };
 
     window.deleteTaxRule = async (idx) => {
-        if(idx === 0) return alert("Cannot delete default tax");
+        if(idx === 0) return window.erpAlert("Cannot delete default tax", "System Notification", "bell");
         window.erpState.taxes.splice(idx, 1);
         await window.saveGeneralSettings();
         window.renderApp();
@@ -1881,7 +1912,7 @@
         const label = document.getElementById('new_disc_label').value;
         const val = parseFloat(document.getElementById('new_disc_val').value);
         const type = document.getElementById('new_disc_type').value;
-        if(!label || isNaN(val)) return alert("Enter valid label and value");
+        if(!label || isNaN(val)) return window.erpAlert("Enter valid label and value", "System Notification", "bell");
         window.erpState.discounts.push({ label, val, type });
         await window.saveGeneralSettings();
         window.renderApp();
@@ -1932,9 +1963,13 @@
                     </div>
 
                     <div class="space-y-4 mb-6">
-                        <div class="grid grid-cols-2 gap-3">
-                            <input id="cm_client_phone" value="${window.erpState.customerPhone || ''}" oninput="this.value = window.sanitizePhone(this.value); window.lookupClient(this.value)" type="tel" placeholder="Phone Number" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none focus:ring-4 focus:ring-violet-500/10 shadow-inner">
-                            <input id="cm_client_name" value="${window.erpState.customerName || ''}" type="text" placeholder="Customer Name" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none focus:ring-4 focus:ring-violet-500/10 shadow-inner">
+                        <div class="p-6 bg-slate-50/50 rounded-b-[40px] space-y-3 border-t border-slate-100">
+                            <input id="cm_client_name" value="${window.erpState.customerName || ''}" 
+                                oninput="this.value = window.sanitizeText(this.value)"
+                                type="text" placeholder="Customer Name" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none focus:ring-4 focus:ring-violet-500/10 shadow-inner">
+                            <input id="cm_client_phone" value="${window.erpState.customerPhone || ''}" 
+                                oninput="this.value = window.sanitizePhone(this.value); window.lookupClient(this.value)"
+                                type="tel" placeholder="Customer Phone" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl font-bold text-xs outline-none focus:ring-4 focus:ring-violet-500/10 shadow-inner">
                         </div>
 
                         <div class="bg-slate-50 p-4 rounded-[28px] border border-slate-100 space-y-4">
@@ -2205,17 +2240,21 @@
         if (redeemAmt > 0 && redeemAmt < 500) { window.erpAlert('Minimum redemption is 500 points (= ₹500).', 'Invalid Redemption', 'alert-circle'); return; }
 
         // Use a branded PIN modal instead of browser prompt
-        window._showPINModal((staffCode) => {
+        window._showPINModal(async (staffCode) => {
             const staff = (window.erpState.staff || []).find(s => s.code === staffCode);
-            const isOwner = staffCode === (window.erpState.passwords?.owner || '');
-            if (!staff && !isOwner) { window.erpAlert('Invalid Authorization Code. Please try again.', 'Access Denied', 'lock'); return false; }
+            const hashedCode = await window.hashPwd(staffCode);
+            const isOwner = hashedCode === (window.erpState.passwords?.owner || '');
+            if (!staff && !isOwner) {
+                window.erpAlert('Invalid Authorization Code.', 'Access Denied', 'lock');
+                return false;
+            }
             window._runCheckout(phone, name, advance, method, discountAmt, redeemAmt, hasStitching, stitchingNo, staffCode);
             return true;
         });
     };
 
     // ─── Branded PIN Modal (replaces browser prompt) ────────────────────────
-    window._showPINModal = (onSuccess) => {
+    window._showPINModal = async (onSuccess) => {
         const modal = document.createElement('div');
         modal.className = 'fixed inset-0 bg-slate-900/80 backdrop-blur-xl flex justify-center items-center z-[600] p-4';
         modal.setAttribute('id', 'pin-auth-modal');
@@ -2240,12 +2279,13 @@
         if (window.lucide) lucide.createIcons();
 
         const inputEl = document.getElementById('pin-auth-input');
+        const confirmBtn = document.getElementById('pin-auth-confirm');
         inputEl.focus();
 
-        const doConfirm = () => {
+        const doConfirm = async () => {
             const pin = inputEl.value;
             if (!pin) return;
-            const ok = onSuccess(pin);
+            const ok = await onSuccess(pin);
             if (ok !== false) {
                 modal.remove();
             } else {
@@ -2262,8 +2302,9 @@
     // ─── Actual checkout execution (called after PIN confirmed) ─────────────
     window._runCheckout = async (phone, name, advance, method, discountAmt, redeemAmt, hasStitching, stitchingNo, staffCode) => {
         const staff = (window.erpState.staff || []).find(s => s.code === staffCode);
-        const isOwner = staffCode === (window.erpState.passwords?.owner || '');
-        const recordedBy = isOwner ? 'Owner' : staff.name;
+        const hashedCode = await window.hashPwd(staffCode);
+        const isOwner = hashedCode === (window.erpState.passwords?.owner || '');
+        const recordedBy = isOwner ? 'Owner' : (staff ? staff.name : 'Unknown');
 
         const btn = document.querySelector("#charge-modal-overlay button.bg-violet-600") || document.querySelector("button[onclick='window._completeCheckout()']");
         const origText = btn?.innerHTML;
@@ -2556,7 +2597,7 @@
                 window.renderApp();
             } catch(e) { 
                 console.error(e);
-                window.erpAlert("Ticket save failed. please check connections."); 
+                window.erpwindow.erpAlert("Ticket save failed. please check connections.", "System Notification", "bell"); 
                 btn.innerText = "CREATE SAVED TICKET"; btn.disabled = false; 
             }
         };
@@ -2579,8 +2620,10 @@
     };
 
     window.collectDue = (id) => {
-        const s = window.erpState.sales.find(x => x.id === id) || window.erpState.orders.find(x => x.id === id);
-        if(!s) return;
+        let s = window.erpState.sales.find(x => x.id === id);
+        const isSale = !!s;
+        if (!s) s = window.erpState.orders.find(x => x.id === id);
+        if (!s) return;
         
         const balance = s.balanceDue !== undefined ? s.balanceDue : Math.max(0, (s.totalCost || 0) - (s.advancePaid || 0) - (s.deliveryDiscount || 0));
 
@@ -2634,7 +2677,7 @@
             const amt = parseFloat(document.getElementById('collect_amt').value);
             const method = document.getElementById('collect_method').value;
             
-            if(isNaN(amt) || amt <= 0) return alert("Invalid amount");
+            if(isNaN(amt) || amt <= 0) return window.erpAlert("Invalid amount", "System Notification", "bell");
 
             const btn = document.getElementById('collect_confirm_btn');
             const originalText = btn.innerText;
@@ -2670,7 +2713,7 @@
                 window.erpAlert("Payment recorded successfully!", "Success", "check-circle");
             } catch (e) { 
                 console.error(e);
-                window.erpAlert("Collection sync failed. check connection."); 
+                window.erpwindow.erpAlert("Collection sync failed. check connection.", "System Notification", "bell"); 
                 btn.innerText = originalText; btn.disabled = false;
             }
         };
@@ -2861,14 +2904,23 @@
 
             return new Promise((resolve) => {
                 document.getElementById('refund_cnt_btn').onclick = () => {
-                    const qty = parseFloat(document.getElementById('refund_qty_input').value);
-                    modal.remove();
-                    if (isNaN(qty) || qty <= 0 || qty > item.qty) {
-                        window.erpAlert("Invalid quantity");
-                        return;
-                    }
+                    const qtyVal = document.getElementById('refund_qty_input');
+                    const qty = qtyVal ? parseFloat(qtyVal.value) : 1;
+                    if (qty <= 0 || qty > item.qty) return window.erpwindow.erpAlert("Invalid quantity.", "System Notification", "bell");
+                    
+                    // M-11: Resolve the promise once execution starts or finishes
                     window._executeRefund(saleId, itemIdx, qty);
+                    resolve(true); 
                 };
+                // Optional: Handle cancellation to resolve the promise too
+                const closeBtn = document.querySelector('.fixed.z-[600] button[onclick*="remove"]');
+                if (closeBtn) {
+                    const originalOnClick = closeBtn.onclick;
+                    closeBtn.onclick = (e) => {
+                        resolve(false);
+                        if (originalOnClick) originalOnClick.call(closeBtn, e);
+                    };
+                }
             });
         }
         
@@ -2882,15 +2934,18 @@
         if (!(await window.erpConfirm(`Confirm refund for ${qtyToRefund}x ${item.name}? This will restock the item and deduct ${fmt(item.price * qtyToRefund)} from the bill total.`, "Process Refund"))) return;
 
         try {
-            // 1. Update stock (local state + firebase)
+            const batch = window.FB.db.batch();
+            const itemsCol = DATA_PATH('items');
+            
+            // 1. Update stock (Batch Action)
             const originalItem = window.erpState.items.find(x => x.id === item.id || x.sku === item.sku);
             if (originalItem) {
-                await DATA_PATH('items').doc(originalItem.id).update({
-                    stock: Number(originalItem.stock || 0) + qtyToRefund
+                batch.update(itemsCol.doc(originalItem.id), {
+                    stock: firebase.firestore.FieldValue.increment(qtyToRefund)
                 });
             }
 
-            // 2. Update sale record
+            // 2. Update sale record (Batch Action)
             const refundValue = item.price * qtyToRefund;
             const newSubtotal = Math.max(0, (sale.subtotal || 0) - refundValue);
             const newTotal = Math.max(0, (sale.total || 0) - refundValue);
@@ -2903,7 +2958,7 @@
                 newItems[itemIdx].qty -= qtyToRefund;
             }
 
-            await DATA_PATH('sales').doc(saleId).update({
+            batch.update(DATA_PATH('sales').doc(saleId), {
                 items: newItems,
                 subtotal: newSubtotal,
                 total: newTotal,
@@ -2911,11 +2966,13 @@
                 refundLog: [...(sale.refundLog || []), { item: item.name, amount: refundValue, date: Date.now() }]
             });
 
+            await batch.commit();
+
             window.erpAlert("Refund processed successfully.", "Success", "check-circle");
             document.querySelectorAll(".fixed .animate-pop-in").forEach(x => x.closest('.fixed').remove());
             window.renderApp();
         } catch (e) {
-            window.erpAlert("Error processing refund. Check connection.");
+            window.erpwindow.erpAlert("Error processing refund. Check connection.", "System Notification", "bell");
             console.error(e);
         }
     };
@@ -2950,28 +3007,31 @@
 
         document.getElementById('void_confirm_btn').onclick = async () => {
             const pin = document.getElementById('void_pin').value;
-            const creds = window.erpState.passwords || { owner: 'Swali4783' };
+            const creds = window.erpState.passwords || {};
+            const hashedPin = await window.hashPwd(pin);
             
-            if (pin === (creds.owner || '')) {
+            if (creds.owner && hashedPin === creds.owner) {
                 if (!(await window.erpConfirm("Are you 100% sure? This will VOID all linked data and REVERSE loyalty points.", "Confirm Void"))) return;
                 try {
+                    const batch = window.FB.db.batch();
                     const sale = (window.erpState.sales || []).find(s => s.id === id);
                     const order = (window.erpState.orders || []).find(o => o.id === id);
                     const voidData = { voidedAt: Date.now(), voidedBy: 'Owner', originalId: id };
                     
                     if (sale) {
                         // 1. Move to Voided Sales
-                        await DATA_PATH('voided_sales').add({ ...sale, ...voidData, _type: 'sale' });
-                        await DATA_PATH('sales').doc(id).delete();
+                        const voidRef = DATA_PATH('voided_sales').doc();
+                        batch.set(voidRef, { ...sale, ...voidData, _type: 'sale' });
+                        batch.delete(DATA_PATH('sales').doc(id));
                         
                         // 2. Reverse Loyalty Points
                         if (sale.customerPhone) {
                             const client = (window.erpState.clients || []).find(c => c.phone === sale.customerPhone);
                             if (client) {
                                 const earned = sale.loyaltySnapshot?.earned || 0;
-                                await window.FB.root('clients').doc(client.id).update({
-                                    loyaltyPoints: Math.max(0, (client.loyaltyPoints || 0) - earned),
-                                    totalSpent: Math.max(0, (client.totalSpent || 0) - (sale.total || 0))
+                                batch.update(window.FB.root('clients').doc(client.id), {
+                                    loyaltyPoints: firebase.firestore.FieldValue.increment(-earned),
+                                    totalSpent: firebase.firestore.FieldValue.increment(-(sale.total || 0))
                                 });
                             }
                         }
@@ -2979,39 +3039,44 @@
                         // 3. Clear Linked Order
                         const linkedOrder = (window.erpState.orders || []).find(o => o.billNo === sale.billNo);
                         if (linkedOrder) {
-                            await DATA_PATH('voided_orders').add({ ...linkedOrder, ...voidData, _type: 'order' });
-                            await window.FB.root('orders').doc(linkedOrder.id).delete();
+                            const voidOrderRef = DATA_PATH('voided_orders').doc();
+                            batch.set(voidOrderRef, { ...linkedOrder, ...voidData, _type: 'order' });
+                            batch.delete(window.FB.root('orders').doc(linkedOrder.id));
                         }
                     } else if (order) {
                         // 1. Move to Voided Orders
-                        await DATA_PATH('voided_orders').add({ ...order, ...voidData, _type: 'order' });
-                        await window.FB.root('orders').doc(id).delete();
+                        const voidOrderRef = DATA_PATH('voided_orders').doc();
+                        batch.set(voidOrderRef, { ...order, ...voidData, _type: 'order' });
+                        batch.delete(window.FB.root('orders').doc(id));
 
                         // 2. Reverse Loyalty Points
                         if (order.phone) {
                             const client = (window.erpState.clients || []).find(c => c.phone === order.phone);
                             if (client) {
                                 const earned = order.loyaltySnapshot?.earned || 0;
-                                await window.FB.root('clients').doc(client.id).update({
-                                    loyaltyPoints: Math.max(0, (client.loyaltyPoints || 0) - earned),
-                                    totalSpent: Math.max(0, (client.totalSpent || 0) - (order.totalCost || 0))
+                                batch.update(window.FB.root('clients').doc(client.id), {
+                                    loyaltyPoints: firebase.firestore.FieldValue.increment(-earned),
+                                    totalSpent: firebase.firestore.FieldValue.increment(-(order.totalCost || 0))
                                 });
                             }
                         }
 
                         // 3. Clear Linked Sale
                         const linkedSale = (window.erpState.sales || []).find(s => s.billNo === order.billNo);
-                        if (linkedSale && window.FB.collection) {
-                            await DATA_PATH('voided_sales').add({ ...linkedSale, ...voidData, _type: 'sale' });
-                            await DATA_PATH('sales').doc(linkedSale.id).delete();
+                        if (linkedSale) {
+                            const voidSaleRef = DATA_PATH('voided_sales').doc();
+                            batch.set(voidSaleRef, { ...linkedSale, ...voidData, _type: 'sale' });
+                            batch.delete(DATA_PATH('sales').doc(linkedSale.id));
                         }
                     }
+                    
+                    await batch.commit();
                     
                     modal.remove();
                     document.querySelectorAll(".fixed.inset-0").forEach(m => m.remove());
                     window.renderApp();
-                    window.erpAlert("Records voided and points reversed successfully.");
-                } catch (e) { console.error(e); window.erpAlert("Void operation failed"); }
+                    window.erpwindow.erpAlert("Records voided and points reversed successfully.", "System Notification", "bell");
+                } catch (e) { console.error(e); window.erpwindow.erpAlert("Void operation failed", "System Notification", "bell"); }
             } else {
                 window.erpAlert("Incorrect Security PIN.", "Access Denied", "shield-off");
                 document.getElementById('void_pin').value = '';
@@ -3092,12 +3157,31 @@
 
     // --- MISC UTILS ---
     // Helper for WhatsApp placeholders
+    const fillTemplate = (template, data) => {
+        return template.replace(/{(\w+|balance\s*!=\s*0\s*\?.*:.*)}/g, (match, key) => {
+            // L-13: Handle simple conditional logic in template strings
+            if (key.includes('balance')) {
+                const parts = key.split('?');
+                const condition = parts[0].trim();
+                const outcomes = parts[1].split(':');
+                const isBalanced = parseFloat(data.balance || 0) !== 0;
+                const res = isBalanced ? outcomes[0].trim() : outcomes.length > 1 ? outcomes[1].trim() : "";
+                return fillTemplate(res, data);
+            }
+            return data[key] !== undefined ? data[key] : match;
+        });
+    };
 
 
     window.lookupClient = (p) => {
-        const clean = p; // Already sanitized by oninput
+        const clean = window.sanitizePhone(p);
         if(clean.length < 5) return;
-        const c = window.erpState.clients.find(x => window.sanitizePhone(x.phone).includes(clean));
+        const c = window.erpState.clients.find(x => {
+            const p = window.sanitizePhone(x.phone);
+            // M-08: If clean is short, use startsWith. If clean is 10 digits, require exact match.
+            if (clean.length >= 10) return p === clean;
+            return p.startsWith(clean);
+        });
         if(c) {
             const nameEl = document.getElementById('cm_client_name');
             if (nameEl) {
@@ -3168,13 +3252,6 @@
         }
     };
 
-    function fillTemplate(tpl, data) {
-        if (!tpl) return "";
-        return tpl.replace(/{(\w+)}/g, (match, key) => {
-            return data[key] !== undefined ? data[key] : match;
-        });
-    }
-
     window.shareWhatsApp = (billNo, name, phone, total, balance = 0) => {
         const sale = window.erpState.sales.find(s => s.billNo === billNo);
         const order = window.erpState.orders.find(o => o.billNo === billNo);
@@ -3183,18 +3260,19 @@
         const data = {
             customerName: name || sale?.customerName || order?.customerName || 'Customer',
             billNo: billNo,
-            totalCost: (total || sale?.total || order?.totalCost || 0).toLocaleString('en-IN'),
-            advancePaid: (total - (balance || 0)).toLocaleString('en-IN'),
+            date: new Date().toLocaleDateString(),
+            itemList: (sale?.items || order?.items || []).map(i => `${i.name} x${i.qty}`).join(', '),
+            total: (total || sale?.total || order?.totalCost || 0).toLocaleString('en-IN'),
+            paid: (total - (balance || 0)).toLocaleString('en-IN'),
             balance: (balance || 0).toLocaleString('en-IN'),
-            deliveryDate: sale ? new Date(sale.date).toLocaleDateString() : (order ? window.fmtDate(order.deliveryDate) : 'N/A'),
             pointsEarned: sale?.loyaltySnapshot?.earned || order?.loyaltySnapshot?.earned || 0,
-            totalPoints: client?.loyaltyPoints || 0,
+            pointsTotal: client?.loyaltyPoints || 0,
             tier: (window.LOYALTY.TIERS[window.getLoyaltyTier(client?.totalSpent || 0)]?.label || 'Basic') + ' Member'
         };
         data.tier = data.tier.toUpperCase();
 
-        const templates = window.erpState.whatsappTemplates || {};
-        let tpl = balance > 0 ? (templates.ready || templates.booking) : templates.delivered;
+        const templates = window.erpState.whatsappTemplates || {};        
+        let tpl = templates.delivered || `*OFFICIAL BILL* — *Lavish Lavender*\n*Bill:* {billNo}\n*Date:* {date}\n*Customer:* {customerName}\n\n*Items:*\n{itemList}\n\n*Total:* {total}\n*Paid:* {paid}\n{balance != 0 ? '*Remaining Balance:* {balance}' : '*Status:* SETTLED'}\n\n*Loyalty Points Status:*\nPoints Earned: {pointsEarned}\nTotal Accrued: {pointsTotal}\nTier: {tier}\n\n_Thank you for shopping at Lavish Lavender!_`;
         
         if (!tpl) {
             tpl = `*Lavish Lavender Bridal Boutique* 🌸\n\nHello *{customerName}*,\n\nYour bill *{billNo}* for *₹{totalCost}* is confirmed. {balance != "0" ? 'Remaining: *₹{balance}*' : ''}\n\n✨ *Loyalty Info*\n{earnedPoints} PT Erned | {totalPoints} Total PT | {tier} Tier\n\nView details: https://www.lavishlavender.in/receipt/?bill={billNo}`;
@@ -3228,14 +3306,17 @@
 
 
 
-    window.updatePasswords = () => {
-        const staff = document.getElementById('pass_staff').value.trim();
-        const owner = document.getElementById('pass_owner').value.trim();
-        if(!staff || !owner) return alert("Passwords cannot be empty");
+    window.updatePasswords = async () => {
+        const staffRaw = document.getElementById('pass_staff').value.trim();
+        const ownerRaw = document.getElementById('pass_owner').value.trim();
+        if(!staffRaw || !ownerRaw) return window.erpAlert("Passwords cannot be empty", "Validation", "alert-circle");
+        
+        const staff = await window.hashPwd(staffRaw);
+        const owner = await window.hashPwd(ownerRaw);
         
         window.erpState.passwords = { staff, owner };
         window.saveGeneralSettings();
-        alert("Admin Credentials Updated Successfully!");
+        window.erpAlert("Admin Credentials updated and hashed.", "Saved", "check-circle");
         window.renderApp();
     };
 
@@ -3282,10 +3363,10 @@
         const name = document.getElementById('staff_name').value.trim();
         const code = document.getElementById('staff_code').value.trim();
 
-        if (!name || code.length !== 4) return alert("Please enter a valid Name and 4-digit Code.");
+        if (!name || code.length !== 4) return window.erpAlert("Enter a valid name and 4-digit code.", "Validation", "alert-circle");
 
         const staff = window.erpState.staff || [];
-        if (staff.find(s => s.code === code)) return alert("This Access Code is already assigned to someone else.");
+        if (staff.find(s => s.code === code)) return window.erpAlert("This code is already in use.", "Conflict", "alert-circle");
 
         staff.push({ name, code });
         window.erpState.staff = staff;
@@ -3299,7 +3380,7 @@
     };
 
     window.deleteStaff = async (idx) => {
-        if (!confirm("Are you sure you want to remove this staff member? All their historical sales remains, but they will no longer have access.")) return;
+        if (!(await window.erpConfirm("Permanently remove this staff record? This cannot be undone.", "Delete Staff"))) return;
         
         window.erpState.staff.splice(idx, 1);
         await window.saveGeneralSettings();
@@ -3441,7 +3522,7 @@
     };
 
     window.editClientPhone = async (id, currentPhone) => {
-        const newPhone = prompt("Enter new 10-digit phone number (e.g. 8714283895):", currentPhone);
+        const newPhone = await window.erpPrompt("Enter new 10-digit phone number (e.g. 8714283895):", currentPhone, "Update Phone Number");
         if (newPhone === null) return;
         const cleanPhone = window.sanitizePhone(newPhone);
         if (cleanPhone.length < 10) return window.erpAlert("Invalid phone number. Must be 10 digits.", "Validation Error", "phone");
@@ -3455,7 +3536,7 @@
             setTimeout(() => window.openClientProfile(id), 500);
         } catch (e) {
             console.error(e);
-            alert("Error updating phone number.");
+            window.erpAlert("Error updating phone number.", "System Notification", "bell");
         }
     };
 
@@ -3473,13 +3554,13 @@
                 <div class="space-y-6 relative overflow-y-auto max-h-[70vh] custom-scrollbar px-2">
                     <div class="space-y-1.5">
                         <label class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] pl-2">Product Name</label>
-                        <input id="ai_name" placeholder="E.g. Linen Blouse" class="w-full px-6 py-5 bg-slate-50 border-none rounded-[28px] font-black text-sm outline-none focus:ring-4 focus:ring-violet-500/10 placeholder:text-slate-300">
+                        <input id="new_it_name" placeholder="E.g. Linen Blouse" class="w-full px-6 py-5 bg-slate-50 border-none rounded-[28px] font-black text-sm outline-none focus:ring-4 focus:ring-violet-500/10 placeholder:text-slate-300">
                     </div>
                     
                     <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-1.5">
                             <label class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] pl-2">Category</label>
-                            <input id="ai_category" list="cat-opts" placeholder="Category" class="w-full px-6 py-4 bg-slate-50 border-none rounded-[24px] font-black text-xs outline-none focus:ring-4 focus:ring-violet-500/10">
+                            <input id="new_it_cat" list="cat-opts" placeholder="Category" class="w-full px-6 py-4 bg-slate-50 border-none rounded-[24px] font-black text-xs outline-none focus:ring-4 focus:ring-violet-500/10">
                             <datalist id="cat-opts">${[...new Set((window.erpState.items || []).map(i => i.category).filter(Boolean))].map(c => `<option value="${c}">`).join('')}</datalist>
                         </div>
                         <div class="space-y-1.5">
@@ -3495,8 +3576,16 @@
                         </div>
                         <div class="space-y-1.5">
                             <label class="text-[9px] font-black text-violet-500 uppercase tracking-[0.2em] pl-2">Selling Price ₹</label>
-                            <input id="ai_price" type="number" placeholder="0" class="w-full px-6 py-4 bg-violet-50 text-violet-600 border-none rounded-[24px] font-black text-sm outline-none focus:ring-4 focus:ring-violet-500/10">
+                            <input id="new_it_price" type="number" placeholder="0" class="w-full px-6 py-4 bg-violet-50 text-violet-600 border-none rounded-[24px] font-black text-sm outline-none focus:ring-4 focus:ring-violet-500/10">
                         </div>
+                    </div>
+                    
+                    <div>
+                        <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest pl-1 mb-1.5 block">Sold By</label>
+                        <select id="new_it_soldBy" class="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl font-black text-[10px] uppercase tracking-widest outline-none shadow-inner">
+                            <option value="pcs">Pieces (Pcs)</option>
+                            <option value="weight">Meter / Weight (m/kg)</option>
+                        </select>
                     </div>
 
                     <div class="flex gap-4 pt-6">
@@ -3508,8 +3597,10 @@
         document.body.appendChild(modal);
         
         document.getElementById('ai_save_pos').onclick = async () => {
-             const name = document.getElementById('ai_name').value.trim();
-             const price = parseFloat(document.getElementById('ai_price').value || 0);
+             const name = document.getElementById('new_it_name').value.trim();
+             const price = parseFloat(document.getElementById('new_it_price').value || 0);
+             const soldBy = document.getElementById('new_it_soldBy').value;
+             
              if(!name || price <= 0) {
                  window.erpAlert("Please enter a valid product name and selling price.", "Incomplete Data", "alert-triangle");
                  return;
@@ -3519,14 +3610,21 @@
              btn.innerHTML = `<i class="w-4 h-4 animate-spin border-2 border-white/20 border-t-white rounded-full mx-auto"></i>`;
              btn.disabled = true;
 
-             const sku = "LL" + (window.erpState.items.length + 1001).toString().padStart(5, "0");
+             // L-09: Hardening SKU with random component to prevent collision-based overrides
+             const existingSkus = new Set(window.erpState.items.map(i => i.sku));
+             let skuNum = window.erpState.items.length + 1001;
+             let sku;
+             do {
+                 sku = "LL" + skuNum.toString().padStart(5, "0");
+                 skuNum++;
+             } while (existingSkus.has(sku));
              
              try {
                  await window.FB.collection('items').add({
                      name,
-                     category: document.getElementById('ai_category').value || 'Uncategorized',
+                     category: document.getElementById('new_it_cat').value.trim() || 'General',
                      supplier: '',
-                     soldBy: 'pcs',
+                     soldBy: soldBy,
                      stock: parseFloat(document.getElementById('ai_stock').value || 0),
                      sellingPrice: price,
                      costPrice: parseFloat(document.getElementById('ai_cost').value || 0),
@@ -3538,7 +3636,7 @@
                  window.renderApp();
              } catch (e) {
                  console.error(e);
-                 alert("Error saving item.");
+                 window.erpAlert("Error saving item.", "System Notification", "bell");
                  btn.disabled = false;
                  btn.innerText = "Save Item";
              }
@@ -3554,7 +3652,7 @@
     };
 
     window.exportAreaReport = function (type) {
-        if (typeof XLSX === 'undefined') return alert("Excel Library not loaded yet.");
+        if (typeof XLSX === 'undefined') return window.erpAlert("Excel Library not loaded yet.", "System Notification", "bell");
         
         let data = [];
         const filter = window.erpState.dashboardFilter || 'all';
@@ -3667,6 +3765,20 @@
                         <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5 block">Quantity</label>
                         <input id="dye_qty" type="number" value="1" step="0.01" class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-base text-slate-800 outline-none focus:border-violet-500 transition-all">
                     </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 px-1">Customer Details</label>
+                            <input type="text" id="cm_client_name" placeholder="Client Name" 
+                                oninput="this.value = window.sanitizeText(this.value)"
+                                class="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-slate-300">
+                        </div>
+                        <div>
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 px-1">Social ID / Phone</label>
+                            <input type="tel" id="cm_client_phone" placeholder="9876543210" 
+                                oninput="this.value = window.sanitizePhone(this.value)"
+                                class="w-full bg-slate-50 border-none rounded-2xl py-3 px-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-slate-300">
+                        </div>
+                    </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5 block">Selling (Cart)</label>
@@ -3693,8 +3805,8 @@
             const qty = parseFloat(document.getElementById('dye_qty').value || 1);
             const sell = parseFloat(document.getElementById('dye_sell').value || 0);
             const cost = parseFloat(document.getElementById('dye_cost').value || 0);
-            if (sell <= 0) return alert("Selling price required");
-            if (qty <= 0) return alert("Valid quantity required");
+            if (sell <= 0) return window.erpAlert("Selling price is required.", "Validation", "alert-circle");
+            if (qty <= 0) return window.erpAlert("Enter a valid quantity.", "Validation", "alert-circle");
 
             const btn = document.getElementById('dye_ok');
             btn.innerText = "SAVING..."; btn.disabled = true;
@@ -3828,13 +3940,13 @@
 
         document.getElementById('stitch_ok').onclick = async () => {
             const num = document.getElementById('stitch_bill_num').value;
-            if (!num || num === '...') return alert("Wait for Bill No");
+            if (!num || num === '...') return window.erpAlert("Please wait for Bill No to generate.", "Loading", "loader");
             const billNo = "B-" + num;
             const dDate = document.getElementById('stitch_date').value;
             const sPrice = parseFloat(document.getElementById('stitch_price').value || 0);
 
-            if (!dDate) return alert("Select Date.");
-            if (sPrice <= 0) return alert("Enter valid Price.");
+            if (!dDate) return window.erpAlert("Please select a delivery date.", "Validation", "calendar");
+            if (sPrice <= 0) return window.erpAlert("Enter a valid price.", "Validation", "alert-circle");
 
             const btn = document.getElementById('stitch_ok');
             btn.innerText = "LINKING..."; btn.disabled = true;
@@ -3843,7 +3955,7 @@
                 const snap = await window.FB.root('orders').where('billNo', '==', billNo).get();
                 if (!snap.empty) {
                     const existing = snap.docs[0].data();
-                    if (!confirm(`Bill ${billNo} already exists for customer: ${existing.customerName}. Link?`)) {
+                    if (!(await window.erpConfirm(`Bill ${window.esc(billNo)} already exists for ${window.esc(existing.customerName)}. Link this item?`, "Existing Order"))) {
                         btn.innerText = "Link Order"; btn.disabled = false; return;
                     }
                 } else {
@@ -3869,7 +3981,7 @@
                 window.renderApp();
             } catch(e) {
                 console.error(e);
-                alert("Linking failed.");
+                window.erpAlert("Linking failed.", "System Notification", "bell");
                 btn.innerText = "Link Order"; btn.disabled = false;
             }
         };
@@ -3905,7 +4017,7 @@
     };
 
     window.syncLegacyLoyalty = async (e) => {
-        if (!confirm("This will scan ALL historic sales and tailoring orders to recalculate loyalty points and tiers for every client. Proceed?")) return;
+        if (!(await window.erpConfirm("This will scan ALL historic sales and tailoring orders to recalculate loyalty points and tiers for every client. Proceed?", "Recalculate Loyalty"))) return;
         
         const btn = e.target;
         const orig = btn.innerText;
@@ -3977,17 +4089,19 @@
             window.erpAlert(`Successfully migrated ${count} clients. Tiers and points are now up-to-date!`, "Migration Complete", "check-circle");
         } catch(err) {
             console.error(err);
-            alert('Migration Error: ' + err.message);
+            window.erpAlert("Migration Error: " + err.message, "Error", "x-circle");
         } finally {
             btn.innerText = orig; btn.disabled = false;
         }
     };
 
     window.deleteCustomer = async (id) => {
-        const pin = prompt("Owner PIN required to delete client record:");
-        if (pin !== (window.erpState.passwords?.owner || '')) return alert("Access Denied");
+        const pin = await window.erpPrompt("Owner PIN required to delete client record:", "", "Authentication Required");
+        if (pin === null) return;
+        const hashedPin = await window.hashPwd(pin);
+        if (hashedPin !== (window.erpState.passwords?.owner || '')) return window.erpAlert("Incorrect PIN.", "Access Denied", "shield-off");
         
-        if (!confirm("Are you absolutely sure? This will permanently delete the client record and their loyalty points. Transaction history will remain but as 'Walk-in' (by phone match).")) return;
+        if (!(await window.erpConfirm("Are you absolutely sure? This will permanently delete the client record and their loyalty points. Transaction history will remain but as 'Walk-in' (by phone match).", "Delete Client Record"))) return;
 
         try {
             await window.FB.root('clients').doc(id).delete();
@@ -3996,7 +4110,7 @@
             window.renderApp();
         } catch (e) {
             console.error(e);
-            alert("Error deleting customer.");
+            window.erpAlert("Error deleting customer.", "Error", "wifi-off");
         }
     };
 
@@ -4064,7 +4178,7 @@
                 window.renderApp();
             } catch (e) {
                 console.error(e);
-                alert("Error saving client.");
+                window.erpAlert("Error saving client.", "Error", "wifi-off");
                 btn.disabled = false;
                 btn.innerText = "Validate & Save";
             }
@@ -4072,7 +4186,7 @@
     };
 
     window.standardizeClientNumbers = async (e) => {
-        if (!confirm("This will normalize all client phone numbers to 10 digits and merge any duplicates. Existing points will be added together. Proceed?")) return;
+        if (!(await window.erpConfirm("This will normalize all client phone numbers to 10 digits and merge any duplicates. Existing points will be added together. Proceed?", "Normalize Phones"))) return;
         
         const btn = e.target;
         const orig = btn.innerText;
@@ -4137,9 +4251,10 @@
             window.erpAlert(`Cleanup complete! ${Object.keys(merged).length} unique clients, ${toDelete.length} duplicates removed.`, "CRM Cleansed", "trash-2");
         } catch (err) {
             console.error(err);
-            alert("Standardization Error: " + err.message);
+            window.erpAlert("Standardization Error: " + err.message, "Error", "x-circle");
         } finally {
             btn.innerText = orig; btn.disabled = false;
         }
     };
 })();
+

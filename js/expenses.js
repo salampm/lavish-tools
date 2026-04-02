@@ -1,29 +1,35 @@
-// Expenses Logic & Terminal (Fixed for Compat Mode)
-window.handleExpMethodChange = (val) => {
-    const inputs = document.getElementById('exp_mixed_inputs');
-    const amtField = document.getElementById('exp_amount');
-    if (inputs) inputs.classList.toggle('hidden', val !== 'Mixed');
-    if (amtField) {
-        if (val === 'Mixed') {
-             amtField.readOnly = true;
-             amtField.classList.add('bg-slate-100', 'opacity-70');
-             window.autoSumExpMixed();
-        } else {
-             amtField.readOnly = false;
-             amtField.classList.remove('bg-slate-100', 'opacity-70');
-        }
-    }
-};
-
-window.autoSumExpMixed = () => {
-    const cash = parseFloat(document.getElementById('exp_mixed_cash')?.value || 0);
-    const upi = parseFloat(document.getElementById('exp_mixed_upi')?.value || 0);
-    const amtField = document.getElementById('exp_amount');
-    if (amtField) amtField.value = (cash + upi).toFixed(2);
-};
-
+window.APP_VERSION = "v2.4.1";
 (function() {
-    const fmt = window.fmt;
+    // Shared state inside IIFE
+    window.erpState.expenses = window.erpState.expenses || [];
+    const fmt = window.fmt || ((v) => '₹' + (v || 0).toLocaleString('en-IN'));
+    const fmtDate = window.fmtDate || ((d) => new Date(d).toLocaleDateString());
+    
+    // M-15: Local XSS helper in case app.js hasn't loaded it yet (standalone receipt fallback)
+    const esc = window.esc || ((str) => String(str || "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[m])));
+    
+    window.handleExpMethodChange = (val) => {
+        const inputs = document.getElementById('exp_mixed_inputs');
+        const amtField = document.getElementById('exp_amount');
+        if (inputs) inputs.classList.toggle('hidden', val !== 'Mixed');
+        if (amtField) {
+            if (val === 'Mixed') {
+                 amtField.readOnly = true;
+                 amtField.classList.add('bg-slate-100', 'opacity-70');
+                 window.autoSumExpMixed();
+            } else {
+                 amtField.readOnly = false;
+                 amtField.classList.remove('bg-slate-100', 'opacity-70');
+            }
+        }
+    };
+
+    window.autoSumExpMixed = () => {
+        const cash = parseFloat(document.getElementById('exp_mixed_cash')?.value || 0);
+        const upi = parseFloat(document.getElementById('exp_mixed_upi')?.value || 0);
+        const amtField = document.getElementById('exp_amount');
+        if (amtField) amtField.value = (cash + upi).toFixed(2);
+    };
     
     // Helper to get collection reference using our silo path
     const EXP_COL = () => window.FB.collection('expenses');
@@ -36,7 +42,10 @@ window.autoSumExpMixed = () => {
     };
 
     function renderExpenseTerminal() {
-        const cats = window.erpState.expenseCategories || [];
+        const cats = (function() {
+            window.erpState.expenses = window.erpState.expenses || [];
+            return window.erpState.expenseCategories || [];
+        })();
         return `
         <div class="flex flex-col h-full bg-slate-50">
             <header class="h-20 bg-white/70 backdrop-blur-md border-b border-slate-100 px-8 flex items-center justify-between z-40 sticky top-0">
@@ -80,43 +89,70 @@ window.autoSumExpMixed = () => {
     };
 
     function renderExpenseHistory() {
-        const now = new Date();
-        let start = new Date().setHours(0, 0, 0, 0);
-        const filter = window.erpState.dashboardFilter || 'today';
+        // M-15: Default to monthly for better overview in history, unless specifically changed
+        if (!window.erpState.expenseFilter || window.erpState.expenseFilter === 'today') {
+            window.erpState.expenseFilter = 'monthly';
+        }
+        const filter = window.erpState.expenseFilter;
+        let start = 0;
+        let end = new Date().setHours(23, 59, 59, 999);
         
-        if (filter === 'weekly') {
-            const day = now.getDay();
-            const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-            start = new Date(now.setDate(diff)).setHours(0, 0, 0, 0);
+        const now = new Date();
+        if (filter === 'today') {
+            start = new Date().setHours(0,0,0,0);
+        } else if (filter === 'weekly') {
+            const d = new Date();
+            const day = d.getDay();
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+            start = new Date(d.setDate(diff)).setHours(0, 0, 0, 0);
         } else if (filter === 'monthly') {
             start = new Date(now.getFullYear(), now.getMonth(), 1).setHours(0, 0, 0, 0);
-        } else if (filter === 'today') {
-             start = new Date().setHours(0, 0, 0, 0);
+        } else if (filter === 'all') {
+            start = 0;
         }
 
-        let end = new Date().setHours(23, 59, 59, 999);
         const search = (window.erpState.expenseSearch || '').toLowerCase();
         
+        const formatMoney = (v) => '₹' + (v || 0).toLocaleString('en-IN');
+        
+        // ... (rest of the vars) ...
+        const formatRelDate = (d) => {
+            const ts = window.getTs(d);
+            if(!ts) return '-';
+            return new Date(ts).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+        };
+
         const list = (window.erpState.expenses || [])
             .filter(e => {
+                const ts = window.getTs(e.date);
+                const matchesDate = ts >= start && ts <= end; 
                 const matchesSearch = !search || 
                     (e.description || '').toLowerCase().includes(search) || 
                     (e.billNo || '').toLowerCase().includes(search);
-                return matchesSearch;
+                return matchesDate && matchesSearch;
             })
-            .sort((a, b) => b.date - a.date);
+            .sort((a, b) => window.getTs(b.date) - window.getTs(a.date));
 
         return `
         <div class="flex flex-col h-full bg-slate-50">
             <header class="h-20 bg-white border-b border-slate-100 px-8 flex items-center justify-between z-40">
                 <div class="flex items-center gap-4">
                     <button onclick="window.setExpenseTab('terminal')" class="p-2 hover:bg-slate-50 rounded-xl transition-colors text-slate-400"><i data-lucide="ArrowLeft" class="w-5 h-5"></i></button>
-                    <h2 class="text-xl font-black text-slate-800 uppercase tracking-tight">Expense History</h2>
+                    <div>
+                        <h2 class="text-xl font-black text-slate-800 uppercase tracking-tight leading-none">Expense History</h2>
+                        <p class="text-[9px] font-black text-indigo-500 uppercase mt-1 tracking-widest">${filter} view</p>
+                    </div>
                 </div>
                 <div class="flex items-center gap-3">
+                    <div class="flex bg-slate-100 p-1 rounded-xl">
+                        ${['today', 'weekly', 'monthly', 'all'].map(f => `
+                            <button onclick="window.erpState.expenseFilter='${f}'; window.renderApp();"
+                                class="px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-white text-violet-600 shadow-sm' : 'text-slate-400'}">${f}</button>
+                        `).join('')}
+                    </div>
                     <div class="relative">
                         <i data-lucide="Search" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
-                        <input type="text" oninput="window.erpState.expenseSearch=this.value; window.renderApp();" value="${window.erpState.expenseSearch || ''}" placeholder="Search History..." class="pl-11 pr-4 py-2.5 bg-slate-50 border-none rounded-xl text-xs font-bold w-64 outline-none focus:ring-2 focus:ring-violet-400">
+                        <input type="text" oninput="window.erpState.expenseSearch=this.value; window.renderApp();" value="${window.erpState.expenseSearch || ''}" placeholder="Search..." class="pl-11 pr-4 py-2.5 bg-slate-50 border-none rounded-xl text-xs font-bold w-48 outline-none focus:ring-2 focus:ring-violet-400">
                     </div>
                 </div>
             </header>
@@ -142,15 +178,15 @@ window.autoSumExpMixed = () => {
                                 }
                                 return `
                                 <tr class="hover:bg-slate-50/50 transition-colors">
-                                    <td class="px-8 py-5 text-xs font-bold text-slate-500">${window.fmtDate(e.date)}</td>
+                                    <td class="px-8 py-5 text-xs font-bold text-slate-500">${formatRelDate(e.date)}</td>
                                     <td class="px-8 py-5">
-                                        <p class="font-black text-slate-800 text-sm">${e.description || 'No description'}</p>
+                                        <p class="font-black text-slate-800 text-sm">${window.esc(e.description || 'No description')}</p>
                                         <div class="flex items-center gap-2 mt-1">
-                                            ${e.billNo ? `<p class="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Ref: ${e.billNo}</p>` : ''}
+                                            ${e.billNo ? `<p class="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Ref: ${window.esc(e.billNo)}</p>` : ''}
                                             <span class="text-[8px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-50 px-1.5 py-0.5 rounded">${methodLabel}</span>
                                         </div>
                                     </td>
-                                    <td class="px-8 py-5 text-right font-black text-rose-500 text-base">${fmt(e.amount)}</td>
+                                    <td class="px-8 py-5 text-right font-black text-rose-500 text-base">${formatMoney(e.amount)}</td>
                                     <td class="px-8 py-5 text-center">
                                         <span class="px-2.5 py-1 bg-violet-50 text-violet-600 rounded-lg text-[9px] font-black uppercase tracking-widest">${e.category}</span>
                                     </td>
@@ -403,20 +439,21 @@ window.autoSumExpMixed = () => {
 
         document.getElementById('del-cat-confirm').onclick = async () => {
             if (isFirestoreId) {
-                try {
-                    await window.FB.collection('expense_categories').doc(idOrIdx).delete();
-                    modal.remove();
-                    window.renderApp();
-                } catch(e) {
-                    console.error(e);
-                    window.erpAlert('Error deleting category. Please retry.', 'Delete Failed', 'wifi-off');
-                    modal.remove();
-                }
+                await window.FB.collection('expense_categories').doc(idOrIdx).delete();
             } else {
-                window.erpState.expenseCategories.splice(idOrIdx, 1);
-                modal.remove();
-                window.renderApp();
+                const cat = window.erpState.expenseCategories[parseInt(idOrIdx)];
+                if (cat) {
+                    try {
+                        // Persist deletion to Firestore so it doesn't come back on reload
+                        await window.FB.collection('expense_categories').add({
+                            name: cat.name, hidden: true, updatedAt: Date.now()
+                        });
+                    } catch(e) { console.warn("Could not persist category deletion", e); }
+                    window.erpState.expenseCategories.splice(parseInt(idOrIdx), 1);
+                }
             }
+            modal.remove();
+            window.renderApp();
         };
     };
 

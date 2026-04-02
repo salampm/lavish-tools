@@ -1,4 +1,5 @@
 // Inventory Module Logic
+window.APP_VERSION = "v2.4.1";
 (function() {
     const fmt = window.fmt;
     
@@ -106,7 +107,7 @@
         container.innerHTML = window.renderInvItemsList(list);
         
         if (window.lucide) lucide.createIcons();
-        window.saveLocalCache(); 
+        window.debouncedSave(); 
     };
 
     window.openAddItem = function () {
@@ -177,7 +178,13 @@
              btn.innerHTML = `<i class="w-4 h-4 animate-spin border-2 border-white/20 border-t-white rounded-full"></i> SYNCING`;
              btn.disabled = true;
 
-             const sku = "LL" + (window.erpState.items.length + 1001).toString().padStart(5, "0");
+             const existingSkus = new Set(window.erpState.items.map(i => i.sku));
+             let skuNum = window.erpState.items.length + 1001;
+             let sku;
+             do {
+                 sku = "LL" + skuNum.toString().padStart(5, "0");
+                 skuNum++;
+             } while (existingSkus.has(sku));
              
              await ITEMS_COL().add({
                  name,
@@ -366,9 +373,10 @@
 
         document.getElementById('del-all-confirm-btn').onclick = async () => {
             const pin = document.getElementById('del-all-pin').value;
-            const creds = window.erpState.passwords || {};
-            const ownerPin = creds.owner || 'Swali4783';
-            if (pin !== ownerPin) {
+            const hashedPin = await window.hashPwd(pin);
+            const ownerHash = (window.erpState.passwords || {}).owner;
+
+            if (hashedPin !== ownerHash) {
                 document.getElementById('del-all-err').classList.remove('hidden');
                 return;
             }

@@ -9,7 +9,8 @@
     <meta http-equiv="Expires" content="0">
     <title>Lavish Lavender - Expense Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@0.344.0"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="css/style.css?v=2.4.1">
 </head>
 <body class="bg-slate-50 font-['Plus_Jakarta_Sans'] text-slate-900 antialiased selection:bg-violet-100 selection:text-violet-900 custom-scrollbar overflow-x-hidden">
@@ -57,22 +58,22 @@
             // Listen to expenses
             window.FB.collection('expenses').onSnapshot((snap) => {
                 window.erpState.expenses = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             window.FB.collection('sales').onSnapshot((snap) => {
                 window.erpState.sales = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             window.FB.collection('items').onSnapshot((snap) => {
                 window.erpState.items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             window.FB.root('orders').onSnapshot((snap) => {
                 window.erpState.orders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             // Listen to categories for persistence
@@ -99,7 +100,7 @@
                 });
 
                 window.erpState.expenseCategories = merged;
-                window.scheduleRender();
+                window.batchedRender();
             });
 
             // Listen to general settings
@@ -121,8 +122,10 @@
             window.renderApp();
         });
 
-        // Render from cache immediately
+        // Load cache first for instant start
+        window.loadLocalState();
         window.renderApp();
     </script>
+    <script src="js/chatbot.js?v=2.4.1"></script>
 </body>
 </html>

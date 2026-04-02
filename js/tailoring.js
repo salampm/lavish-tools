@@ -1,4 +1,5 @@
 // Tailoring Module Logic
+window.APP_VERSION = "v2.4.1";
 (function() {
     // Re-bind helpers for convenience
     const fmt = window.fmt || ((v) => '₹' + (v || 0).toLocaleString('en-IN'));
@@ -88,59 +89,6 @@
             default:            return renderTracker(orders);
         }
     };
-
-    // --- DASHBOARD VIEW ---
-    function renderDashboard(orders) {
-        const now = new Date();
-        const active = orders.filter(o => o.status !== 'Delivered');
-        const overdue = active.filter(o => o.deliveryDate && new Date(o.deliveryDate) < now);
-        const urgent = active.filter(o => {
-            if(!o.deliveryDate) return false;
-            const diff = (new Date(o.deliveryDate) - now) / (1000 * 60 * 60 * 24);
-            return diff >= 0 && diff <= 2;
-        });
-
-        return `
-        <div class="p-8 h-full overflow-y-auto custom-scrollbar">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-                <div class="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
-                    <p class="text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1">Active Queue</p>
-                    <h3 class="text-2xl font-black text-slate-800">${active.length}</h3>
-                </div>
-                <div class="bg-rose-50 p-6 rounded-[32px] border border-rose-100 shadow-sm">
-                    <p class="text-rose-400 text-[9px] font-black uppercase tracking-widest mb-1">Overdue</p>
-                    <h3 class="text-2xl font-black text-rose-600">${overdue.length}</h3>
-                </div>
-                <div class="bg-amber-50 p-6 rounded-[32px] border border-amber-100 shadow-sm">
-                    <p class="text-amber-500 text-[9px] font-black uppercase tracking-widest mb-1">Urgent (48h)</p>
-                    <h3 class="text-2xl font-black text-amber-600">${urgent.length}</h3>
-                </div>
-                <div class="bg-emerald-50 p-6 rounded-[32px] border border-emerald-100 shadow-sm">
-                    <p class="text-emerald-500 text-[9px] font-black uppercase tracking-widest mb-1">Ready for Pickup</p>
-                    <h3 class="text-2xl font-black text-emerald-600">${active.filter(o => o.status === 'Ready').length}</h3>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                <section>
-                    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Critical Orders</h3>
-                    <div class="space-y-3">
-                        ${overdue.map(o => renderOrderStrip(o, 'rose')).join('')}
-                        ${urgent.map(o => renderOrderStrip(o, 'amber')).join('')}
-                        ${(overdue.length + urgent.length === 0) ? `<p class="py-10 text-center text-slate-300 italic text-xs font-bold">No critical items</p>` : ''}
-                    </div>
-                </section>
-                <section>
-                    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Recent Activity</h3>
-                    <div class="bg-white rounded-[32px] border border-slate-100 p-6">
-                        <!-- Activity Feed Placeholder -->
-                        <p class="text-center text-slate-300 italic text-xs py-10">Syncing recent events...</p>
-                    </div>
-                </section>
-            </div>
-        </div>
-        `;
-    }
 
     function renderOrderStrip(o, color) {
         const bal = (o.totalCost || 0) - (o.advancePaid || 0);
@@ -363,7 +311,7 @@
             const badgeColor = o.status === 'Ready' ? 'bg-emerald-100 text-emerald-700' 
                              : o.status === 'Stitching' ? 'bg-blue-100 text-blue-700'
                              : 'bg-orange-100 text-orange-700';
-            const borderColor = isOverdue ? 'border-l-rose-500' : isUrgent ? 'border-l-orange-400' : 'border-l-violet-300';
+            const borderColor = isOverdue ? 'border-l-rose-50-500' : isUrgent ? 'border-l-orange-400' : 'border-l-violet-300';
 
             return `
             <div onclick="window.openOrderDetails('${o.id}')" 
@@ -373,14 +321,14 @@
                         ${o.customerName ? o.customerName[0].toUpperCase() : 'T'}
                     </div>
                     <div class="min-w-0">
-                        <p class="font-black text-slate-800 text-sm uppercase leading-tight truncate">${o.customerName || 'Unknown'}</p>
+                        <p class="font-black text-slate-800 text-sm uppercase leading-tight truncate">${window.esc(o.customerName || 'Unknown')}</p>
                         <div class="flex items-center gap-2 mt-1 flex-wrap">
-                            <span class="text-[9px] font-black text-violet-400 font-mono">${o.billNo}</span>
+                            <span class="text-[9px] font-black text-violet-400 font-mono">${window.esc(o.billNo)}</span>
                             <span class="text-slate-200">•</span>
                             <span class="text-[9px] font-bold text-slate-400 font-mono">Placed: ${window.fmtDate(o.orderDate || o.timestamp)}</span>
                             <span class="text-slate-200">•</span>
                             <span class="text-[9px] font-bold text-slate-400">Due: ${window.fmtDate(o.deliveryDate)}</span>
-                            <span class="px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${badgeColor}">${o.status === 'Order Confirmed' ? 'Confirmed' : o.status}</span>
+                            <span class="px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${badgeColor}">${window.esc(o.status === 'Order Confirmed' ? 'Confirmed' : o.status)}</span>
                             ${isOverdue ? `<span class="px-2 py-0.5 bg-rose-100 text-rose-600 rounded-full text-[8px] font-black uppercase">Overdue</span>` : ''}
                             ${isUrgent ? `<span class="px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full text-[8px] font-black uppercase">Urgent</span>` : ''}
                         </div>
@@ -430,10 +378,7 @@
 
 
     // --- HISTORY VIEW ---
-    window.toggleHistorySort = function() {
-        window.erpState.historySort = window.erpState.historySort === 'desc' ? 'asc' : 'desc';
-        window.renderApp();
-    };
+    // M-01: Removed duplicate toggleHistorySort (moved to app.js)
 
     function renderHistory(orders) {
         window.erpState.historySort = window.erpState.historySort || 'desc';
@@ -477,10 +422,10 @@
                         <tbody class="divide-y divide-slate-100">
                             ${delivered.map(o => `
                                 <tr onclick="window.openOrderDetails('${o.id}')" class="hover:bg-slate-50/50 transition-colors cursor-pointer group">
-                                    <td class="p-6 border-l-4 border-transparent group-hover:border-violet-500 transition-colors"><span class="bg-violet-50 text-violet-600 px-3 py-1 rounded-lg font-black font-mono shadow-sm border border-violet-100">${o.billNo}</span></td>
+                                    <td class="p-6 border-l-4 border-transparent group-hover:border-violet-500 transition-colors"><span class="bg-violet-50 text-violet-600 px-3 py-1 rounded-lg font-black font-mono shadow-sm border border-violet-100">${window.esc(o.billNo)}</span></td>
                                     <td class="p-6">
-                                        <p class="font-black text-slate-800 text-sm mb-0.5">${o.customerName}</p>
-                                        <p class="text-[10px] text-slate-400 font-bold">${o.phone}</p>
+                                        <p class="font-black text-slate-800 text-sm mb-0.5">${window.esc(o.customerName)}</p>
+                                        <p class="text-[10px] text-slate-400 font-bold">${window.esc(o.phone)}</p>
                                     </td>
                                     <td class="p-6 font-bold text-slate-500">${window.fmtDate(o.orderDate || o.timestamp)}</td>
                                     <td class="p-6 text-slate-500 font-bold">${o.items?.length || 0} Items</td>
@@ -488,113 +433,6 @@
                                     <td class="p-6 text-right pr-10 font-black text-emerald-500">${window.fmtDate(o.actualDeliveryDate || o.deliveryDate)}</td>
                                 </tr>
                             `).join('') || `<tr><td colspan="6" class="p-20 text-center text-slate-300 italic font-bold">No archives found</td></tr>`}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        `;
-    }
-
-    // --- REPORTS VIEW ---
-    function renderReports(orders) {
-        const filter = window.erpState.tailorReportFilter || 'Daily';
-        let list = orders.sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0));
-        
-        const now = new Date();
-        const todayStr = now.toISOString().split('T')[0];
-        
-        // ISSUE #21 FIX: Use calendar month start for monthly filter (not rolling 30 days)
-        if (filter === 'Daily') {
-            list = list.filter(o => {
-                const od = o.orderDate || (o.timestamp ? new Date(o.timestamp).toISOString().split('T')[0] : '');
-                return od === todayStr;
-            });
-        } else if (filter === 'Weekly') {
-            const start = now.getTime() - (7 * 24 * 60 * 60 * 1000);
-            list = list.filter(o => (o.timestamp || 0) >= start);
-        } else if (filter === 'Monthly') {
-            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-            list = list.filter(o => (o.timestamp || 0) >= monthStart);
-        }
-
-        const totalYield = list.reduce((s, o) => s + (o.totalCost || 0), 0);
-        // ISSUE #15 FIX: Track collected revenue separately from booked total
-        const collectedYield = list.reduce((s, o) => s + (o.advancePaid || 0), 0);
-        const garmentsCount = list.reduce((s, o) => s + (o.items?.length || 0), 0);
-
-        return `
-        <div class="p-8 h-full flex flex-col overflow-hidden bg-slate-50/50">
-            <div class="mb-10 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
-                <div>
-                    <h2 class="text-3xl font-black text-slate-900 tracking-tighter uppercase mb-1">Tailoring Insights <span class="text-violet-600">B.I.</span></h2>
-                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Boutique Intelligence v2.4.0</p>
-                </div>
-
-                <div class="flex items-center gap-4">
-                    <div class="flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100">
-                        ${['Daily', 'Weekly', 'Monthly'].map(f => `
-                            <button onclick="window.erpState.tailorReportFilter='${f}'; window.renderApp();" 
-                                class="px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-violet-600 text-white shadow-lg shadow-violet-200' : 'text-slate-400 hover:text-slate-900'}">${f}</button>
-                        `).join('')}
-                    </div>
-                    <button onclick="window.exportToExcel()" class="bg-slate-900 text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-2xl flex items-center gap-3 hover:-translate-y-0.5 transition-all active:scale-95">
-                        <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Export to Excel
-                    </button>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-                <div class="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm relative overflow-hidden group hover:border-violet-200 transition-colors">
-                    <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-violet-50 rounded-full group-hover:scale-125 transition-transform"></div>
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 relative z-10">Total Period Yield</p>
-                    <h3 class="text-3xl font-black text-slate-800 tracking-tight relative z-10">${fmt(totalYield)}</h3>
-                    <p class="text-[9px] font-black text-emerald-500 uppercase tracking-widest mt-1 relative z-10">Collected: ${fmt(collectedYield)}</p>
-                </div>
-                <div class="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm relative overflow-hidden group hover:border-violet-200 transition-colors">
-                    <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-emerald-50 rounded-full group-hover:scale-125 transition-transform"></div>
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 relative z-10">Garments Processed</p>
-                    <h3 class="text-3xl font-black text-slate-800 tracking-tight relative z-10">${garmentsCount} Units</h3>
-                </div>
-                <div class="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm relative overflow-hidden group hover:border-violet-200 transition-colors">
-                    <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-amber-50 rounded-full group-hover:scale-125 transition-transform"></div>
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 relative z-10">Active Orders</p>
-                    <h3 class="text-3xl font-black text-slate-800 tracking-tight relative z-10">${list.length} Records</h3>
-                </div>
-            </div>
-
-            <div class="flex-1 bg-white rounded-[48px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-                <div class="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
-                    <h4 class="text-[10px] font-black text-slate-900 uppercase tracking-widest">Transaction Log</h4>
-                    <span class="text-[9px] font-black text-violet-500 uppercase tracking-widest">${filter} View</span>
-                </div>
-                <div class="overflow-x-auto flex-1 custom-scrollbar">
-                    <table class="w-full text-left">
-                        <thead>
-                            <tr class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-50">
-                                <th class="p-8">Bill #</th>
-                                <th class="p-8">Partner Identity</th>
-                                <th class="p-8">Load</th>
-                                <th class="p-8 text-right pr-12">Value Produced</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-50">
-                            ${list.map(o => `
-                                <tr class="hover:bg-slate-50/50 transition-colors group" onclick="window.openOrderDetails('${o.id}')">
-                                    <td class="p-8 font-black font-mono text-violet-400 text-xs">${o.billNo}</td>
-                                    <td class="p-8">
-                                        <p class="font-black text-slate-800 text-sm uppercase tracking-tight">${o.customerName}</p>
-                                        <p class="text-[10px] font-bold text-slate-400 mt-0.5 font-mono">${o.phone}</p>
-                                    </td>
-                                    <td class="p-8">
-                                        <div class="flex flex-wrap gap-2">
-                                            ${o.items?.map(it => `<span class="px-2.5 py-1 bg-slate-50 rounded-lg text-[8px] font-black uppercase text-slate-500">${it.name}</span>`).join('')}
-                                        </div>
-                                    </td>
-                                    <td class="p-8 text-right pr-12 font-black text-slate-900 text-base">${fmt(o.totalCost)}</td>
-                                </tr>
-                            `).join('')}
-                            ${list.length === 0 ? `<tr><td colspan="4" class="p-24 text-center text-slate-300 italic font-black uppercase text-[10px] tracking-widest">No matching records found</td></tr>` : ''}
                         </tbody>
                     </table>
                 </div>
@@ -638,11 +476,18 @@
     window.openOrderModal = function() {
         // ISSUE #14 FIX: Always use absolute max to prevent bill number duplication
         const orders = window.erpState.orders || [];
-        const absoluteMax = Math.max(100, ...orders.map(o => parseInt(o.billNo?.match(/\d+/)?.[0] || 0)));
+        const absoluteMax = Math.max(99, ...orders.map(o => {
+            const m = (o.billNo || "").match(/B-(\d+)/);
+            return m ? parseInt(m[1]) : 0;
+        }));
         document.getElementById('form-billNo').value = "B-" + (absoluteMax + 1);
         document.getElementById('form-orderDate').value = new Date().toISOString().split('T')[0];
         document.getElementById('items-container').innerHTML = '';
         document.getElementById('draft-measurement-status')?.classList.add('hidden');
+        
+        // L-10: Reset draft measurements to avoid state leaks from previous sessions
+        window.draftMeasurements = null;
+        window.selectedClientForDraft = null;
         window.addItem();
         document.getElementById('order-modal').classList.remove('hidden');
     };
@@ -671,8 +516,13 @@
     window.handlePhoneLookup = function(phone) {
         if (!phone) return;
         const clean = window.sanitizePhone(phone);
-        if (clean.length < 6) return; // Still allow partial during typing
-        const client = (window.erpState.clients || []).find(c => window.sanitizePhone(c.phone) === clean || window.sanitizePhone(c.phone).startsWith(clean));
+        if (clean.length < 5) return; // M-17: Progressive lookup improvement
+        
+        const client = (window.erpState.clients || []).find(c => {
+            const p = window.sanitizePhone(c.phone);
+            if (clean.length >= 10) return p === clean;
+            return p.startsWith(clean);
+        });
         if (client) {
             const nameEl = document.getElementById('form-cust-name');
             if (nameEl && !nameEl.value) {
@@ -688,10 +538,11 @@
 
     window.handleNameAutoFill = function(name) {
         if (!name) return;
-        const client = (window.erpState.clients || []).find(c => c.name.toLowerCase() === name.toLowerCase());
-        if (client) {
+        // L-22: Safe access for auto-fill logic
+        const matches = (window.erpState.clients || []).filter(c => c.name?.toLowerCase().includes(name.toLowerCase()));
+        if (matches.length > 0) {
             const phoneEl = document.getElementById('form-phone');
-            if (phoneEl && !phoneEl.value) phoneEl.value = client.phone;
+            if (phoneEl && !phoneEl.value) phoneEl.value = matches[0].phone;
         }
     };
 
@@ -833,7 +684,7 @@
                     window.closeMeasurementModal();
                     window.openOrderDetails(window.selectedOrderId);
                 }, 800);
-            } catch (e) { alert("Save failed"); btn.innerText = ogText; }
+            } catch (e) { window.erpAlert("Save failed"); btn.innerText = ogText; }
         }
     };
 
@@ -848,15 +699,9 @@
             reader.readAsDataURL(file);
             reader.onload = async () => {
                 const base64 = reader.result.split(',')[1];
-                // Note: User can replace with their own proxy or direct endpoint
-                // For now, mirroring the reference implementation's prompt logic
-                const prompt = `Analyze this tailoring measurement form. Return JSON with keys: ${M_FIELDS.join(', ')}. Use numbers where possible.`;
-                
-                // Placeholder for actual AI integration if needed, usually requires server-side
-                // In reference, it hits Gemini. We'll skip the actual network call to avoid API key leaks
-                // but keep the function structure for them to wire up.
-                statusEl.innerText = "AI processing complete (Simulated). Fields filled.";
-                setTimeout(() => statusEl.classList.add('hidden'), 3000);
+                // L-04: Suppress OCR simulated alert for cleaner UX
+                // statusEl.innerText = "AI processing complete (Simulated). Fields filled.";
+                // setTimeout(() => statusEl.classList.remove('hidden'), 3000);
             };
         } catch (e) { statusEl.innerText = "OCR failed."; }
     };
@@ -867,7 +712,7 @@
 
         if (status === 'Delivered') {
             if (o.isFromPOS) {
-                alert("This order originated from POS. Please complete the delivery and final payment in the Retail Terminal (Pending Dues).");
+                window.erpAlert("This order originated from POS. Please complete the delivery and final payment in the Retail Terminal (Pending Dues).");
                 return;
             }
             window.openDeliveryModal(id);
@@ -876,12 +721,12 @@
 
         let laborCost = o.tailoringCost || 0;
         if (status === 'Ready') {
-            const val = prompt("Stitching complete! Enter Labor/Tailoring Cost (Production Expense):", laborCost);
+            const val = await window.erpPrompt("Enter Labor/Tailoring Cost (Production Expense):", laborCost, 'Stitching Complete');
             if (val === null) return; // Cancelled
             laborCost = parseFloat(val) || 0;
         }
 
-        if(!confirm(`Move to ${status}?`)) return;
+        if(!(await window.erpConfirm(`Move to ${status}?`))) return;
         try {
             let log = o.notesLog || [];
             log.push({ text: `Status updated to ${status}${status === 'Ready' ? ` (Labor Cost: ₹${laborCost})` : ''}`, timestamp: new Date().toLocaleString() });
@@ -896,11 +741,11 @@
             
             window.renderApp();
             if (window.selectedOrderId === id) window.openOrderDetails(id);
-        } catch (e) { alert("Update failed"); }
+        } catch (e) { window.erpAlert("Update failed"); }
     };
 
     window.returnToQueue = async function(id) {
-        if(!confirm("Return order to Stitching queue? It will be marked as incomplete.")) return;
+        if(!(await window.erpConfirm("Return order to Stitching queue? It will be marked as incomplete."))) return;
         try {
             const o = window.erpState.orders.find(x => x.id === id);
             if (!o) return;
@@ -914,26 +759,11 @@
             });
             window.closeDetailModal();
             window.renderApp();
-            alert("Order returned to Queue!");
-        } catch(e) { alert("Failed to return to queue"); }
+            window.erpAlert("Order returned to Queue!");
+        } catch(e) { window.erpAlert("Failed to return to queue"); }
     };
 
     // --- UTILS ---
-    window.fmtDate = (d) => {
-        if(!d) return '-';
-        let dt;
-        try {
-            if (d && typeof d === 'object' && typeof d.toDate === 'function') {
-                dt = d.toDate();
-            } else {
-                dt = new Date(d);
-            }
-            if (!dt || isNaN(dt.getTime())) return '-';
-            return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-        } catch (e) {
-            return '-';
-        }
-    };
 
     window.filterTracker = (q) => {
         const v = q.toLowerCase();
@@ -960,8 +790,8 @@
                 <div class="grid grid-cols-3 gap-y-4 gap-x-2">
                     ${Object.entries(m).slice(0, 9).map(([k, v]) => `
                         <div>
-                            <p class="text-[8px] font-black text-slate-400 uppercase mb-0.5">${k.replace('_',' ')}</p>
-                            <p class="text-xs font-black text-slate-800">${v}</p>
+                            <p class="text-[8px] font-black text-slate-400 uppercase mb-0.5">${window.esc(k.replace('_',' '))}</p>
+                            <p class="text-xs font-black text-slate-800">${window.esc(v)}</p>
                         </div>
                     `).join('')}
                     ${Object.keys(m).length > 9 ? `<p class="col-span-3 text-[9px] text-violet-400 font-bold italic">+ More specs in edit mode</p>` : ''}
@@ -978,10 +808,10 @@
             <div class="space-y-8 animate-pop-in">
                 <div class="flex justify-between items-start">
                     <div class="min-w-0 flex-1">
-                        <span class="text-[10px] font-black text-violet-500 font-mono tracking-widest block mb-1">INVOICE: ${o.billNo}</span>
-                        <h2 class="text-3xl font-black text-slate-800 leading-none uppercase tracking-tighter truncate">${o.customerName}</h2>
+                        <p class="text-[9px] font-black text-violet-400 uppercase tracking-widest leading-none mb-1.5">${window.esc(o.billNo)}</p>
+                        <h2 class="text-2xl font-black text-slate-900 leading-tight">${window.esc(o.customerName || 'Guest Customer')}</h2>
                         <div class="flex items-center gap-3 mt-3">
-                            <a href="tel:${o.phone}" class="bg-slate-100 p-2.5 rounded-xl text-slate-500 hover:bg-slate-200 transition-colors"><i data-lucide="phone" class="w-4 h-4"></i></a>
+                            <a href="tel:${window.esc(o.phone)}" class="bg-slate-100 p-2.5 rounded-xl text-slate-500 hover:bg-slate-200 transition-colors"><i data-lucide="phone" class="w-4 h-4"></i></a>
                             <button onclick="window.sendWA('${o.id}', 1)" class="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
                                 <i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp
                             </button>
@@ -1026,7 +856,7 @@
                     <div class="bg-white border-2 border-slate-50 rounded-[32px] overflow-hidden">
                         ${o.items?.map(it => `
                         <div class="p-5 flex justify-between items-center border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
-                            <span class="font-black text-slate-700 text-sm uppercase">${it.name}</span>
+                            <span class="font-black text-slate-700 text-sm uppercase">${window.esc(it.name)}</span>
                             <span class="font-bold text-slate-400">${fmt(it.price)}</span>
                         </div>`).join('')}
                     </div>
@@ -1099,11 +929,14 @@
     window.closeDetailModal = () => document.getElementById('detail-modal').classList.add('hidden');
 
     window.deleteOrder = async function(id) {
-        const pin = prompt("Owner PIN required to delete records:");
-        const ownerPin = window.erpState.passwords?.owner || 'Swali4783';
-        if (pin !== ownerPin) return alert("Access Denied: Incorrect Security PIN");
+        const pin = await window.erpPrompt("Owner PIN required to delete records:", "", "Authentication Required");
+        if (pin === null) return;
+        const hashedPin = await window.hashPwd(pin);
+        const ownerHash = window.erpState.passwords?.owner || '';
+        
+        if (hashedPin !== ownerHash) return window.erpAlert("Access Denied: Incorrect Security PIN");
 
-        if(!confirm("Permanently delete this order record? This will also void any linked POS bills.")) return;
+        if (!(await window.erpConfirm("Permanently delete this order record? This will also void any linked POS bills.", "Delete Order Record"))) return;
         try {
             const order = (window.erpState.orders || []).find(o => o.id === id);
             await ORDERS_COL().doc(id).delete();
@@ -1111,15 +944,18 @@
             // Check and delete linked POS bill
             if (order && order.billNo) {
                 const linkedSale = (window.erpState.sales || []).find(s => s.billNo === order.billNo);
-                if (linkedSale && window.FB.collection) {
+                if (linkedSale) {
                     await window.FB.collection('sales').doc(linkedSale.id).delete();
                 }
             }
 
             window.closeDetailModal();
             if (window.renderApp) window.renderApp();
-            alert("Order and associated records successfully removed.");
-        } catch (e) { console.error(e); alert("Delete failed"); }
+            window.erpAlert("Order and linked records removed.", "Deleted", "check-circle");
+        } catch (e) { 
+            console.error(e); 
+            window.erpAlert("Delete operation failed. Check connection.", "Error", "wifi-off"); 
+        }
     };
 
     // --- FINANCIAL ADJUSTMENTS ---
@@ -1182,13 +1018,17 @@
             }
         }
 
-        await ORDERS_COL().doc(o.id).update(updates);
-        amtEl.value = ""; rEl.value = "";
-        if (document.getElementById('adj-cash')) document.getElementById('adj-cash').value = "";
-        if (document.getElementById('adj-upi')) document.getElementById('adj-upi').value = "";
+        try {
+            await ORDERS_COL().doc(o.id).update(updates);
+            window.erpAlert("Adjustment applied successfully.", "Transacton Logged", "check-circle");
+        } catch (e) {
+            window.erpAlert("Failed to update record. Check connection.", "Error", "cloud-off");
+        }
         
-        window.toggleCostForm(); 
-        document.getElementById('advance-form').classList.add('hidden');
+        // M-10: Correct toggle behavior
+        if (type === 'cost') window.toggleCostForm(); 
+        else document.getElementById('advance-form').classList.add('hidden');
+        
         window.openOrderDetails(o.id);
     };
 
@@ -1204,18 +1044,21 @@
     window.openEditModal = () => {
         const o = window.erpState.orders.find(x => x.id === window.selectedOrderId);
         if (!o) return;
-        document.getElementById('edit-name').value = o.customerName;
-        document.getElementById('edit-phone').value = o.phone;
-        document.getElementById('edit-delivery').value = o.deliveryDate;
+        document.getElementById('edit-name').value = o.customerName || '';
+        document.getElementById('edit-phone').value = o.phone || '';
+        document.getElementById('edit-delivery').value = o.deliveryDate || '';
         document.getElementById('edit-instructions').value = o.description || '';
         
-        const c = document.getElementById('edit-items-container');
-        c.innerHTML = '';
+        const container = document.getElementById('edit-items-container');
+        container.innerHTML = '';
         (o.items || []).forEach(it => {
-            const div = document.createElement('div');
-            div.className = 'grid grid-cols-[1fr_80px] gap-2';
-            div.innerHTML = `<input type="text" class="edit-item-name tailor-input" value="${it.name}"><input type="number" class="edit-item-price tailor-input" value="${it.price}">`;
-            c.appendChild(div);
+            const row = document.createElement('div');
+            row.className = "grid grid-cols-2 gap-4";
+            row.innerHTML = `
+                <input type="text" value="${window.esc(it.name)}" class="edit-item-name px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-xs outline-none focus:ring-2 focus:ring-violet-400 shadow-inner">
+                <input type="number" value="${it.price}" class="edit-item-price px-5 py-3.5 bg-slate-50 border-none rounded-2xl font-bold text-xs outline-none focus:ring-2 focus:ring-violet-400 shadow-inner">
+            `;
+            container.appendChild(row);
         });
         document.getElementById('edit-modal').classList.remove('hidden');
     };
@@ -1228,16 +1071,27 @@
         const delivery = document.getElementById('edit-delivery').value;
         const desc = document.getElementById('edit-instructions').value;
         
-        const items = []; let total = 0;
+        const items = [];
         document.querySelectorAll('#edit-items-container > div').forEach(row => {
             const n = row.querySelector('.edit-item-name').value;
             const p = parseFloat(row.querySelector('.edit-item-price').value) || 0;
-            if(n) { items.push({name: n, price: p}); total += p; }
+            if(n) items.push({name: n, price: p});
         });
+
+        const o = window.erpState.orders.find(x => x.id === window.selectedOrderId);
+        const originalTotal = o.totalCost || 0;
+        const itemsTotal = items.reduce((s, it) => s + it.price, 0);
+        
+        // If items total changed, update total. Else preserve original (which might have adjustments)
+        const finalTotal = (itemsTotal !== (o.items || []).reduce((s, it) => s + it.price, 0)) ? itemsTotal : originalTotal;
+
+        // M-14: Audit log for edits
+        const log = o.notesLog || [];
+        log.push({ text: `Order edited. Items/Details changed.`, timestamp: new Date().toLocaleString() });
 
         await ORDERS_COL().doc(window.selectedOrderId).update({
             customerName: name, phone, deliveryDate: delivery, description: desc,
-            items, totalCost: total
+            items, totalCost: finalTotal, notesLog: log
         });
         window.closeEditModal();
         window.openOrderDetails(window.selectedOrderId);
@@ -1248,21 +1102,22 @@
         const o = window.erpState.orders.find(x => x.id === (id || window.selectedOrderId));
         if (!o) return;
         window.selectedOrderId = o.id;
-        const bal = (o.totalCost || 0) - (o.advancePaid || 0);
+        const bal = (o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0);
         
         document.getElementById('del-pending').innerText = "₹" + bal;
         document.getElementById('del-received').value = bal;
         document.getElementById('del-bill-no').innerText = o.billNo;
         document.getElementById('del-discount').value = 0;
         document.getElementById('del-tailoring-cost').value = o.tailoringCost || 0;
-        document.getElementById('del-status-box').classList.add('hidden');
         
+        // L-11: Refresh Lucide icons in newly rendered modal
+        if (window.lucide) window.lucide.createIcons();
         document.getElementById('delivery-modal').classList.remove('hidden');
     };
 
     window.recalcDel = () => {
         const o = window.erpState.orders.find(x => x.id === window.selectedOrderId);
-        const bal = (o.totalCost || 0) - (o.advancePaid || 0);
+        const bal = (o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0);
         const rec = parseFloat(document.getElementById('del-received').value) || 0;
         const disc = parseFloat(document.getElementById('del-discount').value) || 0;
         const box = document.getElementById('del-status-box');
@@ -1286,7 +1141,7 @@
 
     window.confirmDelivery = async () => {
         const o = window.erpState.orders.find(x => x.id === window.selectedOrderId);
-        const bal = (o.totalCost || 0) - (o.advancePaid || 0);
+        const bal = (o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0);
         const rec = parseFloat(document.getElementById('del-received').value) || 0;
         const disc = parseFloat(document.getElementById('del-discount').value) || 0;
         const labor = parseFloat(document.getElementById('del-tailoring-cost').value) || 0;
@@ -1338,21 +1193,31 @@
         if (!o) return;
 
         const client = (window.erpState.clients || []).find(c => c.phone === phone);
-        const earned = Math.floor((o.totalCost || 0) / 100);
+        
+        // C-09: Unify Loyalty with POS (use window.calcPoints and window.getLoyaltyTier)
+        const tierKey = client ? (client.tier || 'basic') : 'basic';
+        const earned = window.calcPoints ? window.calcPoints(o.totalCost || 0, tierKey) : Math.floor((o.totalCost || 0) / 100);
+        
         const currentPoints = client ? (client.loyaltyPoints || 0) : 0;
-        const newTotal = currentPoints + earned;
-        const tier = client ? (client.tier || 'Basic') : 'Basic';
+        const currentSpent = client ? (client.totalSpent || 0) : 0;
+        const newPointsTotal = currentPoints + earned;
+        const newSpentTotal = currentSpent + (o.totalCost || 0);
+        
+        // Recalculate tier based on NEW spending
+        const newTier = window.getLoyaltyTier ? window.getLoyaltyTier(newSpentTotal) : tierKey;
 
         try {
             // Update order with snapshot
             await ORDERS_COL().doc(o.id).update({
-                loyaltySnapshot: { earned, total: newTotal, tier }
+                loyaltySnapshot: { earned, total: newPointsTotal, tier: newTier }
             });
 
-            // Update client points
+            // Update client points and total spent
             if (client) {
                 await CLIENTS_COL().doc(client.id).update({
-                    loyaltyPoints: newTotal
+                    loyaltyPoints: firebase.firestore.FieldValue.increment(earned),
+                    totalSpent: firebase.firestore.FieldValue.increment(o.totalCost || 0),
+                    tier: newTier
                 });
             }
         } catch (e) {
@@ -1372,7 +1237,7 @@
         }
         
         const o = window.erpState.orders.find(x => x.billNo === bNo);
-        if (!o) return alert("Order not found: " + bNo);
+        if (!o) return window.erpAlert("Order not found: " + bNo, "Error", "alert-triangle");
 
         const printData = {
             billNo: o.billNo,
@@ -1404,9 +1269,15 @@
             Status: o.status,
             Date: o.orderDate
         }));
+        
+        if (data.length === 0) {
+            window.erpAlert("No orders to export.", "Empty", "package");
+            return;
+        }
+
         const csv = [
             Object.keys(data[0]).join(','),
-            ...data.map(row => Object.values(row).join(','))
+            ...data.map(row => Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
         ].join('\n');
         
         const blob = new Blob([csv], { type: 'text/csv' });
