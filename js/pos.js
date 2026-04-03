@@ -2897,7 +2897,7 @@ window.APP_VERSION = "v2.4.2";
                                 <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Refund
                             </button>
                             <button onclick="window.voidBill('${sale.id}')" class="px-4 py-2.5 bg-rose-50 text-rose-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-100 hover:text-rose-600 flex items-center gap-1.5 transition-colors border border-rose-100">
-                                <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Void
+                                <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Void Bill
                             </button>
                         </div>
                     </div>

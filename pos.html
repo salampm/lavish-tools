@@ -42,7 +42,7 @@
                     <button onclick="window.setPOSTab('pos')" id="tab-pos" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Terminal</button>
                     <button onclick="window.setPOSTab('history')" id="tab-history" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Sales History</button>
                     <button onclick="window.setPOSTab('dues')" id="tab-dues" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Pending Dues</button>
-                    <button onclick="window.setPOSTab('voided')" id="tab-voided" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-rose-600 hidden">Void Audit</button>
+                    <button onclick="window.setPOSTab('voided')" id="tab-voided" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-rose-600">Void Audit</button>
                     <button onclick="window.setPOSTab('tickets')" id="tab-tickets" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent transition-all hover:text-violet-600">Saved Tickets</button>
                 </div>
             </div>
@@ -132,10 +132,7 @@
                     tabs.forEach(t => {
                         const el = document.getElementById(`tab-${t}`);
                         if (el) {
-                            if (t === 'voided') {
-                                if (window.erpState.role === 'Owner') el.classList.remove('hidden');
-                                else el.classList.add('hidden');
-                            }
+                            el.classList.remove('hidden'); // Always show all tabs
                             if (t === window.erpState.tab) {
                                 el.classList.add(t === 'voided' ? 'border-rose-600' : 'border-violet-600', t === 'voided' ? 'text-rose-600' : 'text-violet-600');
                                 el.classList.remove('border-transparent');
