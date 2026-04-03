@@ -22,6 +22,8 @@
         { patterns: ['add expense', 'record expense', 'log expense'], action: 'addExpense' },
         { patterns: ['bill count', 'how many bills', 'total bills', 'invoice count'], action: 'billCount' },
         { patterns: ['profit', 'margin', 'net profit'], action: 'profitToday' },
+        { patterns: ['today', 'report', 'summary', 'status'], action: 'todayReport' },
+        { patterns: ['stock of', 'check stock', 'how many', 'inventory'], action: 'checkStock' },
         { patterns: ['view cart', 'show cart', 'what is in cart', 'cart items'], action: 'viewCart' },
         { patterns: ['clear cart', 'empty cart', 'remove all from cart'], action: 'clearCart' },
         { patterns: ['help', 'what can you do', 'commands', 'guide'], action: 'help' },
@@ -326,6 +328,30 @@
                 }
                 state.cart = []; if (window.renderApp) window.renderApp(); return { text: "🧹 Cart cleared!" };
             }
+            case 'profitToday': {
+                const now = Date.now(), todayTs = getTodayTimestamp();
+                const todaySales = (state.sales || []).filter(s => toTimestamp(s.date || s.createdAt) >= todayTs);
+                const todayExpenses = (state.expenses || []).filter(e => toTimestamp(e.date || e.createdAt) >= todayTs);
+                const rev = todaySales.reduce((s, x) => s + (x.total || 0), 0);
+                const exp = todayExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+                return { text: `💸 **Performance Today**:\n• Revenue: ${fmt(rev)}\n• Expenses: ${fmt(exp)}\n---\n💰 **Net Cash**: ${fmt(rev - exp)}` };
+            }
+            case 'todayReport': {
+                const now = Date.now(), todayTs = getTodayTimestamp();
+                const sales = (state.sales || []).filter(s => toTimestamp(s.date || s.createdAt) >= todayTs);
+                const exps = (state.expenses || []).filter(e => toTimestamp(e.date || e.createdAt) >= todayTs);
+                const orders = (state.orders || []).filter(o => o.status !== 'Delivered');
+                const rev = sales.reduce((s, x) => s + (x.total || 0), 0);
+                const debt = sales.reduce((s, x) => s + (x.balanceDue || 0), 0);
+                return { text: `⚡ **Quick Summary (${new Date().toLocaleDateString()})**:\n• 🧾 Sales: **${sales.length} bills** (${fmt(rev)})\n• 💸 Expenses: **${fmt(exps.reduce((s,e)=>s+e.amount,0))}**\n• 🧵 Active Orders: **${orders.length}**\n• 🚩 Total Dues: **${fmt(debt)}**` };
+            }
+            case 'checkStock': {
+                const name = parseItemName(text);
+                if (!name) return { text: "What item? ✨ Try: *'Stock of Maryam Dress'*" };
+                const matches = (state.items || []).filter(i => (i.name && i.name.toLowerCase().includes(name)) || (i.sku && i.sku.toLowerCase() === name));
+                if (!matches.length) return { text: `🔍 Found **0** items matching **"${esc(name)}"**.` };
+                return { text: matches.slice(0, 5).map(i => `📦 **${esc(i.name)}**: ${i.stock} ${i.soldBy || 'pcs'} left (${fmt(i.sellingPrice)})`).join('\n') };
+            }
             case 'addExpense': {
                 const amt = parseAmount(text);
                 if (!amt) return { text: "How much? Try: *'Add expense 500 for Tea'*" };
@@ -370,30 +396,41 @@
         if (document.getElementById('chatbot-overlay')) return;
         const overlay = document.createElement('div'); overlay.id = 'chatbot-overlay'; overlay.className = "fixed inset-0 z-[8999]";
         overlay.innerHTML = `
-            <div class="absolute inset-0 bg-slate-900/10 transition-opacity" onclick="window.closeChatbot()"></div>
-            <div class="fixed bottom-0 lg:bottom-10 right-0 lg:right-10 z-[9000] flex flex-col items-end p-4 lg:p-0 pointer-events-none">
-                <div id="chatbot-window" onclick="event.stopPropagation()" class="bg-white/95 w-full lg:w-[440px] max-w-[95vw] h-[80vh] lg:h-[680px] rounded-[40px] shadow-[0_32px_80px_-16px_rgba(124,58,237,0.3)] border border-slate-200 flex flex-col overflow-hidden animate-pop-in mb-4 pointer-events-auto ring-1 ring-black/5">
-                    <div class="bg-slate-950 p-8 flex items-center gap-5 shrink-0 relative overflow-hidden">
-                        <div class="w-14 h-14 bg-gradient-to-tr from-violet-600 to-indigo-500 rounded-2xl flex items-center justify-center shadow-violet-500/40 relative"><span class="font-black text-white text-xl">L</span><div class="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-slate-900 rounded-full"></div></div>
-                        <div class="flex-1 text-white"><h3 class="font-black text-base uppercase tracking-tight opacity-90">Lily Assistant</h3><div class="flex items-center gap-2"><span class="text-emerald-400 text-[8px] font-black uppercase tracking-[0.2em] animate-pulse">Live</span><span class="text-slate-500 text-[8px] font-bold uppercase leading-none">• Hybrid Intelligence v4</span></div></div>
-                        <button onclick="window.closeChatbot()" class="w-12 h-12 flex items-center justify-center text-white/80 hover:text-white transition-all bg-white/5 rounded-full hover:bg-white/10 z-20 cursor-pointer active:scale-90"><i data-lucide="x" class="w-6 h-6"></i></button>
+            <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onclick="window.closeChatbot()"></div>
+            <div class="fixed inset-0 lg:inset-auto lg:bottom-10 lg:right-10 z-[9000] flex flex-col items-end p-0 lg:p-0 pointer-events-none">
+                <div id="chatbot-window" onclick="event.stopPropagation()" class="bg-white/95 w-full h-full lg:w-[440px] lg:h-[680px] lg:rounded-[40px] shadow-2xl border-0 lg:border border-slate-200 flex flex-col overflow-hidden animate-pop-in pointer-events-auto ring-1 ring-black/5">
+                    <div class="bg-slate-950 p-6 lg:p-8 flex items-center gap-4 shrink-0 relative overflow-hidden">
+                        <div class="w-12 h-12 lg:w-14 lg:h-14 bg-gradient-to-tr from-violet-600 to-indigo-500 rounded-2xl flex items-center justify-center shadow-violet-500/40 relative">
+                            <span class="font-black text-white text-lg lg:text-xl">L</span>
+                            <div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-slate-950 rounded-full"></div>
+                        </div>
+                        <div class="flex-1 text-white">
+                            <h3 class="font-black text-sm lg:text-base uppercase tracking-tight opacity-90">Lily Assistant</h3>
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-emerald-400 text-[8px] font-black uppercase tracking-[0.2em] animate-pulse">Live</span>
+                                <span class="text-slate-500 text-[8px] font-bold uppercase leading-none">• Hybrid AI v4</span>
+                            </div>
+                        </div>
+                        <button onclick="window.closeChatbot()" class="w-12 h-12 flex items-center justify-center text-white/50 hover:text-white transition-all bg-white/5 rounded-xl hover:bg-white/10 z-20 cursor-pointer active:scale-90">
+                            <i data-lucide="x" class="w-6 h-6"></i>
+                        </button>
                     </div>
                     <div id="chat-messages" class="flex-1 overflow-y-auto px-6 py-8 space-y-6 bg-slate-50/10 custom-scrollbar scroll-smooth">
                         <div class="flex gap-4">
                             <div class="w-10 h-10 bg-white border border-slate-100 rounded-2xl flex items-center justify-center text-violet-600 text-xs font-black">L</div>
-                            <div class="bg-white p-5 rounded-3xl rounded-tl-none border border-slate-100 shadow-sm max-w-[85%] text-sm leading-relaxed">Greetings! I am **Lily**. 🌸 Ask me anything about your boutique!</div>
+                            <div class="bg-white p-5 rounded-3xl rounded-tl-none border border-slate-100 shadow-sm max-w-[85%] text-sm leading-relaxed text-slate-700">Greetings! I am **Lily**. 🌸 Ask me anything about your boutique!</div>
                         </div>
                     </div>
                     <div class="px-6 py-4 flex gap-2 overflow-x-auto no-scrollbar border-t border-slate-100 shrink-0 bg-white/50">
-                        <button onclick="document.getElementById('chat-input').value='sales today'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2 bg-white border border-slate-200 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:border-violet-300 hover:text-violet-600 transition-all">Sales</button>
-                        <button onclick="document.getElementById('chat-input').value='pending dues'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2 bg-white border border-slate-200 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:border-violet-300 hover:text-violet-600 transition-all">Dues</button>
-                        <button onclick="document.getElementById('chat-input').value='overdue orders'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2 bg-white border border-slate-200 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:border-violet-300 hover:text-violet-600 transition-all">Orders</button>
-                        <button onclick="document.getElementById('chat-input').value='help'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2 bg-white border border-slate-200 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:border-violet-300 hover:text-violet-600 transition-all">Help</button>
+                        <button onclick="document.getElementById('chat-input').value='today report'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:border-violet-300 hover:text-violet-600 transition-all shadow-sm">Report</button>
+                        <button onclick="document.getElementById('chat-input').value='stock check'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:border-violet-300 hover:text-violet-600 transition-all shadow-sm">Stock</button>
+                        <button onclick="document.getElementById('chat-input').value='urgent orders'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:border-violet-300 hover:text-violet-600 transition-all shadow-sm">Orders</button>
+                        <button onclick="document.getElementById('chat-input').value='help'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:border-violet-300 hover:text-violet-600 transition-all shadow-sm">Help</button>
                     </div>
                     <div class="p-6 bg-white border-t border-slate-100 shrink-0">
-                        <div class="flex gap-4 bg-slate-50 p-2 rounded-[32px] border border-slate-100 focus-within:bg-white focus-within:ring-4 focus-within:ring-violet-50 transition-all">
+                        <div class="flex gap-4 bg-slate-50 p-1.5 rounded-[30px] border border-slate-100 focus-within:bg-white focus-within:ring-4 focus-within:ring-violet-100/50 transition-all">
                             <input id="chat-input" type="text" placeholder="Speak to Lily..." class="flex-1 px-4 py-4 bg-transparent font-bold text-sm outline-none" onkeydown="if(event.key==='Enter')window.sendChatMessage()">
-                            <button id="chat-send-btn" onclick="window.sendChatMessage()" class="w-12 h-12 bg-violet-600 text-white rounded-2xl shadow-lg hover:bg-violet-700 active:scale-90 transition-all flex items-center justify-center"><i data-lucide="send" class="w-5 h-5"></i></button>
+                            <button id="chat-send-btn" onclick="window.sendChatMessage()" class="w-12 h-12 bg-slate-900 text-white rounded-2xl shadow-lg hover:bg-violet-600 active:scale-90 transition-all flex items-center justify-center"><i data-lucide="send" class="w-5 h-5"></i></button>
                         </div>
                     </div>
                 </div>
