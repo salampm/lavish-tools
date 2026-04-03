@@ -185,12 +185,12 @@
                 window.batchedRender();
             });
 
-            window.FB.collection('voided_sales').onSnapshot((snap) => {
+            window.FB.root('voided_sales').onSnapshot((snap) => {
                 window.erpState.voidedSales = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.batchedRender();
             });
 
-            window.FB.collection('voided_orders').onSnapshot((snap) => {
+            window.FB.root('voided_orders').onSnapshot((snap) => {
                 window.erpState.voidedOrders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.batchedRender();
             });

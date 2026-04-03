@@ -35,11 +35,22 @@
             // Search POS sales
             let snap = await window.FB.collection('sales').where('billNo', 'in', queryValues).get();
             let isTailoring = false;
-            
+
             // Search Tailoring orders (root)
             if (snap.empty) {
                 snap = await window.FB.root('orders').where('billNo', 'in', queryValues).get();
                 if (!snap.empty) isTailoring = true;
+            }
+
+            // Search VOIDED records (root)
+            let isVoided = false;
+            if (snap.empty) {
+                snap = await window.FB.root('voided_sales').where('billNo', 'in', queryValues).get();
+                if (!snap.empty) isVoided = true;
+                else {
+                    snap = await window.FB.root('voided_orders').where('billNo', 'in', queryValues).get();
+                    if (!snap.empty) { isVoided = true; isTailoring = true; }
+                }
             }
 
             if (snap.empty) {
@@ -59,9 +70,9 @@
             const o = { id: snap.docs[0].id, ...snap.docs[0].data() };
             window.currentOrder = o;
             const total = o.total || o.subtotal || o.totalCost || 0;
-            const finalTotal = isTailoring ? (o.totalCost - (o.deliveryDiscount || 0)) : total;
+            const finalTotal = isTailoring ? ((o.totalCost || 0) - (o.deliveryDiscount || 0)) : total;
             const date = fmtDate(o.date || o.createdAt || o.orderDate);
-            const bal = isTailoring ? (o.totalCost - (o.deliveryDiscount || 0) - (o.advancePaid || 0)) : 0;
+            const bal = isTailoring ? ((o.totalCost || 0) - (o.deliveryDiscount || 0) - (o.advancePaid || 0)) : 0;
 
             if (isTailoring) {
                 // TAILORING RECEIPT (MATCHES tracker modal)
@@ -96,8 +107,16 @@
                 }
 
                 container.innerHTML = `
-                <div class="p-10 pb-16 relative">
+                <div class="p-10 pb-16 relative ${isVoided ? 'grayscale-[0.3] opacity-90' : ''}">
                     <button onclick="window.closeReceipt()" class="absolute top-8 right-8 bg-slate-50 p-3 rounded-full text-slate-300 hover:text-slate-900 transition-all"><i data-lucide="x" class="w-5 h-5"></i></button>
+
+                    ${isVoided ? `
+                        <div class="mb-8 bg-rose-600 text-white p-6 rounded-[32px] text-center shadow-xl shadow-rose-200">
+                             <p class="text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-80">System Audit</p>
+                             <h4 class="text-xl font-black uppercase tracking-tighter">OFFICIALLY VOIDED</h4>
+                             <p class="text-[9px] font-bold mt-2 opacity-70">This transaction has been nullified and is no longer valid.</p>
+                        </div>
+                    ` : ''}
                     
                     <p class="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-2 leading-none">${window.esc(o.billNo)}</p>
                     <h2 class="text-3xl font-bold text-slate-900 leading-tight mb-8" style="font-family: 'Cormorant Garamond', serif;">${window.esc(o.customerName)}</h2>

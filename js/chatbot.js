@@ -347,20 +347,6 @@
             document.body.appendChild(btn);
         }
 
-        // 2. Header-Right Integration (Desktop / Dashboard Context)
-        const headerRight = document.querySelector('.header-right');
-        if (headerRight && !document.getElementById('lily-header-btn')) {
-            const hBtn = document.createElement('button');
-            hBtn.id = 'lily-header-btn';
-            hBtn.onclick = window.openChatbot;
-            hBtn.className = "flex items-center gap-3 px-4 py-2.5 bg-violet-50 hover:bg-violet-600 group transition-all rounded-2xl border border-violet-100/50 shadow-sm";
-            hBtn.innerHTML = `
-                <i data-lucide="sparkles" class="w-4 h-4 text-violet-600 group-hover:text-white transition-colors"></i>
-                <span class="text-[10px] font-black text-violet-700 uppercase tracking-widest group-hover:text-white transition-colors">Ask Lily</span>
-            `;
-            headerRight.prepend(hBtn);
-        }
-
         if (window.lucide) lucide.createIcons();
     };
     if (document.readyState === 'complete') window.renderChatFAB(); else window.addEventListener('load', window.renderChatFAB);
