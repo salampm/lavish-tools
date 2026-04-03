@@ -662,7 +662,20 @@ window.APP_VERSION = "v2.4.2";
                                  const bal = s._balance;
                                  const breakdown = s.paymentBreakdown || {};
                                  let methodLabel = s.paymentMode || s.paymentMethod || 'Cash';
-                                 if (methodLabel === 'Mixed') {
+                                 
+                                 // HIGH-FIDELITY AUDIT: Calculate breakdown from full payment history
+                                 if (s.paymentLog && s.paymentLog.length > 0) {
+                                     let cSum = 0, uSum = 0, bSum = 0;
+                                     s.paymentLog.forEach(log => {
+                                         cSum += (log.cashParts || 0);
+                                         uSum += (log.upiParts || 0);
+                                         if (log.method === 'Bank' || log.method === 'Card') bSum += (log.amount || 0);
+                                     });
+                                     if (cSum > 0 && uSum > 0) methodLabel = `Mixed (C: ${window.fmt(cSum)} | U: ${window.fmt(uSum)})`;
+                                     else if (cSum > 0) methodLabel = `Cash (${window.fmt(cSum)})`;
+                                     else if (uSum > 0) methodLabel = `UPI (${window.fmt(uSum)})`;
+                                     else if (bSum > 0) methodLabel = `Bank (${window.fmt(bSum)})`;
+                                 } else if (methodLabel === 'Mixed') {
                                      methodLabel = `Mixed (C: ${window.fmt(breakdown.cash || 0)} | U: ${window.fmt(breakdown.upi || 0)})`;
                                  } else if (s.advanceMethod === 'Mixed' && s._type === 'order') {
                                      const ab = s.advanceBreakdown || {};
