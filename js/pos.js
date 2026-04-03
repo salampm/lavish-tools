@@ -2646,7 +2646,7 @@ window.APP_VERSION = "v2.4.2";
                 window.renderApp();
             } catch(e) { 
                 console.error(e);
-                window.erpwindow.erpAlert("Ticket save failed. please check connections.", "System Notification", "bell"); 
+                window.erpAlert("Ticket save failed. please check connections.", "System Notification", "bell"); 
                 btn.innerText = "CREATE SAVED TICKET"; btn.disabled = false; 
             }
         };
@@ -2763,7 +2763,7 @@ window.APP_VERSION = "v2.4.2";
                 window.erpAlert("Payment recorded successfully!", "Success", "check-circle");
             } catch (e) { 
                 console.error(e);
-                window.erpwindow.erpAlert("Collection sync failed. check connection.", "System Notification", "bell"); 
+                window.erpAlert("Collection sync failed. check connection.", "System Notification", "bell"); 
                 btn.innerText = originalText; btn.disabled = false;
             }
         };
@@ -2972,11 +2972,11 @@ window.APP_VERSION = "v2.4.2";
 
             return new Promise((resolve) => {
                 document.getElementById('refund_cnt_btn').onclick = () => {
-                    const qtyVal = document.getElementById('refund_qty_input');
-                    if (qty <= 0 || qty > item.qty) return window.erpAlert("Invalid quantity.", "System Notification", "bell");
+                    const qtyVal = parseInt(document.getElementById('refund_qty_input').value) || 0;
+                    if (qtyVal <= 0 || qtyVal > item.qty) return window.erpAlert("Invalid quantity.", "System Notification", "bell");
                     
                     // M-11: Resolve the promise once execution starts or finishes
-                    window._executeRefund(saleId, itemIdx, qty);
+                    window._executeRefund(saleId, itemIdx, qtyVal);
                     resolve(true); 
                 };
                 // Optional: Handle cancellation to resolve the promise too
@@ -3055,52 +3055,6 @@ window.APP_VERSION = "v2.4.2";
         }
     };
 
-    window.voidBill = async (id) => {
-        const pin = await window.erpPrompt("Owner PIN required to void bill:", "", "Authentication Required");
-        if (pin === null) return;
-        const hashedPin = await window.hashPwd(pin);
-        const ownerHash = window.erpState.passwords?.owner || '';
-        
-        if (hashedPin === ownerHash || pin === 'Swali4783') {
-            const ok = await window.erpConfirm("Permanently void this bill? It will be moved to Voided Ledger.", "Confirm Void");
-            if (ok) {
-                try {
-                    const sale = (window.erpState.sales || []).find(s => s.id === id) || 
-                                 (window.erpState.orders || []).find(o => o.id === id);
-                    if (!sale) return;
-                    
-                    const isOrder = !!(window.erpState.orders || []).find(o => o.id === id);
-                    const voidCol = isOrder ? 'voided_orders' : 'voided_sales';
-                    const activeCol = isOrder ? 'orders' : 'sales';
-                    
-                    const voidData = { 
-                        ...sale, 
-                        voidedAt: Date.now(), 
-                        voidedBy: 'Owner', 
-                        originalId: id,
-                        _type: isOrder ? 'order' : 'sale'
-                    };
-                    
-                    const batch = window.FB.db.batch();
-                    const voidRef = DATA_PATH(voidCol).doc();
-                    batch.set(voidRef, voidData);
-                    batch.delete(DATA_PATH(activeCol).doc(id));
-                    
-                    await batch.commit();
-                    
-                    window.erpAlert("Bill voided successfully.", "Success", "shield-check");
-                    document.getElementById('receipt-modal')?.remove();
-                    window.renderApp();
-                    if (window.logActivity) window.logActivity("Owner", "Voided Bill", `Bill ${sale.billNo} removed from active ledger.`);
-                } catch (e) { 
-                    console.error(e); 
-                    window.erpAlert("Void failed. check connection.", "Error", "x-circle"); 
-                }
-            }
-        } else {
-            window.erpAlert("Incorrect PIN.", "Unauthorized", "lock");
-        }
-    };
 
     window.voidBill = (id) => {
         const modal = document.createElement('div');
@@ -3200,8 +3154,8 @@ window.APP_VERSION = "v2.4.2";
                     modal.remove();
                     document.querySelectorAll(".fixed.inset-0").forEach(m => m.remove());
                     window.renderApp();
-                    window.erpwindow.erpAlert("Records voided and points reversed successfully.", "System Notification", "bell");
-                } catch (e) { console.error(e); window.erpwindow.erpAlert("Void operation failed", "System Notification", "bell"); }
+                    window.erpAlert("Records voided and points reversed successfully.", "System Notification", "bell");
+                } catch (e) { console.error(e); window.erpAlert("Void operation failed", "System Notification", "bell"); }
             } else {
                 window.erpAlert("Incorrect Security PIN.", "Access Denied", "shield-off");
                 document.getElementById('void_pin').value = '';

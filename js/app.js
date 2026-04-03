@@ -639,9 +639,10 @@ window.generateThermalPrint = function(data) {
         html += `<div style='text-align:center;font-size:9px;color:#666;'>${window.esc(line.trim())}</div>`;
     });
     
-    html += `<div style='text-align:center;font-size:9px;font-weight:bold;margin-top:2px;display:flex;justify-content:center;gap:12px;'>`;
+    // Website and Mobile in one line with better spacing
+    html += `<div style='text-align:center;font-size:9px;font-weight:bold;margin-top:2px;'>`;
     html += `<span>${window.esc(pConf.phone)}</span>`;
-    if (pConf.website) html += `<span style='color:#888;'>${window.esc(pConf.website)}</span>`;
+    if (pConf.website) html += `<span style='margin:0 8px;color:#eee;'>|</span><span style='color:#666;'>${window.esc(pConf.website)}</span>`;
     html += `</div>`;
 
     // Extra Top Fields
@@ -659,8 +660,8 @@ window.generateThermalPrint = function(data) {
     
     if (pConf.showCustomer && (data.customerName || data.customerPhone)) {
         html += `<div style='margin-top:4px;border-left:2px solid #eee;padding-left:6px;'>`;
-        if (data.customerName) html += `<div style='font-weight:bold;'>${window.esc(data.customerName.toUpperCase())}</div>`;
-        if (data.customerPhone) html += `<div>${window.esc(data.customerPhone)}</div>`;
+        if (data.customerName) html += `<div style='font-weight:bold;font-size:10px;'>${window.esc(data.customerName.toUpperCase())}</div>`;
+        if (data.customerPhone) html += `<div style='font-size:10px;'>${window.esc(data.customerPhone)}</div>`;
         html += `</div>`;
     }
 
@@ -672,20 +673,20 @@ window.generateThermalPrint = function(data) {
     html += `<hr style='border:none;border-top:1px dashed #ccc;margin:8px 0;'>`;
 
     // Items
-    html += `<table style='width:100%;font-size:11px;text-align:left;border-collapse:collapse;'>`;
-    html += `<tr style='font-weight:900;text-transform:uppercase;font-size:9px;color:#666;'><td style='padding-bottom:4px;'>Item</td><td style='text-align:center;'>Qty</td><td style='text-align:right;'>Amt</td></tr>`;
+    html += `<table style='width:100%;font-size:11px;text-align:left;border-collapse:collapse;table-layout:fixed;'>`;
+    html += `<tr style='font-weight:900;text-transform:uppercase;font-size:9px;color:#666;'><td style='padding-bottom:4px;width:55%;'>Item Description</td><td style='text-align:center;width:15%;'>Qty</td><td style='text-align:right;width:30%;'>Amt</td></tr>`;
 
     (data.items || []).forEach(i => {
         html += `<tr><td style='padding:4px 0;' colspan='3'><div style='font-weight:bold;'>${window.esc(i.name)}</div>`;
         if (i.tailoringRef) html += `<div style='font-size:9px;color:#666;'>Job: ${window.esc(i.tailoringRef)}</div>`;
         html += `</td></tr>`;
-        html += `<tr style='font-size:10px;color:#444;'><td style='padding-bottom:6px;'>${i.qty} x ${fmt(i.price)}</td><td style='text-align:center;padding-bottom:6px;'>${i.qty}</td><td style='text-align:right;padding-bottom:6px;'>${fmt(i.qty * i.price)}</td></tr>`;
+        html += `<tr style='font-size:10px;color:#444;'><td style='padding-bottom:6px;'>@ ${fmt(i.price)}</td><td style='text-align:center;padding-bottom:6px;'>${i.qty}</td><td style='text-align:right;padding-bottom:6px;'>${fmt(i.qty * i.price)}</td></tr>`;
     });
     html += `</table>`;
     html += `<hr style='border:none;border-top:1px dashed #ccc;margin:8px 0;'>`;
 
-    const printRow = (l, v, b = false, c = '#111') =>
-        `<div style='display:flex;justify-content:space-between;${b ? "font-weight:900;font-size:12px;margin:4px 0;" : "margin-bottom:2px;"}color:${c};'><span>${l}</span><span>${v}</span></div>`;
+    const printRow = (l, v, b = false, c = '#111', sz = '11px') =>
+        `<div style='display:flex;justify-content:space-between;${b ? "font-weight:900;margin:6px 0;" : "margin-bottom:2px;"}color:${c};font-size:${sz};'><span>${l}</span><span>${v}</span></div>`;
 
     html += printRow("SUBTOTAL", fmt(data.subtotal));
     if (data.discount > 0) html += printRow("DISCOUNT", "- " + fmt(data.discount), false, "#dc2626");
@@ -698,9 +699,9 @@ window.generateThermalPrint = function(data) {
     }
     
     html += `<hr style='border:none;border-top:2px solid #111;margin:6px 0;'>`;
-    html += printRow("TOTAL AMOUNT", fmt(data.total), true);
-    html += printRow("PAID", fmt(data.paid));
-    if (data.balance > 0) html += printRow("BALANCE DUE", fmt(data.balance), true, "#dc2626");
+    html += printRow("NET AMOUNT", fmt(data.total), true, '#111', '14px');
+    html += printRow("PAID AMOUNT", fmt(data.paid), false, '#666', '12px');
+    if (data.balance > 0) html += printRow("BALANCE DUE", fmt(data.balance), true, "#000", '14px');
 
     html += `<hr style='border:none;border-top:1px dashed #ccc;margin:8px 0;'>`;
 
@@ -708,9 +709,9 @@ window.generateThermalPrint = function(data) {
     if (data.loyaltySnapshot) {
         const ls = data.loyaltySnapshot;
         html += `<div style='margin-top:4px;background:#f8fafc;border:1px solid #e2e8f0;padding:6px;text-align:center;border-radius:4px;'>`;
-        html += `<div style='font-weight:900;font-size:9px;text-transform:uppercase;color:#475569;margin-bottom:2px;'>Loyalty Status</div>`;
-        html += `<div style='font-size:10px;font-weight:bold;color:#1e293b;'>${(ls.tier || 'Basic').toUpperCase()} TIER</div>`;
-        html += `<div style='font-size:9px;color:#64748b;'>earned ${ls.earned} | total:${ls.total} pts</div>`;
+        html += `<div style='font-weight:900;font-size:9px;text-transform:uppercase;color:#475569;margin-bottom:2px;'>Loyalty Snapshot</div>`;
+        html += `<div style='font-size:11px;font-weight:bold;color:#1e293b;'>${(ls.tier || 'Basic').toUpperCase()} MEMBER</div>`;
+        html += `<div style='font-size:10px;color:#64748b;font-weight:900;'>Earned: ${ls.earned} | Balance: ${ls.total} pts</div>`;
         html += `</div>`;
         html += `<hr style='border:none;border-top:1px dashed #ccc;margin:8px 0;'>`;
     }
@@ -718,28 +719,28 @@ window.generateThermalPrint = function(data) {
     // Care Note
     if (pConf.note) {
         pConf.note.split('\n').forEach(line => {
-            html += `<div style='text-align:center;font-size:9px;font-weight:bold;'>${window.esc(line.trim())}</div>`;
+            if (line.trim()) html += `<div style='text-align:center;font-size:9px;font-weight:black;margin-bottom:2px;text-transform:uppercase;'>${window.esc(line.trim())}</div>`;
         });
         html += `<hr style='border:none;border-top:1px dashed #ccc;margin:8px 0;'>`;
     }
 
     // Footer
-    html += `<div style='text-align:center;font-size:10px;font-weight:bold;'>${window.esc(pConf.footer1 || 'Thank you!')}</div>`;
-    if (pConf.footer2) html += `<div style='text-align:center;font-size:9px;margin-top:2px;'>${window.esc(pConf.footer2)}</div>`;
-    if (pConf.footer3) html += `<div style='text-align:center;font-size:9px;margin-top:2px;'>${window.esc(pConf.footer3)}</div>`;
+    html += `<div style='text-align:center;font-size:11px;font-weight:black;text-transform:uppercase;'>${window.esc(pConf.footer1 || 'Thank you!')}</div>`;
+    if (pConf.footer2) html += `<div style='text-align:center;font-size:10px;margin-top:2px;font-weight:700;'>${window.esc(pConf.footer2)}</div>`;
+    if (pConf.footer3) html += `<div style='text-align:center;font-size:10px;margin-top:2px;font-weight:700;'>${window.esc(pConf.footer3)}</div>`;
 
     // Extra Bottom Fields
     if (pConf.extraFields) {
         pConf.extraFields.filter(f => f.position === 'bottom').forEach(f => {
-            html += `<div style='text-align:center;font-size:9px;font-weight:bold;margin-top:2px;'>${window.esc(f.label)}: ${window.esc(f.value)}</div>`;
+            html += `<div style='text-align:center;font-size:10px;font-weight:black;margin-top:4px;text-transform:uppercase;'>${window.esc(f.label)}: ${window.esc(f.value)}</div>`;
         });
     }
 
     if (window.erpState.gstin) {
-        html += `<div style='text-align:center;font-size:9px;color:#999;margin-top:8px;'>GSTIN: ${window.erpState.gstin}</div>`;
+        html += `<div style='text-align:center;font-size:9px;color:#000;margin-top:8px;font-weight:bold;'>GSTIN: ${window.erpState.gstin}</div>`;
     }
 
-    html += `<div style='text-align:center;margin-top:15px;color:#ccc;font-size:8px;letter-spacing:1px;'>* * * * * * * * * *</div>`;
+    html += `<div style='text-align:center;margin-top:15px;color:#aaa;font-size:9px;letter-spacing:1px;font-weight:bold;'>* * * CLOUD INVOICE * * *</div>`;
     html += `</body></html>`;
 
     const style = `<style>
