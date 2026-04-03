@@ -22,6 +22,8 @@
         { patterns: ['add expense', 'record expense', 'log expense'], action: 'addExpense' },
         { patterns: ['bill count', 'how many bills', 'total bills', 'invoice count'], action: 'billCount' },
         { patterns: ['profit', 'margin', 'net profit'], action: 'profitToday' },
+        { patterns: ['view cart', 'show cart', 'what is in cart', 'cart items'], action: 'viewCart' },
+        { patterns: ['clear cart', 'empty cart', 'remove all from cart'], action: 'clearCart' },
         { patterns: ['help', 'what can you do', 'commands', 'guide'], action: 'help' },
         { patterns: ['hi', 'hello', 'hey', 'good morning', 'good evening'], action: 'greet' },
         { patterns: ['add '], action: 'ambiguousAdd' }
@@ -31,7 +33,7 @@
     const CLEANER_REGEXES = (() => {
         const cleaners = [
             'add item', 'new item', 'create item', 'add product', 'add to cart', 'add to card', 'add to bill', 'add to', 'to cart', 'to card', 'in cart', 'in card',
-            'stock of', 'check stock', 'stock check', 'how many', 'sell', 'named', 'called', 'name', 'availability', 'item', 'product', 'add'
+            'stock of', 'check stock', 'stock check', 'how many', 'sell', 'named', 'called', 'name', 'availability', 'item', 'product', 'add', 'points of', 'points'
         ];
         return cleaners.sort((a, b) => b.length - a.length).map(c => {
             const escaped = c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -169,7 +171,7 @@
             return { text: responseText, actionResult };
         } catch (e) { 
             console.error('[Lily] Fetch failed:', e);
-            return { text: `⚠️ **Connection Failed**: ${e.message}. Check if the AI Worker at \`${GEMINI_URL}\` is active.` }; 
+            return { text: `⚠️ **Connection Error**: I couldn't reach my AI brain. I'm operating in **Local Mode** right now. You can still ask me about sales, stock, and orders!` }; 
         }
     }
 
@@ -260,6 +262,80 @@
             case 'overdueOrders': {
                 const overdue = (state.orders || []).filter(o => o.status !== 'Delivered' && o.deliveryDate && toTimestamp(o.deliveryDate) < Date.now());
                 return { text: overdue.length ? `🚨 **${overdue.length} Overdue Orders:**\n` + overdue.slice(0, 5).map(o => `• **${esc(o.billNo)}**: ${esc(o.customerName)}`).join('\n') : "✅ No overdue orders." };
+            }
+            case 'profitToday': {
+                const sales = (state.sales || []).filter(s => toTimestamp(s.date || s.createdAt) >= todayTs);
+                const exp = (state.expenses || []).filter(e => toTimestamp(e.date || e.createdAt) >= todayTs);
+                const revenue = sales.reduce((s, x) => s + (x.total || 0), 0);
+                const spending = exp.reduce((s, e) => s + (e.amount || 0), 0);
+                const profit = revenue - spending;
+                return { text: `📈 **Daily Summary:**\nRevenue: ${fmt(revenue)}\nExpenses: ${fmt(spending)}\n---\n**Net Profit: ${fmt(profit)}** ${profit >= 0 ? '💰' : '⚠️'}` };
+            }
+            case 'billCount': {
+                const sales = (state.sales || []).filter(s => toTimestamp(s.date || s.createdAt) >= todayTs);
+                return { text: `🧾 You've generated **${sales.length} bills** today.` };
+            }
+            case 'topSelling': {
+                const itemMap = {};
+                (state.sales || []).filter(s => toTimestamp(s.date || s.createdAt) >= todayTs).forEach(s => {
+                    (s.items || []).forEach(it => { itemMap[it.name] = (itemMap[it.name] || 0) + (it.qty || 1); });
+                });
+                const top = Object.entries(itemMap).sort((a,b) => b[1] - a[1]).slice(0, 5);
+                if (!top.length) return { text: "No sales recorded today yet." };
+                return { text: `💎 **Top Performers Today:**\n` + top.map(([name, qty], i) => `${i+1}. **${esc(name)}** (${qty} units)`).join('\n') };
+            }
+            case 'lowStock': {
+                const low = (state.items || []).filter(i => (i.stock || 0) < 5);
+                if (!low.length) return { text: "✅ All items are well stocked!" };
+                return { text: `⚠️ **Stock Alerts (< 5 units):**\n` + low.map(i => `• **${esc(i.name)}**: ${i.stock} left`).join('\n') };
+            }
+            case 'urgentOrders': {
+                const now = Date.now();
+                const urgent = (state.orders || []).filter(o => o.status !== 'Delivered' && o.deliveryDate && (toTimestamp(o.deliveryDate) - now) < (48 * 60 * 60 * 1000) && (toTimestamp(o.deliveryDate) - now) >= 0);
+                return { text: urgent.length ? `⏳ **${urgent.length} Orders Due Soon (next 48h):**\n` + urgent.slice(0, 5).map(o => `• **${esc(o.billNo)}**: ${esc(o.customerName)} (${new Date(toTimestamp(o.deliveryDate)).toLocaleDateString()})`).join('\n') : "✅ No urgent deadlines in the next 48 hours." };
+            }
+            case 'findClient': {
+                const name = parseItemName(text);
+                if (!name) return { text: "Who are you looking for? Try: *'Find Maryam'* " };
+                const matches = (state.clients || []).filter(c => (c.name && c.name.toLowerCase().includes(name)) || (c.phone && c.phone.includes(name)));
+                if (!matches.length) return { text: `❌ No client found matching **"${esc(name)}"**.` };
+                return { text: `👤 **Client Results:**\n` + matches.slice(0, 3).map(c => `• **${esc(c.name)}** (${c.phone || 'No Phone'})`).join('\n') };
+            }
+            case 'newOrder': {
+                if (window.openOrderModal) { window.openOrderModal(); return { text: "🧵 Opening the **New Tailoring Order** form for you..." }; }
+                return { text: "Tailoring module not connected." };
+            }
+            case 'checkLoyalty': {
+                const name = parseItemName(text).replace(/\bpoints\b/gi, '').trim();
+                if (!name) return { text: "Whose points? Try: *'Points of Maryam'* " };
+                const matches = (state.clients || []).filter(c => (c.name && c.name.toLowerCase().includes(name)) || (c.phone && c.phone.includes(name)));
+                if (!matches.length) return { text: `❌ No rewards account found for **"${esc(name)}"**.` };
+                return { text: matches.slice(0, 3).map(c => `👑 **${esc(c.name)}**: ${c.loyaltyPoints || 0} Points (${c.loyaltyTier || 'Basic'} Tier)`).join('\n') };
+            }
+            case 'viewCart': {
+                const cart = state.cart || [];
+                if (!cart.length) return { text: "🛒 Your cart is currently **empty**." };
+                const total = cart.reduce((s, it) => s + (it.price * it.qty), 0);
+                return { text: `🛒 **Cart Items (${cart.length}):**\n` + cart.map(it => `• ${it.qty}x **${esc(it.name)}** (${fmt(it.price * it.qty)})`).join('\n') + `\n---\n**Total: ${fmt(total)}**` };
+            }
+            case 'clearCart': {
+                if (window.erpConfirm) {
+                    const ok = await window.erpConfirm("Clear entire cart?", "AI Assistant");
+                    if (ok) { state.cart = []; if (window.renderApp) window.renderApp(); return { text: "🧹 Cart cleared!" }; }
+                    return { text: "Cart kept." };
+                }
+                state.cart = []; if (window.renderApp) window.renderApp(); return { text: "🧹 Cart cleared!" };
+            }
+            case 'addExpense': {
+                const amt = parseAmount(text);
+                if (!amt) return { text: "How much? Try: *'Add expense 500 for Tea'*" };
+                if (window.FB && window.erpState) {
+                    try {
+                        await window.FB.collection('expenses').add({ date: Date.now(), category: 'AI Logged', amount: amt, description: text, paymentMethod: 'Cash', createdAt: Date.now() });
+                        return { text: `✅ Recorded expense of **${fmt(amt)}**.` };
+                    } catch (e) { return { text: `❌ Failed to save expense: ${e.message}` }; }
+                }
+                return { text: "Database connection busy." };
             }
             case 'ambiguousAdd': return { text: "Add what? ✨\n\n• **Item**: *'Add Pashmina 5000'* \n• **Expense**: *'Add expense 200 for Tea'*" };
             default: return null;
@@ -398,16 +474,41 @@
 
     window.renderChatFAB = function () {
         if (document.getElementById('chat-integrated-btn') || document.getElementById('chat-fab')) return;
-        const headerRight = document.querySelector('header > div:last-child');
-        if (headerRight && headerRight.classList.contains('flex')) {
-            const btn = document.createElement('button'); btn.id = 'chat-integrated-btn'; btn.onclick = window.openChatbot;
+        
+        const isMobile = window.innerWidth < 1024;
+        const headerRight = document.querySelector('.header-right') || document.querySelector('header > div:last-child');
+        
+        // On Desktop, if we have a header right container, integrate it
+        if (!isMobile && headerRight && headerRight.classList.contains('flex')) {
+            const btn = document.createElement('button'); 
+            btn.id = 'chat-integrated-btn'; 
+            btn.onclick = window.openChatbot;
             btn.className = "flex items-center gap-3 px-5 py-3 bg-slate-950 text-white rounded-2xl shadow-xl shadow-slate-200 text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all ml-3 shrink-0 ring-1 ring-white/10";
-            btn.innerHTML = `<i data-lucide="sparkles" class="w-4 h-4 text-violet-400"></i> Ask Lily`; headerRight.insertBefore(btn, headerRight.firstChild); if (window.lucide) lucide.createIcons();
+            btn.innerHTML = `<i data-lucide="sparkles" class="w-4 h-4 text-violet-400"></i> Ask Lily`;
+            headerRight.insertBefore(btn, headerRight.firstChild);
+            if (window.lucide) lucide.createIcons();
         } else {
-            const f = document.createElement('div'); f.id = 'chat-fab';
-            f.innerHTML = `<button onclick="window.openChatbot()" class="fixed bottom-8 right-8 z-[8000] w-20 h-20 bg-slate-950 text-white rounded-[28px] shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all group ring-1 ring-white/10"><i data-lucide="bot" class="w-8 h-8 group-hover:text-violet-400 transition-colors"></i></button>`;
-            document.body.appendChild(f); if (window.lucide) lucide.createIcons();
+            // On Mobile or if no header container, use a FAB
+            const fab = document.createElement('div'); 
+            fab.id = 'chat-fab';
+            const fabStyles = isMobile 
+                ? "bottom-6 right-6 w-14 h-14 rounded-2xl" 
+                : "bottom-8 right-8 w-20 h-20 rounded-[28px]";
+            
+            fab.innerHTML = `<button onclick="window.openChatbot()" class="fixed ${fabStyles} z-[8000] bg-slate-950 text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all group ring-1 ring-white/10 border border-white/5"><i data-lucide="sparkles" class="${isMobile ? 'w-6 h-6' : 'w-8 h-8'} text-violet-400"></i></button>`;
+            document.body.appendChild(fab);
+            if (window.lucide) lucide.createIcons();
         }
     };
     if (document.readyState === 'complete') window.renderChatFAB(); else window.addEventListener('load', () => setTimeout(window.renderChatFAB, 800));
+    window.addEventListener('resize', () => {
+        // Redraw FAB on resize if needed (e.g. tablet rotation)
+        const fab = document.getElementById('chat-fab');
+        const integrated = document.getElementById('chat-integrated-btn');
+        if ((window.innerWidth < 1024 && integrated) || (window.innerWidth >= 1024 && fab)) {
+            if (fab) fab.remove();
+            if (integrated) integrated.remove();
+            window.renderChatFAB();
+        }
+    });
 })();

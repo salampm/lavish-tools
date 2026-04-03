@@ -23,17 +23,17 @@
 
         <!-- Main Content -->
         <main class="flex-1 flex flex-col min-w-0 bg-slate-50 h-screen overflow-hidden">
-            <header class="h-20 bg-white/70 backdrop-blur-xl border-b border-slate-200/60 px-8 flex items-center justify-between z-40 sticky top-0">
-                <div class="flex items-center gap-4">
-                    <button onclick="window.toggleSidebar()" class="p-2.5 bg-slate-100 rounded-xl text-slate-500 md:hidden hover:bg-slate-200 transition-colors">
+            <header class="h-20 bg-white/70 backdrop-blur-xl border-b border-slate-200/60 px-4 md:px-8 flex items-center justify-between z-40 sticky top-0">
+                <div class="flex items-center gap-2 md:gap-4">
+                    <button onclick="window.toggleSidebar()" class="p-2.5 bg-slate-100 rounded-xl text-slate-500 md:hidden hover:bg-slate-200 transition-colors shrink-0">
                         <i data-lucide="menu" class="w-5 h-5"></i>
                     </button>
-                    <div>
-                        <h2 class="text-xl font-black text-slate-900 tracking-tight uppercase">Control Center</h2>
-                        <p class="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Business Intelligence <span id="app-version"></span></p>
+                    <div class="min-w-0">
+                        <h2 class="text-lg md:text-xl font-black text-slate-900 tracking-tight uppercase truncate">Control Center</h2>
+                        <p class="text-[9px] font-black text-indigo-500 uppercase tracking-widest truncate">Business Intelligence <span id="app-version"></span></p>
                     </div>
                 </div>
-                <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 md:gap-4 header-right">
                     <div id="clock" class="text-right hidden md:block">
                         <p id="dash-time" class="text-sm font-black text-slate-900 leading-none">00:00:00</p>
                         <p id="dash-date" class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Monday, 16 March</p>
