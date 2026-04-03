@@ -2,9 +2,8 @@
 (function () {
 
     const BOT_NAME = "Lily";
-    window.LILY_VERSION = "2.4.3_FORCE_RELOAD";
-    // CRITICAL: Move this to a backend proxy (e.g., Firebase Cloud Function or Cloudflare Worker)
-    const GEMINI_URL = "https://little-violet-7bc7.lavishlavenderin.workers.dev?t=" + Date.now() + "&v=2.4.3";
+    window.LILY_VERSION = "2.4.6_SMART";
+    const GEMINI_URL = "https://little-violet-7bc7.lavishlavenderin.workers.dev?t=" + Date.now() + "&v=2.4.6";
 
     const COMMANDS = [
         { patterns: ['add item', 'new item', 'create item', 'add product', 'add inventory', 'save to inventory'], action: 'addItem' },
@@ -12,14 +11,20 @@
         { patterns: ['stock', 'inventory', 'check', 'quantity', 'available'], action: 'checkStock' },
         { patterns: ['profit', 'how much profit', 'net today'], action: 'profitToday' },
         { patterns: ['points', 'loyalty', 'loyalty points', 'points for'], action: 'checkLoyalty' },
-        { patterns: ['sell', 'bill', 'checkout'], action: 'sell' },
+        { patterns: ['sell', 'bill', 'checkout', 'add to cart'], action: 'addToCart' },
         { patterns: ['top', 'best seller', 'most sold', 'popular'], action: 'topProducts' },
-        { patterns: ['due', 'pending', 'owe', 'money', 'collections'], action: 'pendingDues' },
+        { patterns: ['due', 'pending', 'owe', 'money', 'collections', 'dues'], action: 'pendingDues' },
         { patterns: ['expense', 'spent', 'spending', 'cost'], action: 'expenseSummary' },
+        { patterns: ['last receipt', 'latest bill', 'show receipt', 'view receipt'], action: 'viewLastReceipt' },
+        { patterns: ['print last', 'print bill', 'print receipt'], action: 'printLast' },
+        { patterns: ['print receipt for', 'print bill for', 'find receipt for'], action: 'printSpecificReceipt' },
+        { patterns: ['whatsapp', 'message', 'send reminder', 'notify', 'text'], action: 'sendSmartWhatsApp' },
+        { patterns: ['dashboard', 'open dashboard', 'show analytics'], action: 'gotoDashboard' },
+        { patterns: ['pos', 'retail', 'terminal', 'open terminal'], action: 'gotoPOS' },
+        { patterns: ['tailoring', 'orders', 'stitching'], action: 'gotoTailoring' },
         { patterns: ['help', 'what can you do', 'what are your commands'], action: 'help' }
     ];
 
-    // Performance: Pre-compiled Regex objects for input cleaning
     const CLEANER_REGEXES = (() => {
         const cleaners = [
             'add item', 'new item', 'create item', 'add product', 'add to cart', 'add to card', 'add to bill', 'add to', 'to cart', 'to card', 'in cart', 'in card',
@@ -31,47 +36,30 @@
         });
     })();
 
-    // Intelligence: Contextual Buffer
     let _chatHistory = [];
 
     // === UTILITIES ===
-
-    function getTodayTimestamp() {
-        const d = new Date();
-        d.setHours(0, 0, 0, 0);
-        return d.getTime();
-    }
-
+    function getTodayTimestamp() { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); }
     function toTimestamp(val) {
         if (!val) return 0;
         if (typeof val === 'number') return val;
         if (val.toMillis) return val.toMillis();
         if (val.toDate) return val.toDate().getTime();
-        if (val instanceof Date) return val.getTime();
         const d = new Date(val);
-        const ts = d.getTime();
-        if (isNaN(ts)) { console.warn(`[Lily Parser] Failed to parse: ${val}`); return 0; }
-        return ts;
+        return isNaN(d.getTime()) ? 0 : d.getTime();
     }
-
-    function esc(s) {
-        if (!s) return "";
-        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;").replace(/`/g, "&#096;");
-    }
-
-    // === PARSERS ===
+    function esc(s) { return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
+    function fmt(v) { return '₹' + (parseFloat(v) || 0).toLocaleString('en-IN'); }
 
     function parseAmount(text) {
-        const match = text.match(/(?:₹|rs\.?|rupees?)\s*(\d[\d,]*\.?\d*)/i) || text.match(/(\d[\d,]*\.?\d*)\s*(?:₹|rs|rupees?)/i) || text.match(/(?:at|for|price)\s+(\d[\d,]*\.?\d*)/i);
-        return match && match[1] ? parseFloat(match[1].replace(/,/g, '')) : null;
+        const match = text.match(/(?:₹|rs\.?|rupees?)\s*(\d[\d,]*\.?\d*)/i) || text.match(/(\d[\d,]*\.?\d*)\s*(?:₹|rs|rupees?)/i);
+        return match ? parseFloat(match[1].replace(/,/g, '')) : null;
     }
 
     function parseItemName(text) {
         let cleaned = text.toLowerCase();
         CLEANER_REGEXES.forEach(rx => { cleaned = cleaned.replace(rx, ''); });
-        cleaned = cleaned.replace(/\b(?:at|for|price)\s+(?:₹|rs\.?|rupees?)?\s*\d[\d,]*\.?\d*\b/gi, '');
-        cleaned = cleaned.replace(/\b(?:₹|rs\.?|rupees?)\s*\d[\d,]*\.?\d*\b/gi, '');
-        cleaned = cleaned.replace(/^(a |an |the |some )/i, '').replace(/[^\w\s\d]/g, '').replace(/\s+/g, ' ').trim();
+        cleaned = cleaned.replace(/\b(?:₹|rs\.?|rupees?)\s*\d[\d,]*\.?\d*\b/gi, '').replace(/[^\w\s\d]/g, '').trim();
         return cleaned;
     }
 
@@ -90,43 +78,37 @@
     }
 
     // === DATA CONTEXT ===
-
     function buildAIContext() {
         const state = window.erpState;
         if (!state) return "Data unavailable.";
-        const now = Date.now(), todayTs = getTodayTimestamp();
-        const fmtLocal = (v) => '₹' + (v || 0).toLocaleString('en-IN');
-        
-        // 1. Current Stats
-        const todaySales = (state.sales || []).filter(s => toTimestamp(s.date || s.createdAt) >= todayTs);
-        const totalRevenue = todaySales.reduce((s, x) => s + (x.total || 0), 0);
-        
-        // 2. Historical Aggregates (Last 3 Months)
-        const monthlyStats = {};
-        (state.sales || []).forEach(s => {
-            const ts = toTimestamp(s.date || s.createdAt);
-            if (ts > (now - 90 * 24 * 60 * 60 * 1000)) {
-                const dt = new Date(ts);
-                const month = dt.toLocaleString('default', { month: 'short', year: 'numeric' });
-                if (!monthlyStats[month]) monthlyStats[month] = 0;
-                monthlyStats[month] += (s.total || 0);
-            }
-        });
-        const historySummary = Object.entries(monthlyStats)
-            .sort((a, b) => new Date(a[0]) - new Date(b[0]))
-            .map(([m, val]) => `${m}: ${fmtLocal(val)}`).join(' | ');
+        const now = new Date();
+        const monthStr = now.toISOString().substring(0, 7);
 
-        // 3. Current Business State
-        const activeOrders = (state.orders || []).filter(o => o.status !== 'Delivered');
-        const overdueOrders = activeOrders.filter(o => o.deliveryDate && toTimestamp(o.deliveryDate) < now);
-        const totalDues = (state.sales || []).reduce((s, x) => s + (x.balanceDue || 0), 0);
-        const itemSummary = (state.items || []).slice(0, 10).map(i => `${i.name} (${i.sku}): ${i.stock} in stock`).join('\n');
+        // 1. Boutique Performance
+        const sales = (state.sales || []).filter(s => s.date.startsWith(monthStr));
+        const rev = sales.reduce((acc, s) => acc + (parseFloat(s.total) || 0), 0);
+        const exp = (state.expenses || []).filter(e => e.date.startsWith(monthStr)).reduce((acc, e) => acc + (parseFloat(e.amount) || 0), 0);
         
-        return `TODAY: ${new Date().toLocaleDateString()}\nTODAY REVENUE: ${fmtLocal(totalRevenue)}\nMONTHLY HISTORY (90 Days): ${historySummary}\nACTIVE ORDERS: ${activeOrders.length} tours (${overdueOrders.length} overdue)\nTOTAL RECEIVABLES: ${fmtLocal(totalDues)}\n\nINVENTORY EXCERPT:\n${itemSummary}`;
+        // 2. Active Tailoring
+        const activeOrders = (state.orders || []).filter(o => o.status !== 'Delivered').map(o => ({ 
+            bill: o.billNo, name: o.customerName, bal: (o.totalCost||0)-(o.advancePaid||0), status: o.status, phone: o.phone 
+        }));
+
+        // 3. Client Loyalty
+        const clients = (state.clients || []).slice(0, 50).map(c => `${c.name}: ${c.loyaltyPoints} pts (${c.phone})`);
+
+        // 4. WhatsApp Templates for reference
+        const templates = state.whatsappTemplates || {};
+
+        return `
+            [FINANCIALS ${monthStr}] Rev: ${fmt(rev)} | Exp: ${fmt(exp)} | Net: ${fmt(rev-exp)}
+            [ACTIVE ORDERS] ${JSON.stringify(activeOrders.slice(0,15))}
+            [CLIENTS] ${clients.join(', ')}
+            [MESSAGING TEMPLATES] ${JSON.stringify(templates)}
+        `.trim();
     }
 
     // === AI CORE ===
-
     function extractAction(text) {
         const cleaned = text.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '');
         const candidates = cleaned.match(/\{[\s\S]*?"action"[\s\S]*?\}/g);
@@ -138,268 +120,183 @@
                     if (candidate[i] === '{') { if (depth === 0) start = i; depth++; }
                     if (candidate[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
                 }
-                if (start !== -1 && end !== -1) {
-                    const parsed = JSON.parse(candidate.substring(start, end));
-                    if (parsed.action && parsed.params) return parsed;
-                }
+                if (start !== -1 && end !== -1) return JSON.parse(candidate.substring(start, end));
             } catch (e) { continue; }
         }
         return null;
     }
 
     async function callGemini(userPrompt) {
+        const context = buildAIContext();
+        const LILY_PROMPT = `
+            You are Lily, the boutique's AI brain. 2026 Edition.
+            
+            [SYSTEM ACTIONS]
+            Output JSON: {"action": "ACTION_NAME", "params": {DATA}}
+            
+            ACTIONS:
+            1. printSpecificReceipt: {billNo: "B-..." or customerName: "..."}
+            2. sendWhatsApp: {phone: "91...", message: "Smart message text here"}
+            3. addItem: {name, sku, category, price, stock}
+            4. viewLastReceipt: {}
+            5. printLast: {}
+            6. gotoDashboard / gotoPOS / gotoTailoring: {}
+            
+            SMART MESSAGING:
+            When sending WhatsApp reminders, use the templates in context but make them "smarter" and more personal. 
+            If they have a balance, mention it politely. If they have loyalty points, include a "Reward Alert".
+            
+            [DATA]
+            ${context}
+        `.trim();
+
         try {
             const res = await fetch(GEMINI_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{
-                        parts: [{ text: `You are Lily, the intelligent AI assistant for "Lavish Lavender Bridal Boutique". Tone: Helpful, professional. Output: Use Markdown. Use JSON actions: {"action": "name", "params": {...}} if needed.\n\nBUSINESS STATE:\n${buildAIContext()}\n\nUSER REQUEST: ${userPrompt}` }]
-                    }],
+                    contents: [{ parts: [{ text: `${LILY_PROMPT}\n\nUSER REQUEST: ${userPrompt}` }] }],
                     generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
                 })
             });
-            
-            if (!res.ok) {
-                const errBody = await res.text().catch(() => '');
-                console.error(`[Lily] Worker returned ${res.status}: ${errBody}`);
-                if (res.status === 403) return { text: `⚠️ **AI Worker Blocked (403)**. The Cloudflare Worker proxy is rejecting requests. Please check:\n• The Gemini API key inside the Worker is valid\n• The Worker has no domain restrictions blocking this site` };
-                if (res.status === 429) return { text: `⚠️ **Rate Limited (429)**. Too many requests. Please wait a moment and try again.` };
-                return { text: `⚠️ **Worker Error (${res.status})**. The AI backend returned an error. Details: ${errBody.substring(0, 100) || 'No details'}` };
-            }
-            
             const data = await res.json();
-            console.log("[Lily] Raw AI Response:", data);
-
-            let responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+            let responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Lily encountered a data fog. Switching to local mode...";
             
-            if (!responseText) {
-                const finishReason = data?.candidates?.[0]?.finishReason;
-                if (finishReason === 'SAFETY') {
-                    responseText = "⚠️ **Safety Notice**: My AI brain blocked this response due to sensitive content filters. Please try rephrasing.";
-                } else if (finishReason === 'OTHER' || !data.candidates) {
-                    responseText = "⚠️ **AI Busy**: The Gemini AI is currently unavailable. Switching to **Local Mode** for this request...";
-                    const localResp = await executeLocal(getLocalIntent(userPrompt), userPrompt);
-                    responseText += "\n\n" + (localResp ? localResp.text : "I'm having trouble thinking. Try asking about stock or sales!");
-                } else {
-                    responseText = "Lily is having trouble thinking right now. Let's try again in a second! 🌸";
-                }
-            }
-
             const action = extractAction(responseText);
-            let actionResult = null;
             if (action) {
-                actionResult = await executeGeminiAction(action.action, action.params);
+                await executeAction(action);
                 responseText = responseText.replace(/\{[\s\S]*?"action"[\s\S]*?\}/g, '').trim();
             }
-            return { text: responseText, actionResult };
+            return { text: responseText };
         } catch (e) { 
-            console.error('[Lily] Fetch failed:', e);
-            return { text: `⚠️ **Connection Error**: I couldn't reach my AI brain. I'm operating in **Local Mode** right now. You can still ask me about sales, stock, and orders!` }; 
+            const localResp = await executeLocal(getLocalIntent(userPrompt), userPrompt);
+            return localResp || { text: "⚠️ System busy. Operating in offline mode." };
         }
     }
 
+    async function executeAction(json) {
+        if (!json || !json.action) return;
+        const state = window.erpState;
+        const msg = document.getElementById('chat-messages');
 
-    async function executeGeminiAction(action, params) {
-        const state = window.erpState, FB = window.FB;
-        if (!FB || !state) return { success: false, message: "System state not initialized." };
-        try {
-            switch (action) {
-                case 'addItem':
-                    const existingSkus = new Set((state.items || []).map(i => i.sku));
-                    let skuNum = (state.items || []).length + 1001, sku; do { sku = "LL" + skuNum.toString().padStart(5, "0"); skuNum++; } while (existingSkus.has(sku));
-                    await FB.collection('items').add({ name: params.name || 'New Item', category: params.category || 'General', soldBy: 'pcs', stock: parseFloat(params.stock || 0), sellingPrice: parseFloat(params.price || 0), costPrice: 0, sku, barcode: sku, timestamp: Date.now() });
-                    return { success: true, message: `Created **${esc(params.name)}** in catalog (SKU: ${sku}).`, type: 'inventory' };
-                case 'addToCart':
-                    const q = (params.name_or_sku || params.name || '').toLowerCase();
-                    const item = (state.items || []).find(i => (i.name && i.name.toLowerCase().includes(q)) || (i.sku && i.sku.toLowerCase() === q));
-                    if (item && window.addCart) { window.addCart(item.id); return { success: true, message: `Added **${esc(item.name)}** to cart.`, type: 'cart' }; }
-                    return { success: false, message: `Not found: "${esc(q)}"` };
-                case 'addExpense':
-                    await FB.collection('expenses').add({ date: Date.now(), category: params.category || 'General', amount: parseFloat(params.amount || 0), description: params.description || 'Logged via Lily AI', paymentMethod: 'Cash', paymentBreakdown: { cash: parseFloat(params.amount || 0), upi: 0 }, createdAt: Date.now() });
-                    return { success: true, message: `Logged expense: **₹${params.amount}** for ${esc(params.category)}.`, type: 'expense' };
-                case 'openOrder': if (window.openOrderModal) { window.openOrderModal(); return { success: true, message: "Opening order form...", type: 'system' }; } return null;
-                case 'showAnalytics': if (window.setDashFilter) { window.setDashFilter('today'); return { success: true, message: `Opening today's analytics.`, type: 'analytics' }; } return null;
-                default: return null;
-            }
-        } catch (e) { return { success: false, message: `Execution Error: ${e.message}` }; }
+        switch (json.action) {
+            case 'printSpecificReceipt':
+                const query = (json.params.billNo || json.params.customerName || "").toLowerCase();
+                const target = (state.sales || []).concat(state.orders || []).find(x => 
+                    (x.billNo && x.billNo.toLowerCase() === query) || 
+                    (x.customerName && x.customerName.toLowerCase().includes(query))
+                );
+                if (target && window.generateThermalPrint) {
+                    const printData = target.items ? target : {
+                        billNo: target.billNo, customerName: target.customerName, customerPhone: target.phone,
+                        date: target.orderDate || target.timestamp, items: target.items || [],
+                        subtotal: target.totalCost || target.total || 0, total: target.total || target.totalCost || 0,
+                        paid: target.advancePaid || target.total || 0, balance: target.balance || 0
+                    };
+                    window.generateThermalPrint(printData);
+                }
+                break;
+
+            case 'sendWhatsApp':
+                const phone = window.sanitizePhone(json.params.phone);
+                const text = json.params.message;
+                if (phone && text) {
+                    const url = `https://wa.me/${phone.length === 10 ? '91' + phone : phone}?text=${encodeURIComponent(text)}`;
+                    window.open(url, '_blank');
+                    msg.insertAdjacentHTML('beforeend', `<div class="text-center p-2 text-emerald-500 text-[9px] font-black uppercase">WhatsApp Dispatched ✅</div>`);
+                }
+                break;
+
+            case 'viewLastReceipt':
+                const latest = (state.sales || []).sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
+                if (latest && window.viewReceipt) window.viewReceipt(latest.id);
+                break;
+            case 'printLast':
+                const lastBill = (state.sales || []).sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
+                if (lastBill && window.printReceipt) window.printReceipt(lastBill);
+                break;
+            case 'gotoDashboard': location.href = 'index.html'; break;
+            case 'gotoPOS': location.href = 'pos.html'; break;
+            case 'gotoTailoring': location.href = 'tailoring.html'; break;
+        }
+        if (window.lucide) lucide.createIcons();
+        msg.scrollTop = msg.scrollHeight;
     }
 
     // === LOCAL HANDLERS ===
+    async function executeLocal(action, text) {
+        const state = window.erpState;
+        const now = new Date().toISOString().split('T')[0];
+        const fmt = window.fmt || ((v) => '₹' + (v || 0).toLocaleString('en-IN'));
 
-    async function executeLocal(intent, text) {
-        const state = window.erpState, fmt = window.fmt || ((v) => '₹' + (v || 0).toLocaleString('en-IN')), todayTs = getTodayTimestamp();
-        if (!state && intent !== 'help' && intent !== 'greet') return { text: "Connecting to business core..." };
-        switch (intent) {
-            case 'greet': return { text: "Good day! I'm **Lily**, your AI assistant. 🌸 How may I assist you?" };
-            case 'help': return { text: `**Fast Commands:**\n• "Sales today"\n• "Stock of Saree"\n• "Overdue orders"\n• "Add expense ₹500 for Tea"\n• "Sell SKU"\n\nI can also answer complex business queries via Gemini AI. ✨` };
-            case 'salesToday': {
-                const sales = (state.sales || []).filter(s => toTimestamp(s.date || s.createdAt) >= todayTs);
-                const total = sales.reduce((s, x) => s + (x.total || 0), 0);
-                const cash = sales.reduce((s, x) => s + (x.paymentBreakdown?.cash || 0), 0), upi = sales.reduce((s, x) => s + (x.paymentBreakdown?.upi || 0), 0);
-                let res = `📊 **Today's Revenue: ${fmt(total)}** (${sales.length} bills).`;
-                if (text.toLowerCase().includes('upi')) res = `📱 **UPI Sales: ${fmt(upi)}** (${sales.filter(x => x.paymentBreakdown?.upi > 0).length} bills)`;
-                else if (text.toLowerCase().includes('cash')) res = `💵 **Cash Sales: ${fmt(cash)}** (${sales.filter(x => x.paymentBreakdown?.cash > 0).length} bills)`;
-                else res += `\nCash: ${fmt(cash)} | UPI: ${fmt(upi)}`;
-                return { text: res };
-            }
-            case 'expensesToday': {
-                const exp = (state.expenses || []).filter(e => toTimestamp(e.date || e.createdAt) >= todayTs);
-                const total = exp.reduce((s, e) => s + (e.amount || 0), 0);
-                return { text: `💸 **Expenses Today: ${fmt(total)}** (${exp.length} entries).` };
-            }
-            case 'checkStock': {
-                const name = parseItemName(text);
-                if (!name) return { text: "Which item? Try: *Stock of kurti*" };
-                const matches = (state.items || []).filter(i => (i.name && i.name.toLowerCase().includes(name)) || (i.sku && i.sku.toLowerCase() === name));
-                if (!matches.length) return { text: `❌ **"${esc(name)}"** not found.` };
-                return { text: matches.map(i => `📦 **${esc(i.name)}**: ${i.stock} in stock (${fmt(i.sellingPrice)})`).join('\n') };
-            }
-            case 'addToCart': {
-                const q = parseItemName(text); if (!q) return { text: "Add what to cart? Try: *Add LL313*" };
-                const matches = (state.items || []).filter(i => (i.name && i.name.toLowerCase().includes(q)) || (i.sku && i.sku.toLowerCase() === q));
-                if (!matches.length) return { text: `❌ Item **"${esc(q)}"** not found.` };
-                if (matches.length > 1) {
-                    let res = `Multiple found for **"${esc(q)}"**:\n\n<div class="flex flex-col gap-2 mt-2">`;
-                    matches.slice(0, 4).forEach(m => { res += `<button data-item-sku="${esc(m.sku)}" class="chat-action-btn w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase text-left flex justify-between hover:bg-violet-50 transition-all"><span>${esc(m.name)}</span> <span class="text-violet-600">${fmt(m.sellingPrice)}</span></button>`; });
-                    return { text: res + `</div>` };
+        switch (action) {
+            case 'help': 
+                return { text: `**Lily's Skill Matrix** 🧠\n\n` +
+                    `1. **Messaging**: *"Send WhatsApp reminder to Zubaida"* 📱\n` +
+                    `2. **Printing**: *"Print receipt for B-105"* or *"Zubaida"* 🖨️\n` +
+                    `3. **Stock**: *"Quantity of Saree"* or *"LL501"* 📦\n` +
+                    `4. **Finance**: *"Sales today"* or *"Net profit"* 📈\n` +
+                    `5. **POS**: *"Add kurti to cart"* or *"Checkout"* 🛒\n` +
+                    `6. **Expenses**: *"Monthly expense report"* 💸\n` +
+                    `7. **Rewards**: *"Loyalty points of Maryam"* 👑\n` +
+                    `8. **Navigation**: *"Go to Tailoring"* or *"Open POS"* 🗺️` };
+            
+            case 'printSpecificReceipt': {
+                const query = text.toLowerCase().replace(/print receipt for|bill for|receipt for/gi, '').trim();
+                const target = (state.orders || []).concat(state.sales || []).find(o => 
+                    (o.billNo && o.billNo.toLowerCase() === query) || (o.customerName && o.customerName.toLowerCase().includes(query))
+                );
+                if (target) {
+                    await executeAction({ action: 'printSpecificReceipt', params: { billNo: target.billNo } });
+                    return { text: `Pulling up data for **${esc(target.customerName)}** (${target.billNo})... 📄` };
                 }
-                if (window.addCart) { window.addCart(matches[0].id); return { text: `✅ Added **${esc(matches[0].name)}** to cart!` }; }
-                return { text: "Retail module unavailable." };
+                return { text: `Couldn't find a record for **"${esc(query)}"**. Check the Bill #?` };
             }
-            case 'addItem': {
-                const name = parseItemName(text), price = parseAmount(text);
-                if (!name && !price && window.openAddItem) { window.openAddItem(); return { text: "📝 Opening the New Product form..." }; }
-                if (name && !price) return { text: `I can add **${esc(name)}**, but I need a selling price. Try: *"Add ${esc(name)} price 1800"*` };
-                if (name && price) {
-                    try {
-                        if (!window.FB) return { text: "⚠️ Database connection not ready." };
-                        const existingSkus = new Set((state.items || []).map(i => i.sku));
-                        let skuNum = (state.items || []).length + 1001, sku; do { sku = "LL" + skuNum.toString().padStart(5, "0"); skuNum++; } while (existingSkus.has(sku));
-                        await window.FB.collection('items').add({ name: name.charAt(0).toUpperCase() + name.slice(1), category: 'General', soldBy: 'pcs', stock: 0, sellingPrice: price, costPrice: 0, sku, barcode: sku, timestamp: Date.now() });
-                        return { text: `✅ **${esc(name)}** cataloged! SKU: **${sku}** | Price: **${fmt(price)}**` };
-                    } catch (e) { return { text: `❌ Sync Error: ${e.message}` }; }
+
+            case 'sendSmartWhatsApp': {
+                const query = text.toLowerCase().replace(/send whatsapp|message|reminder to/gi, '').trim();
+                const target = (state.orders || []).find(o => o.customerName && o.customerName.toLowerCase().includes(query));
+                if (target) {
+                    const bal = (target.totalCost || 0) - (target.advancePaid || 0);
+                    const msg = `Hi ${target.customerName}, 🌸 Friendly reminder from Lavish Lavender for order ${target.billNo}. Balance: ${fmt(bal)}. Visit again!`;
+                    await executeAction({ action: 'sendWhatsApp', params: { phone: target.phone, message: msg } });
+                    return { text: `Opening WhatsApp for **${esc(target.customerName)}**... 📱` };
                 }
-                return { text: "Try: *Add item Pashmina Saree 4500*" };
+                return { text: "Who should I message? Try: *'Reminder to Zubaida'* " };
             }
-            case 'pendingDues': return { text: `💳 **Outstanding Dashboard:**\nPOS: ${fmt((state.sales || []).reduce((s, x) => s + (x.balanceDue || 0), 0))} | Tailoring: ${fmt((state.orders || []).reduce((s, o) => s + Math.max(0, (o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0)), 0))}` };
-            case 'overdueOrders': {
-                const overdue = (state.orders || []).filter(o => o.status !== 'Delivered' && o.deliveryDate && toTimestamp(o.deliveryDate) < Date.now());
-                return { text: overdue.length ? `🚨 **${overdue.length} Overdue Orders:**\n` + overdue.slice(0, 5).map(o => `• **${esc(o.billNo)}**: ${esc(o.customerName)}`).join('\n') : "✅ No overdue orders." };
-            }
-            case 'profitToday': {
-                const sales = (state.sales || []).filter(s => toTimestamp(s.date || s.createdAt) >= todayTs);
-                const exp = (state.expenses || []).filter(e => toTimestamp(e.date || e.createdAt) >= todayTs);
-                const revenue = sales.reduce((s, x) => s + (x.total || 0), 0);
-                const spending = exp.reduce((s, e) => s + (e.amount || 0), 0);
-                const profit = revenue - spending;
-                return { text: `📈 **Daily Summary:**\nRevenue: ${fmt(revenue)}\nExpenses: ${fmt(spending)}\n---\n**Net Profit: ${fmt(profit)}** ${profit >= 0 ? '💰' : '⚠️'}` };
-            }
-            case 'billCount': {
-                const sales = (state.sales || []).filter(s => toTimestamp(s.date || s.createdAt) >= todayTs);
-                return { text: `🧾 You've generated **${sales.length} bills** today.` };
-            }
-            case 'topSelling': {
-                const itemMap = {};
-                (state.sales || []).filter(s => toTimestamp(s.date || s.createdAt) >= todayTs).forEach(s => {
-                    (s.items || []).forEach(it => { itemMap[it.name] = (itemMap[it.name] || 0) + (it.qty || 1); });
-                });
-                const top = Object.entries(itemMap).sort((a,b) => b[1] - a[1]).slice(0, 5);
-                if (!top.length) return { text: "No sales recorded today yet." };
-                return { text: `💎 **Top Performers Today:**\n` + top.map(([name, qty], i) => `${i+1}. **${esc(name)}** (${qty} units)`).join('\n') };
-            }
-            case 'lowStock': {
-                const low = (state.items || []).filter(i => (i.stock || 0) < 5);
-                if (!low.length) return { text: "✅ All items are well stocked!" };
-                return { text: `⚠️ **Stock Alerts (< 5 units):**\n` + low.map(i => `• **${esc(i.name)}**: ${i.stock} left`).join('\n') };
-            }
-            case 'urgentOrders': {
-                const now = Date.now();
-                const urgent = (state.orders || []).filter(o => o.status !== 'Delivered' && o.deliveryDate && (toTimestamp(o.deliveryDate) - now) < (48 * 60 * 60 * 1000) && (toTimestamp(o.deliveryDate) - now) >= 0);
-                return { text: urgent.length ? `⏳ **${urgent.length} Orders Due Soon (next 48h):**\n` + urgent.slice(0, 5).map(o => `• **${esc(o.billNo)}**: ${esc(o.customerName)} (${new Date(toTimestamp(o.deliveryDate)).toLocaleDateString()})`).join('\n') : "✅ No urgent deadlines in the next 48 hours." };
-            }
-            case 'findClient': {
-                const name = parseItemName(text);
-                if (!name) return { text: "Who are you looking for? Try: *'Find Maryam'* " };
-                const matches = (state.clients || []).filter(c => (c.name && c.name.toLowerCase().includes(name)) || (c.phone && c.phone.includes(name)));
-                if (!matches.length) return { text: `❌ No client found matching **"${esc(name)}"**.` };
-                return { text: `👤 **Client Results:**\n` + matches.slice(0, 3).map(c => `• **${esc(c.name)}** (${c.phone || 'No Phone'})`).join('\n') };
-            }
-            case 'newOrder': {
-                if (window.openOrderModal) { window.openOrderModal(); return { text: "🧵 Opening the **New Tailoring Order** form for you..." }; }
-                return { text: "Tailoring module not connected." };
-            }
-            case 'checkLoyalty': {
-                const name = parseItemName(text).replace(/\bpoints\b/gi, '').trim();
-                if (!name) return { text: "Whose points? Try: *'Points of Maryam'* " };
-                const matches = (state.clients || []).filter(c => (c.name && c.name.toLowerCase().includes(name)) || (c.phone && c.phone.includes(name)));
-                if (!matches.length) return { text: `❌ No rewards account found for **"${esc(name)}"**.` };
-                return { text: matches.slice(0, 3).map(c => `👑 **${esc(c.name)}**: ${c.loyaltyPoints || 0} Points (${c.loyaltyTier || 'Basic'} Tier)`).join('\n') };
-            }
-            case 'viewCart': {
-                const cart = state.cart || [];
-                if (!cart.length) return { text: "🛒 Your cart is currently **empty**." };
-                const total = cart.reduce((s, it) => s + (it.price * it.qty), 0);
-                return { text: `🛒 **Cart Items (${cart.length}):**\n` + cart.map(it => `• ${it.qty}x **${esc(it.name)}** (${fmt(it.price * it.qty)})`).join('\n') + `\n---\n**Total: ${fmt(total)}**` };
-            }
-            case 'clearCart': {
-                if (window.erpConfirm) {
-                    const ok = await window.erpConfirm("Clear entire cart?", "AI Assistant");
-                    if (ok) { state.cart = []; if (window.renderApp) window.renderApp(); return { text: "🧹 Cart cleared!" }; }
-                    return { text: "Cart kept." };
-                }
-                state.cart = []; if (window.renderApp) window.renderApp(); return { text: "🧹 Cart cleared!" };
-            }
-            case 'profitToday': {
-                const now = Date.now(), todayTs = getTodayTimestamp();
-                const todaySales = (state.sales || []).filter(s => toTimestamp(s.date || s.createdAt) >= todayTs);
-                const todayExpenses = (state.expenses || []).filter(e => toTimestamp(e.date || e.createdAt) >= todayTs);
-                const rev = todaySales.reduce((s, x) => s + (x.total || 0), 0);
-                const exp = todayExpenses.reduce((s, e) => s + (e.amount || 0), 0);
-                return { text: `💸 **Performance Today**:\n• Revenue: ${fmt(rev)}\n• Expenses: ${fmt(exp)}\n---\n💰 **Net Cash**: ${fmt(rev - exp)}` };
-            }
+
             case 'todayReport': {
-                const now = Date.now(), todayTs = getTodayTimestamp();
-                const sales = (state.sales || []).filter(s => toTimestamp(s.date || s.createdAt) >= todayTs);
-                const exps = (state.expenses || []).filter(e => toTimestamp(e.date || e.createdAt) >= todayTs);
-                const orders = (state.orders || []).filter(o => o.status !== 'Delivered');
-                const rev = sales.reduce((s, x) => s + (x.total || 0), 0);
-                const debt = sales.reduce((s, x) => s + (x.balanceDue || 0), 0);
-                return { text: `⚡ **Quick Summary (${new Date().toLocaleDateString()})**:\n• 🧾 Sales: **${sales.length} bills** (${fmt(rev)})\n• 💸 Expenses: **${fmt(exps.reduce((s,e)=>s+e.amount,0))}**\n• 🧵 Active Orders: **${orders.length}**\n• 🚩 Total Dues: **${fmt(debt)}**` };
+                const todaySales = (state.sales || []).filter(s => s.date === now);
+                const rev = todaySales.reduce((acc, s) => acc + (parseFloat(s.total) || 0), 0);
+                return { text: `**Today's Status (Local)** 🌸\n\n• Sales: **${todaySales.length}**\n• Revenue: **${fmt(rev)}**` };
             }
+
             case 'checkStock': {
                 const name = parseItemName(text);
-                if (!name) return { text: "What item? ✨ Try: *'Stock of Maryam Dress'*" };
                 const matches = (state.items || []).filter(i => (i.name && i.name.toLowerCase().includes(name)) || (i.sku && i.sku.toLowerCase() === name));
                 if (!matches.length) return { text: `🔍 Found **0** items matching **"${esc(name)}"**.` };
-                return { text: matches.slice(0, 5).map(i => `📦 **${esc(i.name)}**: ${i.stock} ${i.soldBy || 'pcs'} left (${fmt(i.sellingPrice)})`).join('\n') };
+                return { text: matches.slice(0, 3).map(i => `📦 **${esc(i.name)}**: ${i.quantity} left (${fmt(i.price)})`).join('\n') };
             }
-            case 'addExpense': {
-                const amt = parseAmount(text);
-                if (!amt) return { text: "How much? Try: *'Add expense 500 for Tea'*" };
-                if (window.FB && window.erpState) {
-                    try {
-                        await window.FB.collection('expenses').add({ date: Date.now(), category: 'AI Logged', amount: amt, description: text, paymentMethod: 'Cash', createdAt: Date.now() });
-                        return { text: `✅ Recorded expense of **${fmt(amt)}**.` };
-                    } catch (e) { return { text: `❌ Failed to save expense: ${e.message}` }; }
-                }
-                return { text: "Database connection busy." };
+
+            case 'pendingDues': {
+                const total = (state.sales || []).reduce((acc, s) => acc + (parseFloat(s.balanceDue || 0)), 0);
+                const tBal = (state.orders || []).filter(o => o.status !== 'Delivered').reduce((acc, o) => acc + ((o.totalCost||0)-(o.advancePaid||0)), 0);
+                return { text: `💰 **Outstanding Dues**:\nRetail: ${fmt(total)}\nTailoring: ${fmt(tBal)}\n\n**Total: ${fmt(total + tBal)}**` };
             }
-            case 'ambiguousAdd': return { text: "Add what? ✨\n\n• **Item**: *'Add Pashmina 5000'* \n• **Expense**: *'Add expense 200 for Tea'*" };
+
+            case 'gotoDashboard': location.href = 'index.html'; return { text: "Navigating to Dashboard..." };
+            case 'gotoPOS': location.href = 'pos.html'; return { text: "Opening Retail Terminal..." };
+            case 'gotoTailoring': location.href = 'tailoring.html'; return { text: "Switching to Tailoring..." };
+
             default: return null;
         }
     }
 
-    // === RENDERERS ===
-
+    // === UI RENDERERS ===
     function formatMarkdown(text) {
         if (!text) return "";
         let safe = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         return safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>').replace(/\n/g, '<br>');
-    }
-
-    function formatTrustedUI(html) {
-        return html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>').replace(/\n/g, '<br>').replace(/<button/g, '<button class="chat-copy-btn p-1 absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/50 rounded" ');
     }
 
     window.copyChatText = function (btn) {
@@ -430,37 +327,29 @@
                             <h3 class="font-black text-sm lg:text-base uppercase tracking-tight opacity-90">Lily Assistant</h3>
                             <div class="flex items-center gap-1.5">
                                 <span class="text-emerald-400 text-[8px] font-black uppercase tracking-[0.2em] animate-pulse">Live</span>
-                                <span class="text-slate-500 text-[8px] font-bold uppercase leading-none">• Hybrid AI v4</span>
+                                <span class="text-slate-500 text-[8px] font-bold uppercase leading-none">• Smart v2.4.6</span>
                             </div>
                         </div>
                         <button onclick="window.closeChatbot()" class="w-12 h-12 flex items-center justify-center text-white/50 hover:text-white transition-all bg-white/5 rounded-xl hover:bg-white/10 z-20 cursor-pointer active:scale-90">
                             <i data-lucide="x" class="w-6 h-6"></i>
                         </button>
                     </div>
-                    <div id="chat-messages" class="flex-1 overflow-y-auto px-6 py-8 space-y-6 bg-slate-50/10 custom-scrollbar scroll-smooth">
-                        <div class="flex gap-4">
-                            <div class="w-10 h-10 bg-white border border-slate-100 rounded-2xl flex items-center justify-center text-violet-600 text-xs font-black">L</div>
-                            <div class="bg-white p-5 rounded-3xl rounded-tl-none border border-slate-100 shadow-sm max-w-[85%] text-sm leading-relaxed text-slate-700">Greetings! I am **Lily**. 🌸 Ask me anything about your boutique!</div>
-                        </div>
-                    </div>
-                    <div class="px-6 py-4 flex gap-2 overflow-x-auto no-scrollbar border-t border-slate-100 shrink-0 bg-white/50">
+                    <div id="chat-messages" class="flex-1 overflow-y-auto px-6 py-8 space-y-6 bg-slate-50/10 custom-scrollbar scroll-smooth"></div>
+                    <div class="px-6 py-2 flex gap-2 overflow-x-auto no-scrollbar border-t border-slate-100 shrink-0 bg-white/50">
                         <button onclick="document.getElementById('chat-input').value='today report'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:border-violet-300 hover:text-violet-600 transition-all shadow-sm">Report</button>
                         <button onclick="document.getElementById('chat-input').value='stock check'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:border-violet-300 hover:text-violet-600 transition-all shadow-sm">Stock</button>
-                        <button onclick="document.getElementById('chat-input').value='urgent orders'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:border-violet-300 hover:text-violet-600 transition-all shadow-sm">Orders</button>
-                        <button onclick="document.getElementById('chat-input').value='help'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:border-violet-300 hover:text-violet-600 transition-all shadow-sm">Help</button>
+                        <button onclick="document.getElementById('chat-input').value='reminder to '; document.getElementById('chat-input').focus();" class="whitespace-nowrap px-4 py-2.5 bg-emerald-50 border border-emerald-100 rounded-2xl text-[9px] font-black uppercase tracking-widest text-emerald-600 shadow-sm">Message</button>
+                        <button onclick="document.getElementById('chat-input').value='print receipt for '; document.getElementById('chat-input').focus();" class="whitespace-nowrap px-4 py-2.5 bg-violet-50 border border-violet-100 rounded-2xl text-[9px] font-black uppercase tracking-widest text-violet-600 shadow-sm">Print</button>
                     </div>
                     <div class="p-6 bg-white border-t border-slate-100 shrink-0">
                         <div class="flex gap-4 bg-slate-50 p-1.5 rounded-[30px] border border-slate-100 focus-within:bg-white focus-within:ring-4 focus-within:ring-violet-100/50 transition-all">
                             <input id="chat-input" type="text" placeholder="Speak to Lily..." class="flex-1 px-4 py-4 bg-transparent font-bold text-sm outline-none" onkeydown="if(event.key==='Enter')window.sendChatMessage()">
-                            <button id="chat-send-btn" onclick="window.sendChatMessage()" class="w-12 h-12 bg-slate-900 text-white rounded-2xl shadow-lg hover:bg-violet-600 active:scale-90 transition-all flex items-center justify-center"><i data-lucide="send" class="w-5 h-5"></i></button>
+                            <button id="chat-send-btn" onclick="window.sendChatMessage()" class="w-12 h-12 bg-slate-900 text-white rounded-2xl shadow-lg hover:bg-violet-600 active:scale-95 transition-all flex items-center justify-center"><i data-lucide="send" class="w-5 h-5"></i></button>
                         </div>
                     </div>
                 </div>
             </div>`;
         document.body.appendChild(overlay);
-        document.getElementById('chat-messages').addEventListener('click', (e) => {
-            const btn = e.target.closest('.chat-action-btn'); if (btn) { const sku = btn.getAttribute('data-item-sku'); const input = document.getElementById('chat-input'); if (input && sku) { input.value = `sell ${sku}`; window.sendChatMessage(); } }
-        });
         if (window.lucide) lucide.createIcons(); document.getElementById('chat-input').focus();
     };
 
@@ -470,104 +359,62 @@
         if (!input || !messages) return;
         const text = input.value.trim();
         if (!text) return;
-        if (text.length > 500) { messages.insertAdjacentHTML('beforeend', `<div class="flex justify-end p-2"><div class="text-rose-500 text-[10px] font-black uppercase tracking-wider">Length Limit: 500 chars</div></div>`); messages.scrollTop = messages.scrollHeight; return; }
 
         _processing = true; input.disabled = true; if (sendBtn) sendBtn.disabled = true; input.value = '';
         const tid = 'tid-' + Date.now();
-        // Mobile Haptic
-        if (navigator.vibrate) navigator.vibrate(50);
 
         try {
-            messages.insertAdjacentHTML('beforeend', `<div class="flex justify-end pr-2"><div class="bg-violet-600 text-white p-5 rounded-3xl rounded-tr-none max-w-[80%] shadow-xl shadow-violet-500/10 text-sm font-semibold leading-relaxed">${esc(text)}</div></div>`);
+            messages.insertAdjacentHTML('beforeend', `<div class="flex justify-end pr-2"><div class="bg-violet-600 text-white p-5 rounded-3xl rounded-tr-none max-w-[80%] shadow-sm text-sm font-semibold leading-relaxed">${esc(text)}</div></div>`);
             messages.scrollTop = messages.scrollHeight;
-            _chatHistory.push({ role: 'user', text });
 
             messages.insertAdjacentHTML('beforeend', `
                 <div id="${tid}" class="flex gap-4">
-                    <div class="w-10 h-10 bg-white border border-slate-100 rounded-2xl flex items-center justify-center text-violet-600 text-[10px] font-black shrink-0 relative">L<div class="absolute -top-1 -right-1 w-2 h-2 bg-violet-400 rounded-full animate-ping"></div></div>
+                    <div class="w-10 h-10 bg-white border border-slate-100 rounded-2xl flex items-center justify-center text-violet-600 text-[10px] font-black shrink-0 relative">L</div>
                     <div class="bg-white/80 p-5 rounded-3xl border border-slate-100 shadow-sm flex gap-1.5 items-center relative overflow-hidden">
-                        <div class="w-1.5 h-1.5 bg-violet-200 rounded-full animate-bounce"></div>
+                        <div class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce"></div>
                         <div class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
-                        <div class="w-1.5 h-1.5 bg-violet-600 rounded-full animate-bounce" style="animation-delay:300ms"></div>
-                        <div id="${tid}-alert" class="absolute bottom-1 right-2 opacity-0 transition-opacity text-[6px] text-slate-400 uppercase font-black">Connection Slow...</div>
+                        <div class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
                     </div>
                 </div>`);
             messages.scrollTop = messages.scrollHeight;
 
-            const tAlert = setTimeout(() => { const el = document.getElementById(tid + '-alert'); if (el) el.style.opacity = '1'; }, 8000);
+            let resp = null, intent = getLocalIntent(text);
+            if (intent && action !== 'sendSmartWhatsApp' && action !== 'printSpecificReceipt') { 
+                // We actually want Gemini to handle WhatsApp and Specific Printing for "Smart" features
+                // But fallback to local if needed
+            }
+            
+            resp = await callGemini(text);
 
-            let resp = null, intent = getLocalIntent(text), isLocal = false;
-            if (intent) { resp = await executeLocal(intent, text); if (resp) isLocal = true; }
-            if (!resp) { resp = await callGemini(text); isLocal = false; }
-
-            clearTimeout(tAlert);
             const thinking = document.getElementById(tid); if (thinking) thinking.remove();
             
-            _chatHistory.push({ role: 'lily', text: resp.text });
-            while (_chatHistory.length > 20) _chatHistory.shift();
-
             messages.insertAdjacentHTML('beforeend', `
                 <div class="flex flex-col gap-3 group">
                     <div class="flex gap-4 relative">
                         <div class="w-10 h-10 bg-white border border-slate-100 rounded-2xl flex items-center justify-center text-violet-600 text-xs font-black shrink-0">L</div>
-                        <div class="bg-white p-5 rounded-3xl rounded-tl-none border border-slate-100 shadow-sm max-w-[85%] text-sm text-slate-700 leading-relaxed shadow-sm relative chat-bubble">
-                            <button onclick="window.copyChatText(this)" class="chat-copy-btn p-1 absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-slate-400"><i data-lucide="copy" class="w-3 h-3"></i></button>
-                            ${isLocal ? formatTrustedUI(resp.text) : formatMarkdown(resp.text)}
+                        <div class="bg-white p-5 rounded-3xl rounded-tl-none border border-slate-100 shadow-sm max-w-[85%] text-sm text-slate-700 leading-relaxed relative chat-bubble">
+                            <button onclick="window.copyChatText(this)" class="chat-copy-btn p-1 absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-50 border border-slate-200 rounded text-slate-400"><i data-lucide="copy" class="w-3 h-3"></i></button>
+                            ${formatMarkdown(resp.text)}
                         </div>
                     </div>
-                    ${resp.actionResult ? `
-                    <div class="ml-14 animate-pop-in">
-                        <div class="bg-slate-900 text-white p-4 rounded-2xl border border-slate-700 shadow-2xl flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-xl ${resp.actionResult.success ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'} flex items-center justify-center"><i data-lucide="${resp.actionResult.success ? 'check-circle' : 'alert-triangle'}" class="w-4 h-4"></i></div>
-                            <div class="flex-1"><p class="text-[7px] font-black uppercase text-slate-400 tracking-[0.2em] mb-0.5">Execution Log</p><p class="font-bold text-[10px] leading-tight">${formatTrustedUI(esc(resp.actionResult.message))}</p></div>
-                        </div>
-                    </div>` : ''}
                 </div>`);
             if (window.lucide) lucide.createIcons(); messages.scrollTop = messages.scrollHeight;
         } catch (err) {
-            console.error(err); const thinking = document.getElementById(tid); if (thinking) thinking.remove();
-            if (_chatHistory.length && _chatHistory[_chatHistory.length-1].role === 'user') _chatHistory.pop();
-            messages.insertAdjacentHTML('beforeend', `<div class="text-center p-4 text-rose-500 text-[10px] font-black uppercase">System Engine Error: Check connection</div>`);
+            console.error(err);
+            if(document.getElementById(tid)) document.getElementById(tid).remove();
+            messages.insertAdjacentHTML('beforeend', `<div class="text-center p-4 text-rose-500 text-[10px] font-black uppercase">Service Busy</div>`);
         } finally { _processing = false; if (input) { input.disabled = false; input.focus(); } if (sendBtn) sendBtn.disabled = false; }
     };
 
     window.renderChatFAB = function () {
         if (document.getElementById('chat-integrated-btn') || document.getElementById('chat-fab')) return;
-        
-        const isMobile = window.innerWidth < 1024;
-        const headerRight = document.querySelector('.header-right') || document.querySelector('header > div:last-child');
-        
-        // On Desktop, if we have a header right container, integrate it
-        if (!isMobile && headerRight && headerRight.classList.contains('flex')) {
-            const btn = document.createElement('button'); 
-            btn.id = 'chat-integrated-btn'; 
-            btn.onclick = window.openChatbot;
-            btn.className = "flex items-center gap-3 px-5 py-3 bg-slate-950 text-white rounded-2xl shadow-xl shadow-slate-200 text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all ml-3 shrink-0 ring-1 ring-white/10";
-            btn.innerHTML = `<i data-lucide="sparkles" class="w-4 h-4 text-violet-400"></i> Ask Lily`;
-            headerRight.insertBefore(btn, headerRight.firstChild);
-            if (window.lucide) lucide.createIcons();
-        } else {
-            // On Mobile or if no header container, use a FAB
-            const fab = document.createElement('div'); 
-            fab.id = 'chat-fab';
-            const fabStyles = isMobile 
-                ? "bottom-6 right-6 w-14 h-14 rounded-2xl" 
-                : "bottom-8 right-8 w-20 h-20 rounded-[28px]";
-            
-            fab.innerHTML = `<button onclick="window.openChatbot()" class="fixed ${fabStyles} z-[8000] bg-slate-950 text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all group ring-1 ring-white/10 border border-white/5"><i data-lucide="sparkles" class="${isMobile ? 'w-6 h-6' : 'w-8 h-8'} text-violet-400"></i></button>`;
-            document.body.appendChild(fab);
-            if (window.lucide) lucide.createIcons();
-        }
+        const btn = document.createElement('button'); 
+        btn.id = 'chat-integrated-btn'; 
+        btn.onclick = window.openChatbot;
+        btn.className = "flex items-center gap-3 px-5 py-3 bg-slate-950 text-white rounded-2xl shadow-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all fixed bottom-8 right-8 z-[8000] ring-1 ring-white/10";
+        btn.innerHTML = `<i data-lucide="sparkles" class="w-4 h-4 text-violet-400"></i> Ask Lily`;
+        document.body.appendChild(btn);
+        if (window.lucide) lucide.createIcons();
     };
-    if (document.readyState === 'complete') window.renderChatFAB(); else window.addEventListener('load', () => setTimeout(window.renderChatFAB, 800));
-    window.addEventListener('resize', () => {
-        // Redraw FAB on resize if needed (e.g. tablet rotation)
-        const fab = document.getElementById('chat-fab');
-        const integrated = document.getElementById('chat-integrated-btn');
-        if ((window.innerWidth < 1024 && integrated) || (window.innerWidth >= 1024 && fab)) {
-            if (fab) fab.remove();
-            if (integrated) integrated.remove();
-            window.renderChatFAB();
-        }
-    });
+    if (document.readyState === 'complete') window.renderChatFAB(); else window.addEventListener('load', window.renderChatFAB);
 })();
