@@ -673,7 +673,6 @@ window.APP_VERSION = "v2.4.2";
                                  if (s.paymentLog && s.paymentLog.length > 0) {
                                      let cSum = 0, uSum = 0, bSum = 0;
                                      s.paymentLog.forEach(log => {
-                                         // If parts are missing (legacy), infer from method
                                          const c = log.cashParts !== undefined ? log.cashParts : (log.method === 'Cash' ? log.amount : 0);
                                          const u = log.upiParts !== undefined ? log.upiParts : (log.method === 'UPI' ? log.amount : 0);
                                          cSum += (c || 0);
@@ -682,16 +681,23 @@ window.APP_VERSION = "v2.4.2";
                                      });
                                      
                                      if (cSum > 0 && uSum > 0) methodLabel = `Mixed (C: ${window.fmt(cSum)} | U: ${window.fmt(uSum)})`;
-                                     else if (cSum > 0) methodLabel = `Cash (${window.fmt(cSum)})`;
-                                     else if (uSum > 0) methodLabel = `UPI (${window.fmt(uSum)})`;
+                                     else if (cSum > 0) methodLabel = `Cash (C: ${window.fmt(cSum)})`;
+                                     else if (uSum > 0) methodLabel = `UPI (U: ${window.fmt(uSum)})`;
                                      else if (bSum > 0) methodLabel = `Bank (${window.fmt(bSum)})`;
                                  } else {
-                                     // Global breakdown fallback for records without logs
-                                     if (methodLabel === 'Mixed') {
-                                         methodLabel = `Mixed (C: ${window.fmt(breakdown.cash || 0)} | U: ${window.fmt(breakdown.upi || 0)})`;
+                                     // Robust legacy/fallback breakdown
+                                     const cashVal = breakdown.cash || (s.paymentMode === 'Cash' ? s.advancePaid : 0);
+                                     const upiVal = breakdown.upi || (s.paymentMode === 'UPI' ? s.advancePaid : 0);
+                                     
+                                     if (methodLabel === 'Mixed' || (cashVal > 0 && upiVal > 0)) {
+                                         methodLabel = `Mixed (C: ${window.fmt(cashVal || 0)} | U: ${window.fmt(upiVal || 0)})`;
                                      } else if (s.advanceMethod === 'Mixed' && s._type === 'order') {
                                          const ab = s.advanceBreakdown || {};
                                          methodLabel = `Mixed (C: ${window.fmt(ab.cash || 0)} | U: ${window.fmt(ab.upi || 0)})`;
+                                     } else if (cashVal > 0) {
+                                         methodLabel = `Cash (${window.fmt(cashVal)})`;
+                                     } else if (upiVal > 0) {
+                                         methodLabel = `UPI (${window.fmt(upiVal)})`;
                                      }
                                  }
 
@@ -724,7 +730,7 @@ window.APP_VERSION = "v2.4.2";
 
                                      <div class="hidden md:block">
                                          <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Summary</p>
-                                         <p class="text-[11px] font-bold text-slate-600 line-clamp-1 italic">${s.summary}</p>
+                                         <p class="text-[11px] font-bold text-slate-600 line-clamp-1 italic">${window.esc(itemNames || 'Invoice Record')}</p>
                                      </div>
 
                                      <div class="text-right">
