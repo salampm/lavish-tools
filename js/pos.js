@@ -696,42 +696,54 @@ window.APP_VERSION = "v2.4.2";
                                  }
 
                                  return `
-                                 <div onclick="window.openReceipt('${s.id}')" class="px-8 py-5 grid grid-cols-2 md:grid-cols-[140px_120px_1fr_250px_90px_90px] gap-4 items-center hover:bg-violet-50/30 cursor-pointer transition-all group border-l-4 border-transparent hover:border-violet-500">
-                                     <div class="flex flex-col">
-                                         <div class="flex items-center gap-2 mb-1">
-                                             <p class="text-base font-black text-slate-800 leading-tight group-hover:text-violet-600 transition-all">${window.esc(s.billNo || 'INV-000')}</p>
-                                             <span class="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${s._isVoid ? 'bg-rose-50 text-rose-500' : (s._type === 'sale' ? 'bg-indigo-50 text-indigo-500' : 'bg-emerald-50 text-emerald-600')}">
+                                 <div onclick="window.openReceipt('${s.id}')" class="px-8 py-5 grid grid-cols-2 md:grid-cols-[140px_120px_1fr_250px_90px_90px] gap-4 items-center hover:bg-slate-50 cursor-pointer transition-all group border-l-4 border-transparent hover:border-violet-500 relative">
+                                     <div>
+                                         <div class="flex items-center gap-2">
+                                             <p class="text-base font-black text-slate-800 tracking-tighter leading-tight group-hover:text-violet-600 transition-colors uppercase">${window.esc(s.billNo)}</p>
+                                             <span class="px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest ${s._isVoid ? 'bg-rose-50 text-rose-500' : (s._type === 'sale' ? 'bg-indigo-50 text-indigo-500' : 'bg-emerald-50 text-emerald-600')}">
                                                  ${s._isVoid ? 'VOIDED' : (s._type === 'sale' ? 'POS' : 'TLR')}
                                              </span>
                                          </div>
-                                         ${isRefund ? '<span class="w-fit px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[7px] font-black uppercase tracking-tighter">Refunded Case</span>' : ''}
+                                         ${isRefund ? '<div class="mt-1"><span class="w-fit px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[7px] font-black uppercase tracking-tighter">Refunded Case</span></div>' : ''}
+                                         <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">${s._displayDate}</p>
                                          ${s._isVoid ? '<span class="w-fit px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-[7px] font-black uppercase tracking-tighter mt-1">Permanently Voided</span>' : `<span class="text-[8px] font-black text-indigo-400 uppercase tracking-widest mt-1">${window.esc(methodLabel)}</span>`}
                                      </div>
-                                     <div class="flex flex-col">
-                                         <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">${s._orderDate}</p>
-                                     </div>
-                                     <div class="min-w-0">
-                                         <p class="text-sm font-black text-slate-700 capitalize truncate mb-1">${window.esc(s.customerName || 'Walk-in Client')}</p>
-                                         <p class="text-[10px] font-bold text-slate-400 truncate tracking-tight">${window.esc(s.customerPhone || '-')}</p>
-                                     </div>
-                                     <div class="min-w-0">
-                                         <p class="text-[10px] font-bold text-slate-600 line-clamp-1 leading-tight uppercase mb-1">${window.esc(itemNames || 'Service Rendered')}</p>
-                                         <div class="flex items-center gap-2">
-                                             <span class="px-2 py-0.5 bg-slate-50 text-slate-400 rounded-full text-[8px] font-black uppercase tracking-widest">${(s.items || []).length} units</span>
-                                             ${s.status ? `<span class="px-2 py-0.5 bg-violet-50 text-violet-400 rounded-full text-[8px] font-black uppercase tracking-widest">${s.status}</span>` : ''}
+
+                                     <div class="hidden md:block">
+                                         <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Status</p>
+                                         <div class="flex items-center gap-1.5">
+                                             <span class="w-2 h-2 rounded-full ${s.balanceDue > 0 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}"></span>
+                                             <span class="text-[9px] font-black uppercase tracking-tighter ${s.balanceDue > 0 ? 'text-rose-600' : 'text-emerald-600'}">${s.balanceDue > 0 ? 'Partial' : 'Settled'}</span>
                                          </div>
                                      </div>
+
+                                     <div class="min-w-0">
+                                         <p class="text-sm font-black text-slate-700 capitalize truncate">${window.esc(s.customerName || 'Client Profile')}</p>
+                                         <p class="text-[10px] font-bold text-slate-400">${window.esc(s.customerPhone || 'Walk-in Guest')}</p>
+                                     </div>
+
+                                     <div class="hidden md:block">
+                                         <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Summary</p>
+                                         <p class="text-[11px] font-bold text-slate-600 line-clamp-1 italic">${s.summary}</p>
+                                     </div>
+
                                      <div class="text-right">
+                                         <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total</p>
                                          <p class="text-sm font-black text-slate-800">${window.fmt(s.total || s.totalCost)}</p>
                                      </div>
-                                     <div class="text-right flex items-center justify-end gap-3">
+
+                                     <div class="text-right flex items-center justify-end gap-2">
                                          <button onclick="event.stopPropagation(); window.editInvoice('${s.id}')" class="p-2 text-slate-300 hover:text-violet-600 hover:bg-violet-50 rounded-xl transition-all" title="Edit Invoice">
                                              <i data-lucide="pencil" class="w-4 h-4"></i>
                                          </button>
-                                         <div class="text-right">
-                                             ${bal > 0 
-                                                 ? `<span class="px-3 py-1 bg-rose-50 text-rose-500 rounded-lg text-[11px] font-black tracking-tighter shadow-sm">${window.fmt(bal)}</span>` 
-                                                 : `<span class="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[11px] font-black tracking-tighter shadow-sm">SETTLED</span>`
+                                         ${(window.erpState.role !== 'Staff') ? `
+                                         <button onclick="event.stopPropagation(); window.voidBill('${s.id}')" class="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all" title="Void Record">
+                                             <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
+                                         </button>` : ''}
+                                         <div class="ml-2">
+                                             ${s.balanceDue > 0 
+                                                 ? `<button onclick="event.stopPropagation(); window.collectDue('${s.id}')" class="px-3 py-1.5 bg-rose-600 text-white rounded-lg text-[10px] font-black tracking-widest shadow-lg shadow-rose-100 hover:bg-rose-700 active:scale-95 transition-all">COLLECT</button>`
+                                                 : `<span class="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black tracking-widest border border-emerald-100">SETTLED</span>`
                                              }
                                          </div>
                                      </div>
@@ -2361,14 +2373,15 @@ window.APP_VERSION = "v2.4.2";
             const total = Math.max(0, taxableBase + taxAmount - redeemAmt);
 
             const isEdit = !!window.erpState.editingInvoiceId;
-            let counter, billNo;
+            let counter, billNo, existingLog = [];
 
             if (isEdit) {
-                // Find original sale to get its billNo and counter
+                // Find original sale to get its billNo, counter and payment log
                 const originalSale = window.erpState.sales.find(s => s.id === window.erpState.editingInvoiceId) || 
                                      window.erpState.orders.find(o => o.id === window.erpState.editingInvoiceId);
                 billNo = originalSale ? originalSale.billNo : ("4-" + (window.erpState.counter || 2499));
                 counter = originalSale ? originalSale.counter : (window.erpState.counter || 2499);
+                existingLog = originalSale ? (originalSale.paymentLog || []) : [];
             } else {
                 counter = (window.erpState.counter || 2499) + 1;
                 billNo = "4-" + counter;
@@ -2399,11 +2412,22 @@ window.APP_VERSION = "v2.4.2";
             // Points earned on net merchandise value (pre-tax)
             const pointsEarned = window.calcPoints(taxableBase, oldTier);
             
+            // New log entry for this session
+            const newLogEntry = {
+                date: Date.now(),
+                amount: finalPaid,
+                method: method,
+                cashParts: method === 'Mixed' ? cash : (method === 'Cash' ? finalPaid : 0),
+                upiParts: method === 'Mixed' ? upi : (method === 'UPI' ? finalPaid : 0),
+                note: isEdit ? "Bill Adjusted" : (isAdvance ? "Initial Advance" : "Full Payment"),
+                isInitial: !isEdit
+            };
+
             const saleData = {
                 billNo,
                 customerName: name,
                 customerPhone: phoneClean,
-                date: Date.now(),
+                date: isEdit ? (window.erpState.sales.find(s => s.id === window.erpState.editingInvoiceId)?.date || Date.now()) : Date.now(),
                 timestamp: Date.now(),
                 items: JSON.parse(JSON.stringify(window.erpState.cart)),
                 subtotal, 
@@ -2422,15 +2446,7 @@ window.APP_VERSION = "v2.4.2";
                 hasStitching: hasStitching,
                 stitchingOrderNo: stitchingNo,
                 taxAmount: taxAmount,
-                paymentLog: [{
-                    date: Date.now(),
-                    amount: finalPaid,
-                    method: method,
-                    cashParts: method === 'Mixed' ? cash : (method === 'Cash' ? finalPaid : 0),
-                    upiParts: method === 'Mixed' ? upi : (method === 'UPI' ? finalPaid : 0),
-                    note: isAdvance ? "Initial Advance" : "Full Payment",
-                    isInitial: true
-                }],
+                paymentLog: isEdit ? [...existingLog, newLogEntry] : [newLogEntry],
                 loyaltySnapshot: {
                     earned: pointsEarned,
                     total: Math.max(0, (client ? (client.loyaltyPoints || 0) : 0) - Math.min(redeemAmt, client?.loyaltyPoints || 0) + pointsEarned),
@@ -2441,8 +2457,10 @@ window.APP_VERSION = "v2.4.2";
             let saleRef;
             
             if (isEdit) {
-                // Update existing record
-                await DATA_PATH('sales').doc(window.erpState.editingInvoiceId).set(saleData, { merge: true });
+                // Update correctly based on original record type
+                const isOrgOrder = window.erpState.orders.some(o => o.id === window.erpState.editingInvoiceId);
+                const col = isOrgOrder ? window.FB.root('orders') : DATA_PATH('sales');
+                await col.doc(window.erpState.editingInvoiceId).set(saleData, { merge: true });
                 saleRef = { id: window.erpState.editingInvoiceId };
             } else {
                 saleRef = await DATA_PATH('sales').add(saleData);
@@ -2805,6 +2823,13 @@ window.APP_VERSION = "v2.4.2";
         modal.innerHTML = `
             <div class="bg-white w-full sm:max-w-sm sm:rounded-[40px] rounded-t-[40px] shadow-2xl animate-slide-up sm:animate-pop-in border border-slate-100 overflow-hidden my-auto relative max-h-[90vh] flex flex-col ${isVoided ? 'opacity-90 grayscale-[0.3]' : ''}">
                 <!-- Sticky Header with Close Button -->
+                <div class="px-8 py-5 border-b border-slate-50 flex items-center justify-between sticky top-0 bg-white/90 backdrop-blur-md z-20">
+                    <div>
+                        <h3 class="font-black text-xl leading-none text-slate-800">${sale.billNo}</h3>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1.5">${window.fmtDate(sale.date || sale.createdAt)}</p>
+                    </div>
+                    <button onclick="document.getElementById('receipt-modal')?.remove()" class="w-10 h-10 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-all">
+                        <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                 </div>
                 
@@ -2856,7 +2881,7 @@ window.APP_VERSION = "v2.4.2";
 
                         <div class="mt-4 pt-4 border-t border-dashed border-slate-100 flex justify-between items-center">
                             <span class="text-[10px] font-black text-slate-400 uppercase">Final Total</span>
-                            <span class="text-xl font-black text-violet-600">${fmt(sale.total || total)}</span>
+                            <span class="text-xl font-black text-violet-600">${fmt(totalAmt)}</span>
                         </div>
                         ${balance > 0 ? `
                             <div class="flex justify-between items-center bg-rose-50 px-3 py-2 rounded-xl mt-3">
@@ -2878,7 +2903,7 @@ window.APP_VERSION = "v2.4.2";
                         </a>
                     </div>
                     
-                    <button onclick="window.shareWhatsApp('${sale.billNo}','${sale.customerName}','${sale.customerPhone}',${total},${balance})" class="w-full flex items-center justify-center gap-2 py-4 bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-emerald-600 transition-all mt-3">
+                    <button onclick="window.shareWhatsApp('${sale.billNo}','${sale.customerName}','${sale.customerPhone}',${totalAmt},${balance})" class="w-full flex items-center justify-center gap-2 py-4 bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-emerald-600 transition-all mt-3">
                         <i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp Receipt
                     </button>
 
