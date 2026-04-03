@@ -59,7 +59,7 @@
     <!-- Core Scripts -->
     <script src="js/firebase.js?v=2.4.2"></script>
     <script src="js/app.js?v=2.4.2"></script>
-    <script src="js/pos.js?v=2.4.2"></script>
+    <script src="js/pos.js?v=2.6.0"></script>
     <script src="js/expenses.js?v=2.4.2"></script>
     <script src="js/chatbot.js?v=2.4.2"></script>
     
@@ -128,20 +128,12 @@
                 if (headerTitle) headerTitle.textContent = 'Retail Terminal';
                 if (subNav) {
                     subNav.classList.remove('hidden');
-                    const tabs = ['pos', 'history', 'dues', 'voided', 'tickets'];
-                    tabs.forEach(t => {
-                        const el = document.getElementById(`tab-${t}`);
-                        if (el) {
-                            el.classList.remove('hidden'); // Always show all tabs
-                            if (t === window.erpState.tab) {
-                                el.classList.add(t === 'voided' ? 'border-rose-600' : 'border-violet-600', t === 'voided' ? 'text-rose-600' : 'text-violet-600');
-                                el.classList.remove('border-transparent');
-                            } else {
-                                el.classList.remove('border-violet-600', 'border-rose-600', 'text-violet-600', 'text-rose-600');
-                                el.classList.add('border-transparent');
-                            }
-                        }
-                    });
+                    subNav.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <button onclick="window.setPOSTab('pos')" id="tab-pos" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.tab === 'pos' ? 'border-violet-600 text-violet-600' : 'border-transparent text-slate-400'}">Terminal</button>
+                            <button onclick="window.setPOSTab('tickets')" id="tab-tickets" class="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 ${window.erpState.tab === 'tickets' ? 'border-violet-600 text-violet-600' : 'border-transparent text-slate-400'}">Saved Tickets</button>
+                        </div>
+                    `;
                 }
             }    
             
