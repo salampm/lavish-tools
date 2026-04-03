@@ -2,8 +2,8 @@
 (function () {
 
     const BOT_NAME = "Lily";
-    window.LILY_VERSION = "2.5.1_ULTIMATE";
-    const GEMINI_URL = "https://little-violet-7bc7.lavishlavenderin.workers.dev?t=" + Date.now() + "&v=2.5.1";
+    window.LILY_VERSION = "2.5.3_PLATINUM";
+    const GEMINI_URL = "https://little-violet-7bc7.lavishlavenderin.workers.dev?t=" + Date.now() + "&v=2.5.3";
 
     const COMMANDS = [
         { patterns: ['add item', 'new item', 'create item', 'add product', 'add inventory', 'save to inventory'], action: 'addItem' },
@@ -27,8 +27,8 @@
 
     const CLEANER_REGEXES = (() => {
         const cleaners = [
-            'add item', 'new item', 'create item', 'add product', 'add to cart', 'add to card', 'add to bill', 'add to', 'to cart', 'to card', 'in cart', 'in card',
-            'stock of', 'check stock', 'stock check', 'how many', 'sell', 'named', 'called', 'name', 'availability', 'item', 'product', 'add', 'points of', 'points'
+            'add item', 'new item', 'create item', 'add product', 'add to cart', 'add bill', 'to cart', 'in cart',
+            'stock of', 'check stock', 'how many', 'sell', 'name', 'availability', 'item', 'product', 'add', 'points'
         ];
         return cleaners.sort((a, b) => b.length - a.length).map(c => {
             const escaped = c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -77,60 +77,45 @@
         const state = window.erpState;
         if (!state) return "Data unavailable.";
         const now = new Date();
-        const monthStr = now.toISOString().substring(0, 7);
-
-        const dateFilter = (d) => {
-            if (typeof d === 'string') return d.startsWith(monthStr);
-            const ts = toTimestamp(d);
-            return ts > 0 && new Date(ts).toISOString().startsWith(monthStr);
-        };
-
-        const sales = (state.sales || []).filter(s => dateFilter(s.date));
-        const rev = sales.reduce((acc, s) => acc + (parseFloat(s.total) || 0), 0);
-        const exp = (state.expenses || []).filter(e => dateFilter(e.date)).reduce((acc, e) => acc + (parseFloat(e.amount) || 0), 0);
         
-        const activeOrders = (state.orders || []).filter(o => o.status !== 'Delivered').map(o => ({ 
-            bill: o.billNo, name: o.customerName, bal: (o.totalCost||0)-(o.advancePaid||0), status: o.status, phone: o.phone 
-        }));
+        // 1. Multi-Month Context Generation
+        const historyMap = {};
+        const allSales = (state.sales || []);
+        allSales.forEach(s => {
+            const m = (typeof s.date === 'string' ? s.date : new Date(toTimestamp(s.date)).toISOString()).substring(0, 7);
+            historyMap[m] = (historyMap[m] || 0) + (parseFloat(s.total) || 0);
+        });
 
-        // OPTIMIZATION: Semantic Client Context Selection
+        // 2. Client & Order Optimization
         const mention = (_lastUserPrompt || "").toLowerCase();
         const relevantClients = (state.clients || []).filter(c => mention.includes(c.name?.toLowerCase())).slice(0, 5);
         const topLoyalty = (state.clients || []).slice().sort((a,b) => (b.loyaltyPoints||0)-(a.loyaltyPoints||0)).slice(0, 10);
         const clients = [...new Set([...relevantClients, ...topLoyalty])].map(c => `${c.name}: ${c.loyaltyPoints} pts (${c.phone})`);
 
-        const templates = state.whatsappTemplates || {};
+        const activeOrders = (state.orders || []).filter(o => o.status !== 'Delivered').map(o => ({ 
+            bill: o.billNo, name: o.customerName, bal: (o.totalCost||0)-(o.advancePaid||0), status: o.status, phone: o.phone 
+        }));
+
         const historyContext = _chatHistory.slice(-6).map(m => `${m.role === 'user' ? 'User' : 'Lily'}: ${m.text}`).join('\n');
 
         return `
-            [CONVERSATION HISTORY]
-            ${historyContext || '(Started)'}
-            [BOUTIQUE ${monthStr}] Rev: ${fmt(rev)} | Exp: ${fmt(exp)} | Net: ${fmt(rev-exp)} | Clients: ${(state.clients||[]).length}
-            [ACTIVE ORDERS] ${JSON.stringify(activeOrders.slice(0,10))}
+            [HISTORY MEMORY]
+            ${historyContext || '(First turn)'}
+            [MONTHLY SALES HISTORY]
+            ${JSON.stringify(historyMap)}
+            [ACTIVE TAILORING] ${JSON.stringify(activeOrders.slice(0,10))}
             [RELEVANT CLIENTS] ${clients.join(', ')}
-            [TEMPLATE GUIDE] ${JSON.stringify(templates)}
         `.trim();
     }
 
     // === AI CORE ===
     function extractAction(text) {
-        const cleaned = text.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '');
-        const candidates = cleaned.match(/\{[\s\S]*?"action"[\s\S]*?\}/g);
+        const candidates = text.match(/\{[\s\S]*?"action"[\s\S]*?\}/g);
         if (!candidates) return null;
         for (const candidate of candidates) {
             try {
-                let depth = 0, start = -1, end = -1;
-                for (let i = 0; i < candidate.length; i++) {
-                    if (candidate[i] === '{') { if (depth === 0) start = i; depth++; }
-                    if (candidate[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
-                }
-                if (start !== -1 && end !== -1) {
-                    const parsed = JSON.parse(candidate.substring(start, end));
-                    if (parsed && parsed.action) {
-                        parsed.params = parsed.params || {};
-                        return parsed;
-                    }
-                }
+                const parsed = JSON.parse(candidate);
+                if (parsed && parsed.action) { parsed.params = parsed.params || {}; return parsed; }
             } catch (e) { continue; }
         }
         return null;
@@ -139,23 +124,24 @@
     async function callGemini(userPrompt) {
         try {
             const context = buildAIContext();
-            const LILY_PROMPT = `You are Lily, the AI for Lavish Lavender Bridal Boutique. Tone: Pro, concise, premium. Output JSON at end: {"action": "NAME", "params": {}}.
+            const LILY_PROMPT = `You are Lily, the boutique co-pilot. Tone: Professional, premium, precise.
+            JSON ACTIONS: {"action": "NAME", "params": {}}.
             - printSpecificReceipt: {billNo OR customerName}
-            - sendWhatsApp: {phone, message} - composing warm, personalized context-aware msgs.
+            - sendWhatsApp: {phone, message} - composing context-aware warm msgs.
             - viewLastReceipt / printLast / gotoDashboard / gotoPOS / gotoTailoring: {}
-            [CONTEXT]
+            [BOUTIQUE STATE]
             ${context}`;
 
             const res = await fetch(GEMINI_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{ parts: [{ text: `${LILY_PROMPT}\n\nUSER: ${userPrompt}` }] }],
-                    generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
+                    contents: [{ parts: [{ text: `${LILY_PROMPT}\n\nUSER QUESTION: ${userPrompt}` }] }],
+                    generationConfig: { temperature: 0.1, maxOutputTokens: 2048 }
                 })
             });
             const data = await res.json();
-            let responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Thinking mode interrupted. Using local logic...";
+            let responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "System logic fallback: Please try a direct command.";
             
             const action = extractAction(responseText);
             if (action) {
@@ -166,13 +152,9 @@
             }
             return { text: responseText };
         } catch (e) { 
-            console.error('[Lily] Gemini failure:', e);
-            try {
-                const intent = getLocalIntent(userPrompt);
-                const localResp = await executeLocal(intent, userPrompt);
-                if (localResp) return localResp;
-            } catch (localErr) { console.error('[Lily] Local fallback fail:', localErr); }
-            return { text: "⚠️ System busy. Try a direct command like *'Stock Kurti'*." };
+            const intent = getLocalIntent(userPrompt);
+            const localResp = await executeLocal(intent, userPrompt);
+            return localResp || { text: "⚠️ System logic error. Check internet or refresh app." };
         }
     }
 
@@ -195,36 +177,31 @@
                         paid: target.advancePaid || target.total || 0, balance: target.balance || 0
                     };
                     window.generateThermalPrint(printData);
-                    return { text: `Pulling bill for **${target.customerName}**... 📄` };
-                } else if (!target) {
-                    msg?.insertAdjacentHTML('beforeend', `<div class="text-center p-2 text-amber-500 text-[9px] font-black uppercase">Record Not Found</div>`);
+                    return { text: `Pulling bill for ${target.customerName}...` };
                 }
                 break;
 
             case 'sendWhatsApp':
-                const sanitize = window.sanitizePhone || (p => String(p).replace(/\D/g, ''));
-                const phone = sanitize(json.params.phone);
-                const text = json.params.message;
-                if (phone && text) {
-                    window.open(`https://wa.me/${phone.length === 10 ? '91' + phone : phone}?text=${encodeURIComponent(text)}`, '_blank');
-                    msg?.insertAdjacentHTML('beforeend', `<div class="text-center p-2 text-emerald-500 text-[9px] font-black uppercase">WhatsApp Dispatching... ✅</div>`);
-                    return { text: "WhatsApp message loaded." };
+                const phone = (window.sanitizePhone || (p => String(p).replace(/\D/g, '')))(json.params.phone);
+                if (phone && json.params.message) {
+                    window.open(`https://wa.me/${phone.length === 10 ? '91' + phone : phone}?text=${encodeURIComponent(json.params.message)}`, '_blank');
+                    return { text: "WhatsApp dispatched." };
                 }
                 break;
 
             case 'viewLastReceipt': {
                 const latest = (state.sales || []).reduce((best, s) => toTimestamp(s.date) > toTimestamp(best?.date) ? s : best, null);
                 if (latest && window.viewReceipt) window.viewReceipt(latest.id);
-                return { text: "Opening latest transaction receipt... 📄" };
+                return { text: "Opening latest bill." };
             }
             case 'printLast': {
                 const lastBill = (state.sales || []).reduce((best, s) => toTimestamp(s.date) > toTimestamp(best?.date) ? s : best, null);
                 if (lastBill && window.printReceipt) window.printReceipt(lastBill);
-                return { text: "Printing latest sales record... 🖨️" };
+                return { text: "Printing latest bill." };
             }
-            case 'gotoDashboard': return { text: "Navigating to **Dashboard**... 🗺️", navigate: 'index.html' };
-            case 'gotoPOS': return { text: "Opening **Retail POS**... 🛒", navigate: 'pos.html' };
-            case 'gotoTailoring': return { text: "Switching to **Tracker**... 🧵", navigate: 'tailoring.html' };
+            case 'gotoDashboard': return { text: "Navigating to Master Dashboard...", navigate: 'index.html' };
+            case 'gotoPOS': return { text: "Opening Retail POS...", navigate: 'pos.html' };
+            case 'gotoTailoring': return { text: "Opening Tailoring Module...", navigate: 'tailoring.html' };
         }
     }
 
@@ -234,38 +211,27 @@
         const nowStr = new Date().toISOString().split('T')[0];
 
         switch (action) {
-            case 'help': 
-                return { text: `**Lily v2.5.1 Ultimate** 🌸\n\n• Reports: *"Audit today"* \n• Messaging: *"Message Zubaida"* \n• Printing: *"Print B-105"* \n• Inventory: *"Stock Kurti"* \n• Navigation: *"Go to dashboard"*` };
+            case 'help': return { text: `**Lily v2.5.2 FINAL** 🌸\n\n• Audit: *"Sales today"* \n• Printing: *"Print B-105"* \n• Stock: *"Stock Kurti"* \n• Dues: *"Pending dues"* \n• Navigation: *"Go to terminal"*` };
             
-            case 'printSpecificReceipt': {
-                const query = text.toLowerCase().replace(/print receipt for|bill for|receipt for/gi, '').trim();
-                const target = (state.orders || []).concat(state.sales || []).find(o => 
-                    (o.billNo && o.billNo.toLowerCase() === query) || (o.customerName && o.customerName.toLowerCase().includes(query))
-                );
-                if (target) return await executeAction({ action: 'printSpecificReceipt', params: { billNo: target.billNo } });
-                return null;
-            }
-
             case 'todayReport': {
                 const filter = (arr) => arr.filter(x => (typeof x.date === 'string' ? x.date : new Date(toTimestamp(x.date)).toISOString().split('T')[0]) === nowStr);
-                const sales = filter(state.sales || []);
-                const exps = filter(state.expenses || []);
+                const sales = filter(state.sales || []), exps = filter(state.expenses || []);
                 const rev = sales.reduce((a, s) => a + (parseFloat(s.total) || 0), 0);
                 const cost = exps.reduce((a, e) => a + (parseFloat(e.amount) || 0), 0);
-                return { text: `**Daily Boutique Audit** 📑\n\n• Sales Rev: **${fmt(rev)}**\n• Expenses: **${fmt(cost)}**\n• Net Today: **${rev >= cost ? `📈 +${fmt(rev-cost)}` : `📉 -${fmt(cost-rev)}`}**` };
+                return { text: `**Today's Audit**\nRevenue: **${fmt(rev)}**\nExpenses: **${fmt(cost)}**\nNet: **${fmt(rev-cost)}**` };
             }
 
             case 'checkStock': {
                 const name = parseItemName(text);
                 const matches = (state.items || []).filter(i => (i.name && i.name.toLowerCase().includes(name)) || (i.sku && i.sku.toLowerCase() === name));
                 if (!matches.length) return null;
-                return { text: `**Inventory for "${esc(name)}"**:\n` + matches.slice(0, 5).map(i => `📦 **${esc(i.name)}**: ${i.stock ?? i.quantity ?? 0} left (${fmt(i.sellingPrice ?? i.price)})`).join('\n') };
+                return { text: `**Stock Lookups**:\n` + matches.slice(0, 5).map(i => `📦 **${esc(i.name)}**: ${i.stock ?? i.quantity ?? 0} left`).join('\n') };
             }
 
             case 'pendingDues': {
                 const total = (state.sales || []).reduce((acc, s) => acc + (parseFloat(s.balanceDue || 0)), 0);
                 const tBal = (state.orders || []).filter(o => o.status !== 'Delivered').reduce((acc, o) => acc + ((o.totalCost||0)-(o.advancePaid||0)), 0);
-                return { text: `💰 **Outstanding Book Balance**:\n• Retail Dues: ${fmt(total)}\n• Stitching Dues: ${fmt(tBal)}\n\n**Total: ${fmt(total+tBal)}**` };
+                return { text: `💰 **Outstanding Book Balance**:\nTotal: ${fmt(total+tBal)}` };
             }
 
             case 'gotoDashboard': case 'gotoPOS': case 'gotoTailoring': return await executeAction({ action });
@@ -285,9 +251,8 @@
         const clone = bubble.cloneNode(true);
         clone.querySelector('.chat-copy-btn')?.remove();
         navigator.clipboard.writeText(clone.innerText.trim()).then(() => {
-            const old = btn.innerHTML; btn.innerHTML = '<i data-lucide="check" class="w-3 h-3 text-emerald-500"></i>';
-            if (window.lucide) lucide.createIcons();
-            setTimeout(() => { btn.innerHTML = old; if (window.lucide) lucide.createIcons(); }, 2000);
+            btn.innerHTML = '<i data-lucide="check" class="w-3 h-3 text-emerald-500"></i>';
+            setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 2000);
         });
     };
 
@@ -297,9 +262,9 @@
         if (document.getElementById('chatbot-overlay')) return;
         const overlay = document.createElement('div'); overlay.id = 'chatbot-overlay'; overlay.className = "fixed inset-0 z-[8999]";
         overlay.innerHTML = `
-            <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="window.closeChatbot()"></div>
+            <div class="absolute inset-0 bg-slate-900/40" onclick="window.closeChatbot()"></div>
             <div class="fixed inset-0 lg:inset-auto lg:bottom-10 lg:right-10 z-[9000] flex flex-col items-center lg:items-end p-4 lg:p-0 pointer-events-none">
-                <div id="chatbot-window" onclick="event.stopPropagation()" class="bg-white w-full h-full lg:w-[440px] lg:h-[720px] lg:rounded-[40px] shadow-2xl flex flex-col overflow-hidden animate-pop-in pointer-events-auto border-0 lg:border border-slate-100">
+                <div id="chatbot-window" onclick="event.stopPropagation()" class="bg-white w-full h-full lg:w-[440px] lg:h-[760px] lg:rounded-[40px] shadow-2xl flex flex-col overflow-hidden animate-pop-in pointer-events-auto border-0 lg:border border-slate-100">
                     <div class="bg-slate-950 p-6 lg:p-8 flex items-center gap-4 shrink-0 shrink-0 relative">
                         <div class="w-12 h-12 bg-gradient-to-tr from-violet-600 to-indigo-500 rounded-2xl flex items-center justify-center relative">
                             <span class="font-black text-white text-xl">L</span>
@@ -309,16 +274,16 @@
                             <h3 class="font-black text-sm lg:text-base uppercase tracking-tight opacity-90 leading-none mb-1">Lily AI</h3>
                             <div class="flex items-center gap-1.5">
                                 <span class="text-emerald-400 text-[8px] font-black uppercase tracking-[0.2em] animate-pulse">Live</span>
-                                <span class="text-slate-500 text-[8px] font-bold uppercase leading-none">• v2.5.1 Ultimate</span>
+                                <span class="text-slate-500 text-[8px] font-bold uppercase leading-none">• v2.5.2 Optimized</span>
                             </div>
                         </div>
                         <button onclick="window.closeChatbot()" class="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white transition-all bg-white/5 rounded-xl"><i data-lucide="x" class="w-5 h-5"></i></button>
                     </div>
-                    <div id="chat-messages" class="flex-1 overflow-y-auto px-6 py-6 space-y-6 bg-slate-50/20 custom-scrollbar scroll-smooth"></div>
+                    <div id="chat-messages" class="flex-1 overflow-y-auto px-6 py-6 space-y-6 bg-slate-100/5 custom-scrollbar scroll-smooth"></div>
                     <div class="px-6 py-3 flex gap-2 overflow-x-auto no-scrollbar border-t border-slate-50 shrink-0 bg-white">
-                        <button onclick="document.getElementById('chat-input').value='Audit Report'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:border-violet-300 transition-all font-mono">Audit</button>
-                        <button onclick="document.getElementById('chat-input').value='Stock Kurti'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-[9px] font-black uppercase tracking-widest font-mono">Stock</button>
-                        <button onclick="document.getElementById('chat-input').value='Reminder to '; document.getElementById('chat-input').focus();" class="whitespace-nowrap px-4 py-2.5 bg-emerald-50 border border-emerald-100 rounded-2xl text-[9px] font-black uppercase text-emerald-600 font-mono">WhatsApp</button>
+                        <button onclick="document.getElementById('chat-input').value='Audit Report'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-[9px] font-black uppercase tracking-widest font-mono">Report</button>
+                        <button onclick="document.getElementById('chat-input').value='Stock check'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-[9px] font-black uppercase tracking-widest font-mono">Stock</button>
+                        <button onclick="document.getElementById('chat-input').value='Pending dues'; window.sendChatMessage()" class="whitespace-nowrap px-4 py-2.5 bg-rose-50 border border-rose-100 rounded-2xl text-[9px] font-black uppercase text-rose-600 font-mono">Dues</button>
                         <button onclick="document.getElementById('chat-input').value='Print bill B-'; document.getElementById('chat-input').focus();" class="whitespace-nowrap px-4 py-2.5 bg-violet-50 border border-violet-100 rounded-2xl text-[9px] font-black uppercase text-violet-600 font-mono">Print</button>
                     </div>
                     <div class="p-6 bg-white border-t border-slate-100 shrink-0">
@@ -341,9 +306,8 @@
         if (!text) return;
 
         if (text.length > 500) {
-            messages.insertAdjacentHTML('beforeend', `<div class="text-center p-2 text-rose-400 text-[9px] font-black uppercase">Message too long (500 chars max)</div>`);
-            input.value = ''; messages.scrollTop = messages.scrollHeight;
-            return;
+            messages.insertAdjacentHTML('beforeend', `<div class="text-center p-2 text-rose-400 text-[9px] font-black uppercase">Max 500 chars</div>`);
+            input.value = ''; return;
         }
 
         _processing = true; input.disabled = true; sendBtn.disabled = true; input.value = '';
@@ -357,7 +321,7 @@
 
             messages.insertAdjacentHTML('beforeend', `
                 <div id="${tid}" class="flex gap-3">
-                    <div class="w-10 h-10 bg-slate-950 border border-slate-100 rounded-2xl flex items-center justify-center text-white text-[10px] font-black shrink-0">L</div>
+                    <div class="w-10 h-10 bg-slate-950 border border-slate-100 rounded-2xl flex items-center justify-center text-white text-[10px] font-black shrink-0 relative">L</div>
                     <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex gap-1.5 items-center">
                         <div class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce"></div>
                         <div class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
@@ -366,11 +330,8 @@
                 </div>`);
             messages.scrollTop = messages.scrollHeight;
 
-            const AI_ENHANCED = new Set(['sendSmartWhatsApp', null]);
-            let resp = null;
             const intent = getLocalIntent(text);
-
-            if (intent && !AI_ENHANCED.has(intent)) resp = await executeLocal(intent, text);
+            let resp = (intent && !['sendSmartWhatsApp'].includes(intent)) ? await executeLocal(intent, text) : null;
             if (!resp) resp = await callGemini(text);
 
             if (resp) {
@@ -396,7 +357,7 @@
             console.error(err);
             if(document.getElementById(tid)) document.getElementById(tid).remove();
             if (_chatHistory.length && _chatHistory[_chatHistory.length - 1].role === 'user') _chatHistory.pop();
-            messages.insertAdjacentHTML('beforeend', `<div class="text-center p-4 text-rose-500 text-[10px] font-black uppercase">Connection Offline. Using Local Logic.</div>`);
+            messages.insertAdjacentHTML('beforeend', `<div class="text-center p-4 text-rose-500 text-[10px] font-black uppercase">Error. Try refreshing app.</div>`);
         } finally { _processing = false; input.disabled = false; input.focus(); sendBtn.disabled = false; }
     };
 

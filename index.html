@@ -43,6 +43,31 @@
 
             <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
                 <div id="dashboard-content" class="max-w-[1600px] mx-auto">
+                    <!-- Lily Intelligence Hub (New Primary CTA) -->
+                    <div id="lily-hub-cta" class="mb-10 bg-gradient-to-br from-slate-900 to-slate-800 rounded-[48px] p-10 shadow-2xl relative overflow-hidden group cursor-pointer hover:scale-[1.01] transition-all" onclick="window.openChatbot()">
+                        <div class="absolute -right-20 -top-20 w-80 h-80 bg-violet-600/20 rounded-full blur-[100px] group-hover:bg-violet-600/30 transition-all duration-700"></div>
+                        <div class="absolute -left-20 -bottom-20 w-80 h-80 bg-indigo-600/10 rounded-full blur-[100px]"></div>
+                        
+                        <div class="flex flex-col md:flex-row items-center justify-between gap-10 relative z-10">
+                            <div class="flex items-center gap-8">
+                                <div class="w-20 h-20 bg-gradient-to-tr from-violet-600 to-indigo-500 rounded-[32px] flex items-center justify-center shadow-2xl shadow-violet-500/20 relative">
+                                    <span class="font-black text-white text-3xl">L</span>
+                                    <div class="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 border-4 border-slate-900 rounded-full animate-pulse"></div>
+                                </div>
+                                <div>
+                                    <h3 class="text-2xl font-black text-white tracking-tight leading-none mb-3 uppercase italic">Consult Lily Intelligence</h3>
+                                    <p class="text-slate-400 text-sm font-medium max-w-md leading-relaxed">Your hybrid AI co-pilot is active. Ask for sales audits, stock checks, or send smart WhatsApp reminders to clients instantly.</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <span class="hidden lg:block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] bg-white/5 px-6 py-3 rounded-2xl border border-white/5 italic">System Status: Optimal</span>
+                                <div class="px-8 py-5 bg-white text-slate-950 rounded-3xl font-black text-xs uppercase tracking-widest shadow-xl group-hover:bg-violet-600 group-hover:text-white transition-all flex items-center gap-3">
+                                    <i data-lucide="sparkles" class="w-4 h-4"></i> Apply Logic
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
                         <div>
                             <h2 class="text-4xl font-black text-slate-900 tracking-tighter mb-2">Omniscient View</h2>
@@ -276,10 +301,10 @@
         </main>
     </div>
 
-    <script src="js/firebase.js?v=2.5.1"></script>
-    <script src="js/app.js?v=2.5.1"></script>
-    <script src="js/pos.js?v=2.5.1"></script>
-    <script src="js/chatbot.js?v=2.5.1"></script>
+    <script src="js/firebase.js?v=2.5.3"></script>
+    <script src="js/app.js?v=2.5.3"></script>
+    <script src="js/pos.js?v=2.5.3"></script>
+    <script src="js/chatbot.js?v=2.5.3"></script>
     <script>
         // Only redirect once role is explicitly determined
         window.addEventListener('firebase-ready', () => {
@@ -304,7 +329,7 @@
             window.renderApp();
         };
 
-        window.APP_VERSION = "v2.5.1";
+        window.APP_VERSION = "v2.5.3";
         window.renderApp = function() {
             window.renderSidebar('dashboard');
             
@@ -773,7 +798,7 @@
             entries.sort((a,b) => b.date - a.date);
 
             const modal = document.createElement('div');
-            modal.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4';
+            modal.className = 'fixed inset-0 bg-slate-900/60 z-[1000] flex items-center justify-center p-4';
             modal.innerHTML = `
                 <div class="bg-white w-full max-w-2xl rounded-[48px] shadow-2xl overflow-hidden animate-pop-in">
                     <div class="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
