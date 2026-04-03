@@ -409,39 +409,45 @@
             const isFiltered = filter !== 'all';
             
             // Base Data
-            const sales = (window.erpState.sales || []).filter(s => s.date >= start && s.date <= end);
-            const tailoring = (window.erpState.orders || []).filter(o => {
-                const d = o.createdAt?.toDate ? o.createdAt.toDate().getTime() : (o.orderDate ? new Date(o.orderDate).getTime() : 0);
-                return d >= start && d <= end;
-            });
+            // Base Data
             const expenses = (window.erpState.expenses || []).filter(e => e.date >= start && e.date <= end);
 
-            const revRetail = sales.reduce((sum, s) => sum + (s.total || 0), 0);
-            const revTailoring = tailoring.reduce((sum, o) => sum + (o.totalCost || 0), 0);
-            const revTotal = revRetail + revTailoring;
+            let cashIn = 0, upiIn = 0, bankIn = 0, cashOut = 0, upiOut = 0, bankOut = 0;
+            let bookedRevenue = 0, grossMargin = 0;
             
             const tailoringOrders = (window.erpState.orders || []);
             const activeOrders = tailoringOrders.filter(o => o.status !== 'Delivered').length;
             const urgentOrders = tailoringOrders.filter(o => o.status !== 'Delivered' && o.deliveryDate && (new Date(o.deliveryDate) - now) < (48 * 60 * 60 * 1000) && (new Date(o.deliveryDate) - now) >= 0).length;
             const overdueOrders = tailoringOrders.filter(o => o.status !== 'Delivered' && o.deliveryDate && (new Date(o.deliveryDate) < today)).length;
-            // --- LIQUIDITY CALCULATIONS (Inflow) ---
-            let cashIn = 0, upiIn = 0, bankIn = 0;
             
-            // 1. Audit ALL POS Sales for payments in this range
+            const sales = (window.erpState.sales || []).filter(s => s.date >= start && s.date <= end);
+
             (window.erpState.sales || []).forEach(s => {
+                if (s.date >= start && s.date <= end) {
+                    bookedRevenue += (s.total || 0);
+                    (s.items || []).forEach(it => {
+                        const cost = parseFloat(it.cost || it.costPrice || 0);
+                        const price = parseFloat(it.price || it.sellingPrice || 0);
+                        const qty = parseFloat(it.qty || it.quantity || 1);
+                        grossMargin += (price - cost) * qty;
+                    });
+                }
+                
                 if (s.paymentLog && s.paymentLog.length > 0) {
                     s.paymentLog.forEach(log => {
                         if (log.date >= start && log.date <= end) {
-                            cashIn += (log.cashParts || 0);
-                            upiIn += (log.upiParts || 0);
-                            // Detect bank/other if not Mixed but labeled as such
+                            // If parts are missing (legacy), infer from method
+                            const c = log.cashParts !== undefined ? log.cashParts : (log.method === 'Cash' ? log.amount : 0);
+                            const u = log.upiParts !== undefined ? log.upiParts : (log.method === 'UPI' ? log.amount : 0);
+                            cashIn += (c || 0);
+                            upiIn += (u || 0);
+                            
                             if (log.method === 'Bank' || log.method === 'Card') {
                                 bankIn += (log.amount || 0);
                             }
                         }
                     });
                 } else if (s.date >= start && s.date <= end) {
-                    // Fallback for legacy records or missing logs
                     const b = s.paymentBreakdown || {};
                     if (s.paymentBreakdown) {
                         cashIn += (b.cash || 0);
@@ -454,13 +460,20 @@
                 }
             });
 
-            // 2. Audit ALL Tailoring Orders for payments in this range
             (window.erpState.orders || []).forEach(o => {
+                const ts = o.createdAt?.toMillis ? o.createdAt.toMillis() : (o.timestamp || 0);
+                if (ts >= start && ts <= end) {
+                    bookedRevenue += (o.totalCost || 0);
+                    grossMargin += (o.totalCost || 0) * 0.7;
+                }
+
                 if (o.paymentLog && o.paymentLog.length > 0) {
                     o.paymentLog.forEach(log => {
                         if (log.date >= start && log.date <= end) {
-                            cashIn += (log.cashParts || 0);
-                            upiIn += (log.upiParts || 0);
+                            const c = log.cashParts !== undefined ? log.cashParts : (log.method === 'Cash' ? log.amount : 0);
+                            const u = log.upiParts !== undefined ? log.upiParts : (log.method === 'UPI' ? log.amount : 0);
+                            cashIn += (c || 0);
+                            upiIn += (u || 0);
                             if (log.method === 'Bank' || log.method === 'Card') bankIn += (log.amount || 0);
                         }
                     });
@@ -479,12 +492,6 @@
                 }
             });
 
-
-
-            // --- LIQUIDITY CALCULATIONS (Outflow) ---
-            let cashOut = 0, upiOut = 0, bankOut = 0;
-
-            // Expenses (Operation Burn)
             expenses.forEach(e => {
                 const b = e.paymentBreakdown || {};
                 cashOut += (b.cash || 0);
@@ -493,8 +500,6 @@
                     if (e.paymentMethod === 'Cash') cashOut += (e.amount || 0);
                     else if (e.paymentMethod === 'UPI') upiOut += (e.amount || 0);
                     else if (e.paymentMethod === 'Bank' || e.paymentMethod === 'Card') bankOut += (e.amount || 0);
-                } else {
-                    // Check if there was other parts in any generic way (mostly cash/upi breakdown covered above)
                 }
             });
 
@@ -545,8 +550,8 @@
                 document.getElementById('upi_delta').innerText = `In: ₹${window.fmt(upiIn)} | Out: ₹${window.fmt(upiOut)}`;
             }
 
-            const expTotal = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-            const realizations = (cashIn + upiIn + bankIn) - (cashOut + upiOut + bankOut);
+            const realizations = cashIn + upiIn + bankIn;
+            const isOwner = window.erpState.role === 'Owner';
             
             const lowStock = (window.erpState.items || []).filter(i => (i.stock || 0) < 5).length;
 
@@ -556,23 +561,41 @@
             
             const readyOrders = tailoringOrders.filter(o => o.status === 'Ready').length;
             const stitchingOrders = tailoringOrders.filter(o => o.status === 'Stitching').length;
-            const tailoringRevenueToday = tailoringOrders.reduce((sum, o) => sum + (o.totalCost || 0), 0);
             const totalClients = (window.erpState.clients || []).length;
 
             stats.innerHTML = `
                 <!-- Block: Business Performance (Impact High) -->
                 <div class="bg-indigo-600 p-8 rounded-[48px] shadow-2xl relative overflow-hidden group col-span-1 md:col-span-2">
                     <div class="absolute -right-20 -top-20 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none group-hover:scale-150 transition-transform duration-1000"></div>
-                    <p class="text-[10px] font-black text-white/50 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Realized Performance (Liquidity Pulse)</p>
-                    <h3 class="text-5xl font-black text-white relative z-10 text-center">${window.fmt(realizations)}</h3>
-                    <div class="flex items-center justify-center gap-2 mt-4 relative z-10">
-                        <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-                        <p class="text-[10px] font-bold text-white/80 uppercase tracking-widest">${realizations >= 0 ? 'Liquid Growth' : 'Cash Gap Detected'}</p>
+                    <div class="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
+                        <div class="text-center md:text-left">
+                           <p class="text-[10px] font-black text-white/50 uppercase tracking-[0.2em] mb-2">Booked Revenue</p>
+                           <h3 class="text-3xl font-black text-white leading-none">₹${window.fmt(bookedRevenue)}</h3>
+                        </div>
+                        <div class="w-px h-12 bg-white/10 hidden md:block"></div>
+                        <div class="text-center md:text-right">
+                           <p class="text-[10px] font-black text-indigo-200 uppercase tracking-[0.2em] mb-2">Liquid Realized</p>
+                           <h3 class="text-3xl font-black text-indigo-100 leading-none">₹${window.fmt(realizations)}</h3>
+                        </div>
                     </div>
+                    ${isOwner ? `
+                    <div class="mt-8 pt-6 border-t border-white/10 flex items-center justify-between relative z-10">
+                        <div>
+                            <p class="text-[8px] font-black text-indigo-300 uppercase tracking-widest leading-none mb-1">Gross Internal Margin</p>
+                            <p class="text-lg font-black text-white leading-none">₹${window.fmt(grossMargin)}</p>
+                        </div>
+                        <div class="bg-white/20 px-3 py-1.5 rounded-full font-black text-[9px] text-white uppercase tracking-tighter">
+                            ${Math.round((grossMargin/bookedRevenue)*100 || 0)}% Yield
+                        </div>
+                    </div>` : `
+                    <div class="flex items-center justify-center gap-2 mt-6 relative z-10">
+                        <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+                        <p class="text-[10px] font-bold text-white/80 uppercase tracking-widest">Active Operations Cycle</p>
+                    </div>`}
                 </div>
 
-                ${filter !== 'today' ? `
-                    <!-- Aggregate Views for History -->
+                ${(filter !== 'today' && !isOwner) ? `
+                    <!-- Aggregate Views for History (Staff Only) -->
                     <div class="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm relative overflow-hidden group">
                         <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Total Inflow</p>
                         <h3 class="text-4xl font-black text-slate-900 relative z-10 text-center">${window.fmt(cashIn + upiIn + bankIn)}</h3>
@@ -642,7 +665,6 @@
             document.getElementById('stock-bar').style.width = stockPct + "%";
             document.getElementById('total-items').innerText = totalItems;
 
-            // Recent Sales feed (using filtered 'sales' variable)
             const recentSales = document.getElementById('recent-sales');
             const latest = sales.sort((a,b) => (b.date || 0) - (a.date || 0)).slice(0, 5);
             recentSales.innerHTML = latest.map(s => `

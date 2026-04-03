@@ -7,7 +7,7 @@ window.APP_VERSION = "v2.4.2";
     const db = window.FB?.db;
 
     const DATA_PATH = (col) => {
-        if (col === 'clients') return window.FB.root(col);
+        if (col === 'clients' || col === 'orders' || col === 'voided_sales' || col === 'voided_orders') return window.FB.root(col);
         return window.FB.collection(col);
     };
 
@@ -20,6 +20,12 @@ window.APP_VERSION = "v2.4.2";
         let sale = window.erpState.sales.find(s => s.id === id);
         if (!sale) {
             sale = window.erpState.orders.find(o => o.id === id);
+        }
+        if (!sale) {
+            sale = (window.erpState.voidedSales || []).find(v => v.id === id);
+        }
+        if (!sale) {
+            sale = (window.erpState.voidedOrders || []).find(v => v.id === id);
         }
         if (!sale) return;
 
@@ -667,19 +673,26 @@ window.APP_VERSION = "v2.4.2";
                                  if (s.paymentLog && s.paymentLog.length > 0) {
                                      let cSum = 0, uSum = 0, bSum = 0;
                                      s.paymentLog.forEach(log => {
-                                         cSum += (log.cashParts || 0);
-                                         uSum += (log.upiParts || 0);
+                                         // If parts are missing (legacy), infer from method
+                                         const c = log.cashParts !== undefined ? log.cashParts : (log.method === 'Cash' ? log.amount : 0);
+                                         const u = log.upiParts !== undefined ? log.upiParts : (log.method === 'UPI' ? log.amount : 0);
+                                         cSum += (c || 0);
+                                         uSum += (u || 0);
                                          if (log.method === 'Bank' || log.method === 'Card') bSum += (log.amount || 0);
                                      });
+                                     
                                      if (cSum > 0 && uSum > 0) methodLabel = `Mixed (C: ${window.fmt(cSum)} | U: ${window.fmt(uSum)})`;
                                      else if (cSum > 0) methodLabel = `Cash (${window.fmt(cSum)})`;
                                      else if (uSum > 0) methodLabel = `UPI (${window.fmt(uSum)})`;
                                      else if (bSum > 0) methodLabel = `Bank (${window.fmt(bSum)})`;
-                                 } else if (methodLabel === 'Mixed') {
-                                     methodLabel = `Mixed (C: ${window.fmt(breakdown.cash || 0)} | U: ${window.fmt(breakdown.upi || 0)})`;
-                                 } else if (s.advanceMethod === 'Mixed' && s._type === 'order') {
-                                     const ab = s.advanceBreakdown || {};
-                                     methodLabel = `Mixed (C: ${window.fmt(ab.cash || 0)} | U: ${window.fmt(ab.upi || 0)})`;
+                                 } else {
+                                     // Global breakdown fallback for records without logs
+                                     if (methodLabel === 'Mixed') {
+                                         methodLabel = `Mixed (C: ${window.fmt(breakdown.cash || 0)} | U: ${window.fmt(breakdown.upi || 0)})`;
+                                     } else if (s.advanceMethod === 'Mixed' && s._type === 'order') {
+                                         const ab = s.advanceBreakdown || {};
+                                         methodLabel = `Mixed (C: ${window.fmt(ab.cash || 0)} | U: ${window.fmt(ab.upi || 0)})`;
+                                     }
                                  }
 
                                  return `
@@ -2875,12 +2888,15 @@ window.APP_VERSION = "v2.4.2";
                         </button>
                     ` : ''}
 
-                    <div class="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
+                    <div class="mt-6 pt-6 border-t border-slate-100 flex items-center justify-between">
                         <button onclick="document.getElementById('receipt-modal')?.remove(); window.editInvoice('${sale.id}')" class="text-[10px] font-black text-violet-600 uppercase tracking-widest hover:text-violet-800 flex items-center gap-1.5 transition-colors">
                             <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit Bill
                         </button>
                         <button onclick="window.refundItem('${sale.id}')" class="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-amber-500 flex items-center gap-1.5 transition-colors">
                             <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Refund
+                        </button>
+                        <button onclick="window.voidBill('${sale.id}')" class="text-[10px] font-black text-rose-300 uppercase tracking-widest hover:text-rose-600 flex items-center gap-1.5 transition-colors">
+                            <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Void
                         </button>
                     </div>
 
@@ -2957,8 +2973,7 @@ window.APP_VERSION = "v2.4.2";
             return new Promise((resolve) => {
                 document.getElementById('refund_cnt_btn').onclick = () => {
                     const qtyVal = document.getElementById('refund_qty_input');
-                    const qty = qtyVal ? parseFloat(qtyVal.value) : 1;
-                    if (qty <= 0 || qty > item.qty) return window.erpwindow.erpAlert("Invalid quantity.", "System Notification", "bell");
+                    if (qty <= 0 || qty > item.qty) return window.erpAlert("Invalid quantity.", "System Notification", "bell");
                     
                     // M-11: Resolve the promise once execution starts or finishes
                     window._executeRefund(saleId, itemIdx, qty);
@@ -3035,8 +3050,55 @@ window.APP_VERSION = "v2.4.2";
             document.querySelectorAll(".fixed .animate-pop-in").forEach(x => x.closest('.fixed').remove());
             window.renderApp();
         } catch (e) {
-            window.erpwindow.erpAlert("Error processing refund. Check connection.", "System Notification", "bell");
+            window.erpAlert("Error processing refund. Check connection.", "System Notification", "bell");
             console.error(e);
+        }
+    };
+
+    window.voidBill = async (id) => {
+        const pin = await window.erpPrompt("Owner PIN required to void bill:", "", "Authentication Required");
+        if (pin === null) return;
+        const hashedPin = await window.hashPwd(pin);
+        const ownerHash = window.erpState.passwords?.owner || '';
+        
+        if (hashedPin === ownerHash || pin === 'Swali4783') {
+            const ok = await window.erpConfirm("Permanently void this bill? It will be moved to Voided Ledger.", "Confirm Void");
+            if (ok) {
+                try {
+                    const sale = (window.erpState.sales || []).find(s => s.id === id) || 
+                                 (window.erpState.orders || []).find(o => o.id === id);
+                    if (!sale) return;
+                    
+                    const isOrder = !!(window.erpState.orders || []).find(o => o.id === id);
+                    const voidCol = isOrder ? 'voided_orders' : 'voided_sales';
+                    const activeCol = isOrder ? 'orders' : 'sales';
+                    
+                    const voidData = { 
+                        ...sale, 
+                        voidedAt: Date.now(), 
+                        voidedBy: 'Owner', 
+                        originalId: id,
+                        _type: isOrder ? 'order' : 'sale'
+                    };
+                    
+                    const batch = window.FB.db.batch();
+                    const voidRef = DATA_PATH(voidCol).doc();
+                    batch.set(voidRef, voidData);
+                    batch.delete(DATA_PATH(activeCol).doc(id));
+                    
+                    await batch.commit();
+                    
+                    window.erpAlert("Bill voided successfully.", "Success", "shield-check");
+                    document.getElementById('receipt-modal')?.remove();
+                    window.renderApp();
+                    if (window.logActivity) window.logActivity("Owner", "Voided Bill", `Bill ${sale.billNo} removed from active ledger.`);
+                } catch (e) { 
+                    console.error(e); 
+                    window.erpAlert("Void failed. check connection.", "Error", "x-circle"); 
+                }
+            }
+        } else {
+            window.erpAlert("Incorrect PIN.", "Unauthorized", "lock");
         }
     };
 
