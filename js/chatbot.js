@@ -8,10 +8,9 @@
     const COMMANDS = [
         { patterns: ['add item', 'new item', 'create item', 'add product', 'add inventory', 'save to inventory'], action: 'addItem' },
         { patterns: ['add to cart', 'to cart', 'to card', 'add to card', 'add to bill', 'sell ', 'cart', 'card'], action: 'addToCart' },
-        { patterns: ['how many', 'stock of', 'stock check', 'check stock', 'availability'], action: 'checkStock' },
         { patterns: ['total sales', 'sales today', 'today sales', 'today sale', "today's revenue", 'upi sale', 'cash sale'], action: 'salesToday' },
         { patterns: ['total expenses', 'expenses today', 'today expenses', 'spending'], action: 'expensesToday' },
-        { patterns: ['pending dues', 'outstanding', 'receivables', 'who owes', 'balance due'], action: 'pendingDues' },
+        { patterns: ['pending dues', 'outstanding', 'receivables', 'who owes', 'balance dues'], action: 'pendingDues' },
         { patterns: ['new order', 'create order', 'tailoring order', 'book order'], action: 'newOrder' },
         { patterns: ['overdue', 'late orders', 'expired orders'], action: 'overdueOrders' },
         { patterns: ['urgent', 'due soon', 'upcoming delivery'], action: 'urgentOrders' },
@@ -23,7 +22,7 @@
         { patterns: ['bill count', 'how many bills', 'total bills', 'invoice count'], action: 'billCount' },
         { patterns: ['profit', 'margin', 'net profit'], action: 'profitToday' },
         { patterns: ['today', 'report', 'summary', 'status'], action: 'todayReport' },
-        { patterns: ['stock of', 'check stock', 'how many', 'inventory'], action: 'checkStock' },
+        { patterns: ['stock of', 'check stock', 'how many', 'inventory', 'availability'], action: 'checkStock' },
         { patterns: ['view cart', 'show cart', 'what is in cart', 'cart items'], action: 'viewCart' },
         { patterns: ['clear cart', 'empty cart', 'remove all from cart'], action: 'clearCart' },
         { patterns: ['help', 'what can you do', 'commands', 'guide'], action: 'help' },
@@ -107,16 +106,34 @@
         const state = window.erpState;
         if (!state) return "Data unavailable.";
         const now = Date.now(), todayTs = getTodayTimestamp();
+        const fmtLocal = (v) => '₹' + (v || 0).toLocaleString('en-IN');
+        
+        // 1. Current Stats
         const todaySales = (state.sales || []).filter(s => toTimestamp(s.date || s.createdAt) >= todayTs);
-        const todayExpenses = (state.expenses || []).filter(e => toTimestamp(e.date || e.createdAt) >= todayTs);
+        const totalRevenue = todaySales.reduce((s, x) => s + (x.total || 0), 0);
+        
+        // 2. Historical Aggregates (Last 3 Months)
+        const monthlyStats = {};
+        (state.sales || []).forEach(s => {
+            const ts = toTimestamp(s.date || s.createdAt);
+            if (ts > (now - 90 * 24 * 60 * 60 * 1000)) {
+                const dt = new Date(ts);
+                const month = dt.toLocaleString('default', { month: 'short', year: 'numeric' });
+                if (!monthlyStats[month]) monthlyStats[month] = 0;
+                monthlyStats[month] += (s.total || 0);
+            }
+        });
+        const historySummary = Object.entries(monthlyStats)
+            .sort((a, b) => new Date(a[0]) - new Date(b[0]))
+            .map(([m, val]) => `${m}: ${fmtLocal(val)}`).join(' | ');
+
+        // 3. Current Business State
         const activeOrders = (state.orders || []).filter(o => o.status !== 'Delivered');
         const overdueOrders = activeOrders.filter(o => o.deliveryDate && toTimestamp(o.deliveryDate) < now);
-        const totalRevenue = todaySales.reduce((s, x) => s + (x.total || 0), 0);
-        const totalExpenses = todayExpenses.reduce((s, e) => s + (e.amount || 0), 0);
-        const totalDues = (state.sales || []).reduce((s, x) => s + (x.balanceDue || 0), 0) + (state.orders || []).reduce((s, o) => s + Math.max(0, (o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0)), 0);
-        const itemSummary = (state.items || []).slice(0, 15).map(i => `${i.name} (${i.sku}): ${i.stock} in stock, ₹${i.sellingPrice}`).join('\n');
-        const historyContext = _chatHistory.slice(-8).map(m => `${m.role === 'user' ? 'User' : 'Lily'}: ${m.text}`).join('\n');
-        return `TODAY: ${new Date().toLocaleDateString()}\nREVENUE: ₹${totalRevenue.toLocaleString()}\nEXPENSES: ₹${totalExpenses.toLocaleString()}\nDUES: ₹${totalDues.toLocaleString()}\nACTIVE ORDERS: ${activeOrders.length} tours (${overdueOrders.length} overdue)\n\nCONVERSATION:\n${historyContext}\n\nINVENTORY:\n${itemSummary}`;
+        const totalDues = (state.sales || []).reduce((s, x) => s + (x.balanceDue || 0), 0);
+        const itemSummary = (state.items || []).slice(0, 10).map(i => `${i.name} (${i.sku}): ${i.stock} in stock`).join('\n');
+        
+        return `TODAY: ${new Date().toLocaleDateString()}\nTODAY REVENUE: ${fmtLocal(totalRevenue)}\nMONTHLY HISTORY (90 Days): ${historySummary}\nACTIVE ORDERS: ${activeOrders.length} tours (${overdueOrders.length} overdue)\nTOTAL RECEIVABLES: ${fmtLocal(totalDues)}\n\nINVENTORY EXCERPT:\n${itemSummary}`;
     }
 
     // === AI CORE ===
@@ -163,7 +180,23 @@
             }
             
             const data = await res.json();
-            let responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Lily is temporarily unavailable.';
+            console.log("[Lily] Raw AI Response:", data);
+
+            let responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+            
+            if (!responseText) {
+                const finishReason = data?.candidates?.[0]?.finishReason;
+                if (finishReason === 'SAFETY') {
+                    responseText = "⚠️ **Safety Notice**: My AI brain blocked this response due to sensitive content filters. Please try rephrasing.";
+                } else if (finishReason === 'OTHER' || !data.candidates) {
+                    responseText = "⚠️ **AI Busy**: The Gemini AI is currently unavailable. Switching to **Local Mode** for this request...";
+                    const localResp = await executeLocal(getLocalIntent(userPrompt), userPrompt);
+                    responseText += "\n\n" + (localResp ? localResp.text : "I'm having trouble thinking. Try asking about stock or sales!");
+                } else {
+                    responseText = "Lily is having trouble thinking right now. Let's try again in a second! 🌸";
+                }
+            }
+
             const action = extractAction(responseText);
             let actionResult = null;
             if (action) {
