@@ -1,4 +1,4 @@
-window.APP_VERSION = "v2.4.1";
+window.APP_VERSION = "v2.4.2";
 
 // --- CACHE & UPDATE MANAGEMENT ---
 // 1. Force unregister old Service Workers that often block updates

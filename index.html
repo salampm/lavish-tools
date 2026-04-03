@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <!-- Cache Busting -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
@@ -276,15 +276,17 @@
         </main>
     </div>
 
-    <script src="js/app.js?v=2.4.1"></script>
-    <script src="js/firebase.js?v=2.4.1"></script>
-    <script src="js/pos.js?v=2.4.1"></script>
+    <script src="js/firebase.js?v=2.4.2"></script>
+    <script src="js/app.js?v=2.4.2"></script>
+    <script src="js/pos.js?v=2.4.2"></script>
+    <script src="js/chatbot.js?v=2.4.2"></script>
     <script>
         // Only redirect once role is explicitly determined
         window.addEventListener('firebase-ready', () => {
-            if (window.erpState.role && window.erpState.role !== 'Owner') {
+            if (window.erpState.role && window.erpState.role !== 'Owner' && window.erpState.role !== 'Admin') {
                 location.href = 'pos.html';
             }
+            if (window.setDashFilter) window.setDashFilter('today');
         });
 
         window.toggleHistOps = function() {
