@@ -149,6 +149,15 @@
                     generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
                 })
             });
+            
+            if (!res.ok) {
+                const errBody = await res.text().catch(() => '');
+                console.error(`[Lily] Worker returned ${res.status}: ${errBody}`);
+                if (res.status === 403) return { text: `⚠️ **AI Worker Blocked (403)**. The Cloudflare Worker proxy is rejecting requests. Please check:\n• The Gemini API key inside the Worker is valid\n• The Worker has no domain restrictions blocking this site` };
+                if (res.status === 429) return { text: `⚠️ **Rate Limited (429)**. Too many requests. Please wait a moment and try again.` };
+                return { text: `⚠️ **Worker Error (${res.status})**. The AI backend returned an error. Details: ${errBody.substring(0, 100) || 'No details'}` };
+            }
+            
             const data = await res.json();
             let responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Lily is temporarily unavailable.';
             const action = extractAction(responseText);
@@ -158,8 +167,12 @@
                 responseText = responseText.replace(/\{[\s\S]*?"action"[\s\S]*?\}/g, '').trim();
             }
             return { text: responseText, actionResult };
-        } catch (e) { return { text: `⚠️ Connection Issue: ${e.message}` }; }
+        } catch (e) { 
+            console.error('[Lily] Fetch failed:', e);
+            return { text: `⚠️ **Connection Failed**: ${e.message}. Check if the AI Worker at \`${GEMINI_URL}\` is active.` }; 
+        }
     }
+
 
     async function executeGeminiAction(action, params) {
         const state = window.erpState, FB = window.FB;
