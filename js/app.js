@@ -683,10 +683,9 @@ window.generateThermalPrint = function(data) {
         html += `<tr style='font-size:10px;color:#444;'><td style='padding-bottom:6px;'>@ ${fmt(i.price)}</td><td style='text-align:center;padding-bottom:6px;'>${i.qty}</td><td style='text-align:right;padding-bottom:6px;'>${fmt(i.qty * i.price)}</td></tr>`;
     });
     html += `</table>`;
-    html += `<hr style='border:none;border-top:1px dashed #ccc;margin:8px 0;'>`;
-
+    html += `<table style="width:100%;font-size:11px;border-collapse:collapse;">`;
     const printRow = (l, v, b = false, c = '#111', sz = '11px') =>
-        `<div style='display:flex;justify-content:space-between;${b ? "font-weight:900;margin:6px 0;" : "margin-bottom:2px;"}color:${c};font-size:${sz};'><span>${l}</span><span>${v}</span></div>`;
+        `<tr style="color:${c};font-size:${sz};${b ? 'font-weight:900;' : ''}"><td style="padding:2px 0;">${l}</td><td style="text-align:right;padding:2px 0;">${v}</td></tr>`;
 
     html += printRow("SUBTOTAL", fmt(data.subtotal));
     if (data.discount > 0) html += printRow("DISCOUNT", "- " + fmt(data.discount), false, "#dc2626");
@@ -698,20 +697,22 @@ window.generateThermalPrint = function(data) {
         html += printRow("TAX (" + data.taxVal + "%)", fmt(Math.round(taxAmt)));
     }
     
-    html += `<hr style='border:none;border-top:2px solid #111;margin:6px 0;'>`;
+    html += `<tr><td colspan="2"><hr style='border:none;border-top:1px dashed #ccc;margin:4px 0;'></td></tr>`;
     html += printRow("NET AMOUNT", fmt(data.total), true, '#111', '14px');
     html += printRow("PAID AMOUNT", fmt(data.paid), false, '#666', '12px');
     if (data.balance > 0) html += printRow("BALANCE DUE", fmt(data.balance), true, "#000", '14px');
+
+    html += `</table>`;
 
     html += `<hr style='border:none;border-top:1px dashed #ccc;margin:8px 0;'>`;
 
     // Loyalty
     if (data.loyaltySnapshot) {
         const ls = data.loyaltySnapshot;
-        html += `<div style='margin-top:4px;background:#f8fafc;border:1px solid #e2e8f0;padding:6px;text-align:center;border-radius:4px;'>`;
-        html += `<div style='font-weight:900;font-size:9px;text-transform:uppercase;color:#475569;margin-bottom:2px;'>Loyalty Snapshot</div>`;
-        html += `<div style='font-size:11px;font-weight:bold;color:#1e293b;'>${(ls.tier || 'Basic').toUpperCase()} MEMBER</div>`;
-        html += `<div style='font-size:10px;color:#64748b;font-weight:900;'>Earned: ${ls.earned} | Balance: ${ls.total} pts</div>`;
+        html += `<div style='margin-top:4px;border:1px dashed #ccc;padding:4px;text-align:center;'>`;
+        html += `<div style='font-weight:900;font-size:9px;text-transform:uppercase;'>Loyalty Snapshot</div>`;
+        html += `<div style='font-size:11px;font-weight:bold;'>${(ls.tier || 'Basic').toUpperCase()} MEMBER</div>`;
+        html += `<div style='font-size:10px;'>Earned: ${ls.earned} | Balance: ${ls.total} pts</div>`;
         html += `</div>`;
         html += `<hr style='border:none;border-top:1px dashed #ccc;margin:8px 0;'>`;
     }
@@ -719,15 +720,15 @@ window.generateThermalPrint = function(data) {
     // Care Note
     if (pConf.note) {
         pConf.note.split('\n').forEach(line => {
-            if (line.trim()) html += `<div style='text-align:center;font-size:9px;font-weight:black;margin-bottom:2px;text-transform:uppercase;'>${window.esc(line.trim())}</div>`;
+            if (line.trim()) html += `<div style='text-align:center;font-size:9px;font-weight:bold;margin-bottom:2px;text-transform:uppercase;'>${window.esc(line.trim())}</div>`;
         });
         html += `<hr style='border:none;border-top:1px dashed #ccc;margin:8px 0;'>`;
     }
 
     // Footer
-    html += `<div style='text-align:center;font-size:11px;font-weight:black;text-transform:uppercase;'>${window.esc(pConf.footer1 || 'Thank you!')}</div>`;
-    if (pConf.footer2) html += `<div style='text-align:center;font-size:10px;margin-top:2px;font-weight:700;'>${window.esc(pConf.footer2)}</div>`;
-    if (pConf.footer3) html += `<div style='text-align:center;font-size:10px;margin-top:2px;font-weight:700;'>${window.esc(pConf.footer3)}</div>`;
+    html += `<div style='text-align:center;font-size:11px;font-weight:bold;text-transform:uppercase;'>${window.esc(pConf.footer1 || 'Thank you!')}</div>`;
+    if (pConf.footer2) html += `<div style='text-align:center;font-size:10px;margin-top:2px;'>${window.esc(pConf.footer2)}</div>`;
+    if (pConf.footer3) html += `<div style='text-align:center;font-size:10px;margin-top:2px;'>${window.esc(pConf.footer3)}</div>`;
 
     // Extra Bottom Fields
     if (pConf.extraFields) {

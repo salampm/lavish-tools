@@ -228,8 +228,8 @@
             }
             case 'pendingDues': {
                 const total = (state.sales || []).reduce((acc, s) => acc + (parseFloat(s.balanceDue || 0)), 0);
-                const tBal = (state.orders || []).filter(o => o.status !== 'Delivered').reduce((acc, o) => acc + ((o.totalCost||0)-(o.advancePaid||0)), 0);
-                return { text: `💰 **Outstanding Book Balance**:\nTotal: ${fmt(total+tBal)}` };
+                const tBal = (state.orders || []).reduce((acc, o) => acc + Math.max(0, (o.totalCost||0) - (o.advancePaid||0) - (o.deliveryDiscount||0)), 0);
+                return { text: `💰 **Outstanding Receivables**:\n• Retail: ${fmt(total)}\n• Tailoring: ${fmt(tBal)}\n\n**Total: ${fmt(total+tBal)}**` };
             }
             case 'gotoDashboard': case 'gotoPOS': case 'gotoTailoring': return await executeAction({ action });
             default: return null;

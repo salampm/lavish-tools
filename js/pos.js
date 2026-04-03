@@ -3025,12 +3025,23 @@ window.APP_VERSION = "v2.4.2";
                 newItems[itemIdx].qty -= qtyToRefund;
             }
 
+            const totalPaid = sale.total || 1;
+            const breakdown = sale.paymentBreakdown || {};
+            let cParts = 0; let uParts = 0;
+            if (sale.paymentMode === 'Mixed') {
+                const cashRatio = (breakdown.cash || 0) / totalPaid;
+                const upiRatio = (breakdown.upi || 0) / totalPaid;
+                cParts = -Math.round((refundValue * cashRatio) * 100) / 100;
+                uParts = -Math.round((refundValue * upiRatio) * 100) / 100;
+            } else if (sale.paymentMode === 'Cash') { cParts = -refundValue; }
+            else if (sale.paymentMode === 'UPI') { uParts = -refundValue; }
+
             const newPaymentLog = (sale.paymentLog || []).concat([{
                 date: Date.now(),
                 amount: -refundValue,
                 method: sale.paymentMode || 'Cash',
-                cashParts: (sale.paymentMode === 'Cash' || sale.paymentMode === 'Mixed') ? -refundValue : 0,
-                upiParts: (sale.paymentMode === 'UPI') ? -refundValue : 0, // Simplification: Mixed refunds assumed cash or same split
+                cashParts: cParts,
+                upiParts: uParts,
                 note: `Refund: ${item.name} (Qty ${qtyToRefund})`,
                 isRefund: true
             }]);

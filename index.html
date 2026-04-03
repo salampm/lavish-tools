@@ -435,15 +435,20 @@
                     });
                 }
                 
+                // Track if we need to manually add the initial checkout payment
+                // (Old invoices won't have it in paymentLog)
+                let initialAccountedFor = false;
+
                 if (s.paymentLog && s.paymentLog.length > 0) {
-                    let hasLogInRange = false;
                     s.paymentLog.forEach(log => {
+                        if (log.isInitial || !log.isRefund && !log.note) initialAccountedFor = true; // basic heuristic if isInitial is completely missing but we have old format logs that *might* be initial... wait, just checking isInitial is safer if we know checkout sets it now. However, let's look for `isInitial` or if the log date is exactly the sale date.
+                        // Actually, if it's an old sale, it didn't have log at all. It got log when collected. Collection sets note="Balance Settlement".
+                        if (log.isInitial) initialAccountedFor = true;
+
                         const logDate = typeof log.date === 'number' ? log.date : (log.date?.toMillis ? log.date.toMillis() : Date.now());
                         if (logDate >= start && logDate <= end) {
-                            hasLogInRange = true;
                             const c = log.cashParts !== undefined ? (log.cashParts || 0) : (log.method === 'Cash' ? (log.amount || 0) : 0);
                             const u = log.upiParts !== undefined ? (log.upiParts || 0) : (log.method === 'UPI' ? (log.amount || 0) : 0);
-                            // For Mixed: if both parts are 0 but amount > 0, infer from amount
                             if (c === 0 && u === 0 && (log.amount || 0) > 0) {
                                 if (log.method === 'Cash') cashIn += (log.amount || 0);
                                 else if (log.method === 'UPI') upiIn += (log.amount || 0);
@@ -456,25 +461,10 @@
                             }
                         }
                     });
-                    // FALLBACK: sale is in range but NO log entries matched dates
-                    // This happens when paymentLog was added later (collection) but initial payment has no log
-                    if (inRange && !hasLogInRange) {
-                        const b = s.paymentBreakdown || {};
-                        if (b.cash || b.upi) {
-                            cashIn += (b.cash || 0);
-                            upiIn += (b.upi || 0);
-                        } else {
-                            if (s.paymentMode === 'Cash') cashIn += (s.advancePaid || s.total || 0);
-                            else if (s.paymentMode === 'UPI') upiIn += (s.advancePaid || s.total || 0);
-                            else if (s.paymentMode === 'Mixed') {
-                                cashIn += (b.cash || s.advancePaid || 0);
-                                upiIn += (b.upi || 0);
-                            }
-                            else if (s.paymentMode === 'Bank' || s.paymentMode === 'Card') bankIn += (s.advancePaid || s.total || 0);
-                        }
-                    }
-                } else if (inRange) {
-                    // No paymentLog at all - use breakdown or mode
+                }
+                
+                // If the initial checkout payment wasn't found in the logs, AND the checkout date is in range, add it!
+                if (!initialAccountedFor && inRange) {
                     const b = s.paymentBreakdown || {};
                     if (b.cash || b.upi) {
                         cashIn += (b.cash || 0);
@@ -482,6 +472,10 @@
                     } else {
                         if (s.paymentMode === 'Cash') cashIn += (s.advancePaid || s.total || 0);
                         else if (s.paymentMode === 'UPI') upiIn += (s.advancePaid || s.total || 0);
+                        else if (s.paymentMode === 'Mixed') {
+                            cashIn += (b.cash || s.advancePaid || 0); // Fallback
+                            upiIn += (b.upi || 0);
+                        }
                         else if (s.paymentMode === 'Bank' || s.paymentMode === 'Card') bankIn += (s.advancePaid || s.total || 0);
                     }
                 }
@@ -492,15 +486,23 @@
                 const oInRange = ts >= start && ts <= end;
                 if (oInRange) {
                     bookedRevenue += (o.totalCost || 0);
-                    grossMargin += (o.totalCost || 0) * 0.7;
+                    const actualCost = (o.materialCost || 0) + (o.laborCost || 0);
+                    if (actualCost > 0) {
+                        grossMargin += (o.totalCost || 0) - actualCost;
+                    } else {
+                        const TAILORING_MARGIN_ESTIMATE = parseFloat(window.erpState.tailoringMarginPct || 0.7);
+                        grossMargin += (o.totalCost || 0) * TAILORING_MARGIN_ESTIMATE;
+                    }
                 }
 
+                let initialAccountedFor = false;
+
                 if (o.paymentLog && o.paymentLog.length > 0) {
-                    let hasLogInRange = false;
                     o.paymentLog.forEach(log => {
+                        if (log.isInitial) initialAccountedFor = true;
+
                         const logDate = typeof log.date === 'number' ? log.date : (log.date?.toMillis ? log.date.toMillis() : Date.now());
                         if (logDate >= start && logDate <= end) {
-                            hasLogInRange = true;
                             const c = log.cashParts !== undefined ? (log.cashParts || 0) : (log.method === 'Cash' ? (log.amount || 0) : 0);
                             const u = log.upiParts !== undefined ? (log.upiParts || 0) : (log.method === 'UPI' ? (log.amount || 0) : 0);
                             if (c === 0 && u === 0 && (log.amount || 0) > 0) {
@@ -514,21 +516,14 @@
                             }
                         }
                     });
-                    if (oInRange && !hasLogInRange) {
-                        const b = o.advanceBreakdown || {};
+                }
+                
+                if (!initialAccountedFor && oInRange) {
+                    const b = o.advanceBreakdown || {};
+                    if (b.cash || b.upi) {
                         cashIn += (b.cash || 0);
                         upiIn += (b.upi || 0);
-                        if (!b.cash && !b.upi) {
-                            if (o.advanceMethod === 'Cash') cashIn += (o.advancePaid || 0);
-                            else if (o.advanceMethod === 'UPI') upiIn += (o.advancePaid || 0);
-                            else if (o.advanceMethod === 'Bank' || o.advanceMethod === 'Card') bankIn += (o.advancePaid || 0);
-                        }
-                    }
-                } else if (oInRange) {
-                    const b = o.advanceBreakdown || {};
-                    cashIn += (b.cash || 0);
-                    upiIn += (b.upi || 0);
-                    if (!b.cash && !b.upi) {
+                    } else {
                         if (o.advanceMethod === 'Cash') cashIn += (o.advancePaid || 0);
                         else if (o.advanceMethod === 'UPI') upiIn += (o.advancePaid || 0);
                         else if (o.advanceMethod === 'Bank' || o.advanceMethod === 'Card') bankIn += (o.advancePaid || 0);
@@ -538,9 +533,12 @@
 
             expenses.forEach(e => {
                 const b = e.paymentBreakdown || {};
-                cashOut += (b.cash || 0);
-                upiOut += (b.upi || 0);
-                if (!e.paymentBreakdown) {
+                const hasMeaningfulBreakdown = (b.cash || 0) > 0 || (b.upi || 0) > 0;
+                
+                if (hasMeaningfulBreakdown) {
+                    cashOut += (b.cash || 0);
+                    upiOut += (b.upi || 0);
+                } else {
                     if (e.paymentMethod === 'Cash') cashOut += (e.amount || 0);
                     else if (e.paymentMethod === 'UPI') upiOut += (e.amount || 0);
                     else if (e.paymentMethod === 'Bank' || e.paymentMethod === 'Card') bankOut += (e.amount || 0);
@@ -909,7 +907,7 @@
                     <div class="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                         <div>
                             <h3 class="text-xl font-black text-slate-900 uppercase tracking-tight">${mode} ${type} Breakdown</h3>
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">${filter} records · Total: ₹${window.fmt(entries.reduce((s,x)=>s+x.amount, 0))}</p>
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">${filter} records · Total: ${window.fmt(entries.reduce((s,x)=>s+x.amount, 0))}</p>
                         </div>
                         <button onclick="this.closest('.fixed').remove()" class="w-10 h-10 bg-white shadow-sm border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 transition-all">
                             <i data-lucide="x" class="w-5 h-5"></i>
@@ -935,7 +933,7 @@
                                                 ${x.ref ? `<span class="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none">#${window.esc(x.ref)}</span>` : ''}
                                             </div>
                                         </td>
-                                        <td class="px-4 py-4 text-right font-black text-sm ${type === 'Inflow' ? 'text-emerald-500' : 'text-rose-500'}">₹${window.fmt(x.amount)}</td>
+                                        <td class="px-4 py-4 text-right font-black text-sm ${type === 'Inflow' ? 'text-emerald-500' : 'text-rose-500'}">${window.fmt(x.amount)}</td>
                                     </tr>
                                 `).join('')}
                                 ${entries.length === 0 ? `<tr><td colspan="3" class="py-20 text-center text-slate-300 italic font-medium">No transactions found for this period.</td></tr>` : ''}
@@ -1331,12 +1329,23 @@
                     newItems[itemIdx].qty -= qtyToRefund;
                 }
 
+                const totalPaid = sale.total || 1;
+                const breakdown = sale.paymentBreakdown || {};
+                let cParts = 0; let uParts = 0;
+                if (sale.paymentMode === 'Mixed') {
+                    const cashRatio = (breakdown.cash || 0) / totalPaid;
+                    const upiRatio = (breakdown.upi || 0) / totalPaid;
+                    cParts = -Math.round((refundValue * cashRatio) * 100) / 100;
+                    uParts = -Math.round((refundValue * upiRatio) * 100) / 100;
+                } else if (sale.paymentMode === 'Cash') { cParts = -refundValue; }
+                else if (sale.paymentMode === 'UPI') { uParts = -refundValue; }
+
                 const newPaymentLog = (sale.paymentLog || []).concat([{
                     date: Date.now(),
                     amount: -refundValue,
                     method: sale.paymentMode || 'Cash',
-                    cashParts: (sale.paymentMode === 'Cash' || sale.paymentMode === 'Mixed') ? -refundValue : 0,
-                    upiParts: (sale.paymentMode === 'UPI') ? -refundValue : 0,
+                    cashParts: cParts,
+                    upiParts: uParts,
                     note: `Refund: ${item.name}`,
                     isRefund: true
                 }]);
