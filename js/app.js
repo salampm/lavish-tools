@@ -1,5 +1,14 @@
 window.APP_VERSION = "v2.4.2";
 
+// === NATIVE APP ENFORCER (Disable Pinch-to-Zoom for iOS/Android App Feel) ===
+document.addEventListener('touchstart', (e) => {
+    if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+
+document.addEventListener('gesturestart', (e) => {
+    e.preventDefault();
+}, { passive: false });
+
 // --- CACHE & UPDATE MANAGEMENT ---
 // 1. Force unregister old Service Workers that often block updates
 // Legacy SW cleanup — remove after one deployment cycle
