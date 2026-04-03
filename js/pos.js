@@ -538,7 +538,7 @@ window.APP_VERSION = "v2.4.2";
     // --- REVENUE TRACKERS ---
     function renderHistory() {
         const salesList = (window.erpState.sales || [])
-            .filter(s => (s.balanceDue || 0) <= 0) // Only show settled in history
+            .filter(s => (s.balanceDue || 0) <= 0) 
             .map(s => {
                 const dt = s.createdAt?.toMillis ? s.createdAt.toMillis() : (typeof s.createdAt === 'number' ? s.createdAt : new Date(s.date || Date.now()).getTime());
                 return {
@@ -546,13 +546,12 @@ window.APP_VERSION = "v2.4.2";
                     _type: 'sale',
                     _sortDate: dt,
                     _displayDate: window.fmtDate(dt),
-                    _orderDate: s.date ? window.fmtDate(s.date) : window.fmtDate(dt),
                     _balance: s.balanceDue || 0
                 };
             });
 
         const ordersList = (window.erpState.orders || [])
-            .filter(o => o.status === 'Delivered' && ((o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0)) <= 0) // Only show delivered AND settled in history
+            .filter(o => o.status === 'Delivered' && ((o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0)) <= 0)
             .map(o => {
                 const dt = o.createdAt?.toMillis ? o.createdAt.toMillis() : (typeof o.createdAt === 'number' ? o.createdAt : (o.timestamp || Date.now()));
                 const bal = Math.max(0, (o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0));
@@ -561,7 +560,6 @@ window.APP_VERSION = "v2.4.2";
                     _type: 'order',
                     _sortDate: dt,
                     _displayDate: o.deliveryDate ? window.fmtDate(o.deliveryDate) : '-',
-                    _orderDate: window.fmtDate(o.orderDate || dt),
                     customerPhone: o.phone,
                     _balance: bal
                 };
@@ -576,7 +574,6 @@ window.APP_VERSION = "v2.4.2";
                     _isVoid: true,
                     _sortDate: dt,
                     _displayDate: window.fmtDate(dt),
-                    _orderDate: v.date ? window.fmtDate(v.date) : window.fmtDate(dt),
                     _balance: 0
                 };
             });
@@ -585,9 +582,7 @@ window.APP_VERSION = "v2.4.2";
         const sortKey = window.erpState.historySortKey || 'date';
 
         let list = [...salesList, ...ordersList, ...voidedList].sort((a,b) => {
-            if (sortKey === 'balance') {
-                return sortOrder === 'desc' ? b._balance - a._balance : a._balance - b._balance;
-            }
+            if (sortKey === 'balance') return sortOrder === 'desc' ? b._balance - a._balance : a._balance - b._balance;
             if (sortKey === 'bill') {
                 const numA = parseInt((a.billNo || '').replace(/\D/g, '')) || 0;
                 const numB = parseInt((b.billNo || '').replace(/\D/g, '')) || 0;
@@ -598,31 +593,20 @@ window.APP_VERSION = "v2.4.2";
         
         const filter = window.erpState.historyFilter || 'all';
         const startOfToday = new Date().setHours(0,0,0,0);
-        
-        if (filter === 'today') {
-            list = list.filter(l => l._sortDate >= startOfToday);
-        } else if (filter === 'week') {
-            const weekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-            list = list.filter(l => l._sortDate >= weekAgo);
-        } else if (filter === 'month') {
-            const monthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-            list = list.filter(l => l._sortDate >= monthAgo);
-        }
+        if (filter === 'today') list = list.filter(l => l._sortDate >= startOfToday);
+        else if (filter === 'week') list = list.filter(l => l._sortDate >= (Date.now() - 7 * 86400000));
+        else if (filter === 'month') list = list.filter(l => l._sortDate >= (Date.now() - 30 * 86400000));
 
         if (window.erpState.historySearch) {
             const q = window.erpState.historySearch.toLowerCase();
-            list = list.filter(l => 
-                (l.billNo || '').toLowerCase().includes(q) || 
-                (l.customerName || '').toLowerCase().includes(q) || 
-                (l.customerPhone || '').toLowerCase().includes(q)
-            );
+            list = list.filter(l => (l.billNo || '').toLowerCase().includes(q) || (l.customerName || '').toLowerCase().includes(q) || (l.customerPhone || '').includes(q));
         }
 
         return `
         <div class="flex flex-col h-full bg-slate-50">
             <header class="h-24 bg-white border-b border-slate-100 px-8 flex items-center justify-between z-40 sticky top-0 shadow-sm">
                 <div>
-                    <h2 class="text-xl font-black text-slate-800 uppercase tracking-tight">Receipts Ledger <span class="text-violet-600">v2.4.0</span></h2>
+                    <h2 class="text-xl font-black text-slate-800 uppercase tracking-tight">Receipts Ledger <span class="text-violet-600">v2.4.5</span></h2>
                     <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Unified Sales & Tailoring Archive</p>
                 </div>
                 <div class="flex items-center gap-4">
@@ -631,16 +615,12 @@ window.APP_VERSION = "v2.4.2";
                             <button onclick="window.erpState.historyFilter='${f}'; window.renderApp();" class="px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-white text-violet-600 shadow-md ring-1 ring-black/5' : 'text-slate-400 hover:text-slate-600'}">${f}</button>
                         `).join('')}
                     </div>
-                    <div class="h-10 w-px bg-slate-200 mx-2"></div>
                     <div class="flex items-center gap-2">
                         <select onchange="window.erpState.historySortKey=this.value; window.renderApp()" class="px-4 py-2.5 bg-slate-50 border-none rounded-xl text-[10px] font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-violet-400">
                             <option value="date" ${sortKey === 'date' ? 'selected' : ''}>Sort: Date</option>
                             <option value="balance" ${sortKey === 'balance' ? 'selected' : ''}>Sort: Balance</option>
                             <option value="bill" ${sortKey === 'bill' ? 'selected' : ''}>Sort: Bill No</option>
                         </select>
-                        <button onclick="window.toggleHistorySort()" class="w-10 h-10 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center hover:bg-slate-100 transition-all shadow-sm">
-                            <i data-lucide="${window.erpState.historySort === 'desc' ? 'sort-desc' : 'sort-asc'}" class="w-4 h-4 text-violet-600"></i>
-                        </button>
                     </div>
                     <div class="relative">
                         <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
@@ -651,105 +631,89 @@ window.APP_VERSION = "v2.4.2";
             
             <div class="flex-1 overflow-y-auto px-4 md:px-8 pb-4 md:pb-8 custom-scrollbar">
                 <div class="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-visible flex flex-col max-w-[1400px] mx-auto">
-                    <div class="sticky top-0 z-30 bg-slate-50/95 backdrop-blur-md border-b border-slate-100 px-8 py-5 hidden md:grid grid-cols-[140px_120px_1fr_250px_90px_90px] gap-4 items-center uppercase tracking-[0.2em] text-[10px] font-black text-slate-400 border-l-4 border-transparent">
+                    <div class="sticky top-0 z-30 bg-slate-50/95 backdrop-blur-md border-b border-slate-100 px-8 py-5 hidden md:grid grid-cols-[160px_120px_1fr_250px_110px_140px] gap-4 items-center uppercase tracking-[0.2em] text-[10px] font-black text-slate-400 border-l-4 border-transparent">
                         <div>Bill & Group</div>
-                        <div>Date</div>
+                        <div>Status & Date</div>
                         <div>Customer Info</div>
-                        <div>Items / Progress</div>
+                        <div>Summary</div>
                         <div class="text-right">Total</div>
-                        <div class="text-right">Balance</div>
+                        <div class="text-right pr-4">Actions</div>
                     </div>
 
                     <div class="divide-y divide-slate-50">
                         ${list.length === 0 ? `<div class="py-24 text-center text-slate-300 font-bold italic uppercase tracking-widest text-[10px]">No records match your filters</div>` :
                             list.map(s => {
                                  const isRefund = s.refunded || (s.refundLog && s.refundLog.length > 0);
-                                 const itemNames = (s.items || []).map(i => i.name).join(", ");
+                                 const itemNames = (s.items && s.items.length > 0) ? s.items.map(i => i.name).filter(n => n).join(", ") : 'POS Transaction';
                                  const bal = s._balance;
                                  const breakdown = s.paymentBreakdown || {};
                                  let methodLabel = s.paymentMode || s.paymentMethod || 'Cash';
                                  
-                                 // HIGH-FIDELITY AUDIT: Calculate breakdown from full payment history
                                  if (s.paymentLog && s.paymentLog.length > 0) {
                                      let cSum = 0, uSum = 0, bSum = 0;
                                      s.paymentLog.forEach(log => {
                                          const c = log.cashParts !== undefined ? log.cashParts : (log.method === 'Cash' ? log.amount : 0);
                                          const u = log.upiParts !== undefined ? log.upiParts : (log.method === 'UPI' ? log.amount : 0);
-                                         cSum += (c || 0);
-                                         uSum += (u || 0);
+                                         cSum += (c || 0); uSum += (u || 0);
                                          if (log.method === 'Bank' || log.method === 'Card') bSum += (log.amount || 0);
                                      });
-                                     
                                      if (cSum > 0 && uSum > 0) methodLabel = `Mixed (C: ${window.fmt(cSum)} | U: ${window.fmt(uSum)})`;
-                                     else if (cSum > 0) methodLabel = `Cash (C: ${window.fmt(cSum)})`;
-                                     else if (uSum > 0) methodLabel = `UPI (U: ${window.fmt(uSum)})`;
+                                     else if (cSum > 0) methodLabel = `Cash (${window.fmt(cSum)})`;
+                                     else if (uSum > 0) methodLabel = `UPI (${window.fmt(uSum)})`;
                                      else if (bSum > 0) methodLabel = `Bank (${window.fmt(bSum)})`;
-                                 } else {
-                                     // Robust legacy/fallback breakdown
-                                     const cashVal = breakdown.cash || (s.paymentMode === 'Cash' ? s.advancePaid : 0);
-                                     const upiVal = breakdown.upi || (s.paymentMode === 'UPI' ? s.advancePaid : 0);
-                                     
-                                     if (methodLabel === 'Mixed' || (cashVal > 0 && upiVal > 0)) {
-                                         methodLabel = `Mixed (C: ${window.fmt(cashVal || 0)} | U: ${window.fmt(upiVal || 0)})`;
-                                     } else if (s.advanceMethod === 'Mixed' && s._type === 'order') {
-                                         const ab = s.advanceBreakdown || {};
-                                         methodLabel = `Mixed (C: ${window.fmt(ab.cash || 0)} | U: ${window.fmt(ab.upi || 0)})`;
-                                     } else if (cashVal > 0) {
-                                         methodLabel = `Cash (${window.fmt(cashVal)})`;
-                                     } else if (upiVal > 0) {
-                                         methodLabel = `UPI (${window.fmt(upiVal)})`;
-                                     }
+                                 } else if (methodLabel === 'Mixed') {
+                                     methodLabel = `Mixed (C: ${window.fmt(breakdown.cash || 0)} | U: ${window.fmt(breakdown.upi || 0)})`;
                                  }
 
                                  return `
-                                 <div onclick="window.openReceipt('${s.id}')" class="px-8 py-5 grid grid-cols-2 md:grid-cols-[140px_120px_1fr_250px_90px_90px] gap-4 items-center hover:bg-slate-50 cursor-pointer transition-all group border-l-4 border-transparent hover:border-violet-500 relative">
+                                 <div onclick="window.openReceipt('${s.id}')" class="px-8 py-5 grid grid-cols-2 md:grid-cols-[160px_120px_1fr_250px_110px_140px] gap-4 items-center hover:bg-slate-50 cursor-pointer transition-all group border-l-4 border-transparent hover:border-violet-500 relative">
                                      <div>
                                          <div class="flex items-center gap-2">
                                              <p class="text-base font-black text-slate-800 tracking-tighter leading-tight group-hover:text-violet-600 transition-colors uppercase">${window.esc(s.billNo)}</p>
                                              <span class="px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest ${s._isVoid ? 'bg-rose-50 text-rose-500' : (s._type === 'sale' ? 'bg-indigo-50 text-indigo-500' : 'bg-emerald-50 text-emerald-600')}">
-                                                 ${s._isVoid ? 'VOIDED' : (s._type === 'sale' ? 'POS' : 'TLR')}
+                                                 ${s._isVoid ? 'VOID' : (s._type === 'sale' ? 'POS' : 'TLR')}
                                              </span>
                                          </div>
-                                         ${isRefund ? '<div class="mt-1"><span class="w-fit px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[7px] font-black uppercase tracking-tighter">Refunded Case</span></div>' : ''}
-                                         <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">${s._displayDate}</p>
-                                         ${s._isVoid ? '<span class="w-fit px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-[7px] font-black uppercase tracking-tighter mt-1">Permanently Voided</span>' : `<span class="text-[8px] font-black text-indigo-400 uppercase tracking-widest mt-1">${window.esc(methodLabel)}</span>`}
+                                         <div class="mt-1 flex flex-col gap-0.5">
+                                             ${isRefund ? '<span class="w-fit px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[7px] font-black uppercase tracking-tighter">Refunded Case</span>' : ''}
+                                             <span class="text-[8px] font-black text-indigo-400 uppercase tracking-widest">${window.esc(methodLabel)}</span>
+                                         </div>
                                      </div>
 
                                      <div class="hidden md:block">
-                                         <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Status</p>
-                                         <div class="flex items-center gap-1.5">
-                                             <span class="w-2 h-2 rounded-full ${s.balanceDue > 0 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}"></span>
-                                             <span class="text-[9px] font-black uppercase tracking-tighter ${s.balanceDue > 0 ? 'text-rose-600' : 'text-emerald-600'}">${s.balanceDue > 0 ? 'Partial' : 'Settled'}</span>
+                                         <div class="flex items-center gap-1.5 mb-1">
+                                             <span class="w-2 h-2 rounded-full ${s._isVoid ? 'bg-slate-300' : (bal > 0 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500')}"></span>
+                                             <span class="text-[9px] font-black uppercase tracking-tighter ${bal > 0 ? 'text-rose-600' : 'text-emerald-600'}">${s._isVoid ? 'Voided' : (bal > 0 ? 'Partial' : 'Settled')}</span>
                                          </div>
+                                         <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">${s._displayDate}</p>
                                      </div>
 
                                      <div class="min-w-0">
-                                         <p class="text-sm font-black text-slate-700 capitalize truncate">${window.esc(s.customerName || 'Client Profile')}</p>
-                                         <p class="text-[10px] font-bold text-slate-400">${window.esc(s.customerPhone || 'Walk-in Guest')}</p>
+                                         <p class="text-sm font-black text-slate-700 capitalize truncate">${window.esc(s.customerName || 'Walk-in')}</p>
+                                         <p class="text-[10px] font-bold text-slate-400">${window.esc(s.customerPhone || '-')}</p>
                                      </div>
 
                                      <div class="hidden md:block">
-                                         <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Summary</p>
-                                         <p class="text-[11px] font-bold text-slate-600 line-clamp-1 italic">${window.esc(itemNames || 'Invoice Record')}</p>
+                                         <p class="text-[11px] font-bold text-slate-600 line-clamp-2 italic leading-tight">${window.esc(itemNames)}</p>
                                      </div>
 
                                      <div class="text-right">
-                                         <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total</p>
-                                         <p class="text-sm font-black text-slate-800">${window.fmt(s.total || s.totalCost)}</p>
+                                         <p class="text-base font-black text-slate-800">${window.fmt(s.total || s.totalCost)}</p>
+                                         ${bal > 0 ? `<p class="text-[9px] font-black text-rose-500 uppercase tracking-tighter">Due: ${window.fmt(bal)}</p>` : ''}
                                      </div>
 
-                                     <div class="text-right flex items-center justify-end gap-2">
-                                         <button onclick="event.stopPropagation(); window.editInvoice('${s.id}')" class="p-2 text-slate-300 hover:text-violet-600 hover:bg-violet-50 rounded-xl transition-all" title="Edit Invoice">
+                                     <div class="flex items-center justify-end gap-1.5">
+                                         <button onclick="event.stopPropagation(); window.editInvoice('${s.id}')" class="w-9 h-9 flex items-center justify-center text-slate-300 hover:text-violet-600 hover:bg-violet-50 rounded-xl transition-all" title="Edit">
                                              <i data-lucide="pencil" class="w-4 h-4"></i>
                                          </button>
-                                         ${(window.erpState.role !== 'Staff') ? `
-                                         <button onclick="event.stopPropagation(); window.voidBill('${s.id}')" class="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all" title="Void Record">
-                                             <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
+                                         ${(window.erpState.role !== 'Staff' && !s._isVoid) ? `
+                                         <button onclick="event.stopPropagation(); window.voidBill('${s.id}')" class="w-9 h-9 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all" title="Void">
+                                             <i data-lucide="shield-alert" class="w-4 h-4"></i>
                                          </button>` : ''}
-                                         <div class="ml-2">
-                                             ${s.balanceDue > 0 
-                                                 ? `<button onclick="event.stopPropagation(); window.collectDue('${s.id}')" class="px-3 py-1.5 bg-rose-600 text-white rounded-lg text-[10px] font-black tracking-widest shadow-lg shadow-rose-100 hover:bg-rose-700 active:scale-95 transition-all">COLLECT</button>`
-                                                 : `<span class="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black tracking-widest border border-emerald-100">SETTLED</span>`
+                                         <div class="ml-1 min-w-[70px]">
+                                             ${bal > 0 
+                                                 ? `<button onclick="event.stopPropagation(); window.collectDue('${s.id}')" class="w-full py-2 bg-rose-600 text-white rounded-lg text-[9px] font-black tracking-widest shadow-lg shadow-rose-100 hover:bg-rose-700 active:scale-95 transition-all">COLLECT</button>`
+                                                 : `<span class="block w-full py-2 bg-emerald-50 text-emerald-600 rounded-lg text-[9px] font-black tracking-widest text-center border border-emerald-100">SETTLED</span>`
                                              }
                                          </div>
                                      </div>
