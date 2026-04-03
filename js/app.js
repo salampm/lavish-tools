@@ -1,4 +1,4 @@
-window.APP_VERSION = "v2.4.2";
+window.APP_VERSION = "v2.4.3";
 
 // === NATIVE APP ENFORCER (Disable Pinch-to-Zoom for iOS/Android App Feel) ===
 document.addEventListener('touchstart', (e) => {

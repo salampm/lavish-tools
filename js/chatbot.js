@@ -2,33 +2,21 @@
 (function () {
 
     const BOT_NAME = "Lily";
-    window.LILY_VERSION = "2.4.2_FORCE_RELOAD";
+    window.LILY_VERSION = "2.4.3_FORCE_RELOAD";
     // CRITICAL: Move this to a backend proxy (e.g., Firebase Cloud Function or Cloudflare Worker)
-    const GEMINI_URL = "https://little-violet-7bc7.lavishlavenderin.workers.dev?t=" + Date.now();
+    const GEMINI_URL = "https://little-violet-7bc7.lavishlavenderin.workers.dev?t=" + Date.now() + "&v=2.4.3";
 
     const COMMANDS = [
         { patterns: ['add item', 'new item', 'create item', 'add product', 'add inventory', 'save to inventory'], action: 'addItem' },
-        { patterns: ['add to cart', 'to cart', 'to card', 'add to card', 'add to bill', 'sell ', 'cart', 'card'], action: 'addToCart' },
-        { patterns: ['total sales', 'sales today', 'today sales', 'today sale', "today's revenue", 'upi sale', 'cash sale'], action: 'salesToday' },
-        { patterns: ['total expenses', 'expenses today', 'today expenses', 'spending'], action: 'expensesToday' },
-        { patterns: ['pending dues', 'outstanding', 'receivables', 'who owes', 'balance dues'], action: 'pendingDues' },
-        { patterns: ['new order', 'create order', 'tailoring order', 'book order'], action: 'newOrder' },
-        { patterns: ['overdue', 'late orders', 'expired orders'], action: 'overdueOrders' },
-        { patterns: ['urgent', 'due soon', 'upcoming delivery'], action: 'urgentOrders' },
-        { patterns: ['find client', 'search client', 'lookup client', 'client info', 'customer info'], action: 'findClient' },
-        { patterns: ['loyalty points', 'points of', 'check points', 'how many points'], action: 'checkLoyalty' },
-        { patterns: ['low stock', 'out of stock', 'stock alert', 'reorder'], action: 'lowStock' },
-        { patterns: ['top selling', 'best seller', 'popular items', 'top products'], action: 'topSelling' },
-        { patterns: ['add expense', 'record expense', 'log expense'], action: 'addExpense' },
-        { patterns: ['bill count', 'how many bills', 'total bills', 'invoice count'], action: 'billCount' },
-        { patterns: ['profit', 'margin', 'net profit'], action: 'profitToday' },
-        { patterns: ['today', 'report', 'summary', 'status'], action: 'todayReport' },
-        { patterns: ['stock of', 'check stock', 'how many', 'inventory', 'availability'], action: 'checkStock' },
-        { patterns: ['view cart', 'show cart', 'what is in cart', 'cart items'], action: 'viewCart' },
-        { patterns: ['clear cart', 'empty cart', 'remove all from cart'], action: 'clearCart' },
-        { patterns: ['help', 'what can you do', 'commands', 'guide'], action: 'help' },
-        { patterns: ['hi', 'hello', 'hey', 'good morning', 'good evening'], action: 'greet' },
-        { patterns: ['add '], action: 'ambiguousAdd' }
+        { patterns: ['today', 'report', 'how was today', 'sales today', 'summary'], action: 'todayReport' },
+        { patterns: ['stock', 'inventory', 'check', 'quantity', 'available'], action: 'checkStock' },
+        { patterns: ['profit', 'how much profit', 'net today'], action: 'profitToday' },
+        { patterns: ['points', 'loyalty', 'loyalty points', 'points for'], action: 'checkLoyalty' },
+        { patterns: ['sell', 'bill', 'checkout'], action: 'sell' },
+        { patterns: ['top', 'best seller', 'most sold', 'popular'], action: 'topProducts' },
+        { patterns: ['due', 'pending', 'owe', 'money', 'collections'], action: 'pendingDues' },
+        { patterns: ['expense', 'spent', 'spending', 'cost'], action: 'expenseSummary' },
+        { patterns: ['help', 'what can you do', 'what are your commands'], action: 'help' }
     ];
 
     // Performance: Pre-compiled Regex objects for input cleaning
