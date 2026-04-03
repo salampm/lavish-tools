@@ -187,6 +187,7 @@ window.erpState = {
         { id: 'inventory', icon: 'package', label: 'Inventory', url: 'inventory.html', roles: ['Owner'] },
         { id: 'clients', icon: 'users', label: 'Clients', url: 'pos.html?tab=clients' },
         { id: 'reports', icon: 'file-spreadsheet', label: 'Master Reports', url: 'pos.html?tab=reports', roles: ['Owner'] },
+        { id: 'lily', icon: 'sparkles', label: 'Lily Assistant', onclick: 'window.openChatbot()', url: '#' },
         { id: 'settings', icon: 'settings', label: 'Master Settings', url: 'pos.html?tab=settings', roles: ['Owner'] }
     ],
     isOnline: navigator.onLine,
@@ -429,7 +430,7 @@ window.navBtn = (item) => {
     
     return `
     <div class="menu-item-wrapper relative group">
-        <button onclick="window.toggleSidebar(false); setTimeout(() => location.href='${item.url}', 150);" 
+        <button onclick="${item.onclick ? item.onclick : `window.toggleSidebar(false); setTimeout(() => location.href='${item.url}', 150);`}" 
                 class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-bold pointer-events-auto ${active ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-500/30' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}">
             <i data-lucide="${item.icon}" class="w-4 h-4"></i>
             <span class="flex-1 text-left">${item.label}</span>

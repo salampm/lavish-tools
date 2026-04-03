@@ -2,8 +2,8 @@
 (function () {
 
     const BOT_NAME = "Lily";
-    window.LILY_VERSION = "2.5.3_PLATINUM";
-    const GEMINI_URL = "https://little-violet-7bc7.lavishlavenderin.workers.dev?t=" + Date.now() + "&v=2.5.3";
+    window.LILY_VERSION = "2.5.4_DIAMOND";
+    const GEMINI_URL = "https://little-violet-7bc7.lavishlavenderin.workers.dev?t=" + Date.now() + "&v=2.5.4";
 
     const COMMANDS = [
         { patterns: ['add item', 'new item', 'create item', 'add product', 'add inventory', 'save to inventory'], action: 'addItem' },

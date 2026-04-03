@@ -301,10 +301,10 @@
         </main>
     </div>
 
-    <script src="js/firebase.js?v=2.5.3"></script>
-    <script src="js/app.js?v=2.5.3"></script>
-    <script src="js/pos.js?v=2.5.3"></script>
-    <script src="js/chatbot.js?v=2.5.3"></script>
+    <script src="js/firebase.js?v=2.5.4"></script>
+    <script src="js/app.js?v=2.5.4"></script>
+    <script src="js/pos.js?v=2.5.4"></script>
+    <script src="js/chatbot.js?v=2.5.4"></script>
     <script>
         // Only redirect once role is explicitly determined
         window.addEventListener('firebase-ready', () => {
@@ -329,7 +329,9 @@
             window.renderApp();
         };
 
-        window.APP_VERSION = "v2.5.3";
+        window.LILY_VERSION = "2.5.4_DIAMOND";
+        const GEMINI_URL = "https://little-violet-7bc7.lavishlavenderin.workers.dev?t=" + Date.now() + "&v=2.5.4";
+
         window.renderApp = function() {
             window.renderSidebar('dashboard');
             
