@@ -2757,10 +2757,11 @@ window.APP_VERSION = "v2.4.2";
         if (!sale) return;
 
         // Unified Mapping with 0-safe checks
+        const isVoided = (sale.voidedAt !== undefined) || (window.erpState.voidedSales || []).some(v => v.id === id) || (window.erpState.voidedOrders || []).some(v => v.id === id);
         const subtotal = sale.subtotal || sale.totalCost || 0;
-        const discount = sale.discount || sale.deliveryDiscount || 0;
-        const total = sale.total || sale.totalCost || (subtotal - discount);
-        const balance = sale.balanceDue !== undefined ? sale.balanceDue : Math.max(0, (sale.totalCost || 0) - (sale.advancePaid || 0) - (sale.deliveryDiscount || 0));
+        const discountAmt = (sale.discount || 0) + (sale.deliveryDiscount || 0);
+        const totalAmt = sale.total || (subtotal - discountAmt);
+        const balance = sale.balanceDue !== undefined ? sale.balanceDue : Math.max(0, totalAmt - (sale.advancePaid || 0));
 
         const tailoringRefs = [...new Set((sale.items || []).map(i => i.tailoringRef || i.tailoringBillNo).filter(Boolean))];
         const tailoringHtml = tailoringRefs.length > 0 ? `
@@ -2776,15 +2777,8 @@ window.APP_VERSION = "v2.4.2";
         modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
 
         modal.innerHTML = `
-            <div class="bg-white w-full sm:max-w-sm sm:rounded-[40px] rounded-t-[40px] shadow-2xl animate-slide-up sm:animate-pop-in border border-slate-100 overflow-hidden my-auto relative max-h-[90vh] flex flex-col">
+            <div class="bg-white w-full sm:max-w-sm sm:rounded-[40px] rounded-t-[40px] shadow-2xl animate-slide-up sm:animate-pop-in border border-slate-100 overflow-hidden my-auto relative max-h-[90vh] flex flex-col ${isVoided ? 'opacity-90 grayscale-[0.3]' : ''}">
                 <!-- Sticky Header with Close Button -->
-                <div class="px-8 py-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between sticky top-0 z-20">
-                    <div>
-                        <h3 class="font-black text-xl leading-none text-slate-800">${sale.billNo}</h3>
-                        <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1.5">${new Date(sale.date || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
-                    </div>
-                    <button onclick="document.getElementById('receipt-modal')?.remove()" class="w-10 h-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all shadow-sm">
-                        <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                 </div>
                 
@@ -2813,6 +2807,27 @@ window.APP_VERSION = "v2.4.2";
                                 </div>
                             `).join('')}
                         </div>
+
+                        <!-- 💎 Diamond System: Collection Audit Trail -->
+                        ${sale.paymentLog && sale.paymentLog.length > 0 ? `
+                        <div class="mt-4 pt-4 border-t border-slate-100">
+                             <h4 class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Collection Audit Trace</h4>
+                             <div class="space-y-2">
+                                 ${sale.paymentLog.map(log => `
+                                     <div class="flex justify-between items-center text-[10px] font-bold">
+                                         <div class="flex flex-col">
+                                             <span class="text-slate-800">${log.note || 'Payment Session'}</span>
+                                             <span class="text-[8px] text-slate-400 uppercase tracking-tighter">${window.fmtDate(log.date)} • ${log.method}</span>
+                                         </div>
+                                         <span class="${(log.amount || 0) < 0 ? 'text-rose-500' : 'text-emerald-600'}">
+                                             ${(log.amount || 0) < 0 ? '-' : '+'}${fmt(Math.abs(log.amount))}
+                                         </span>
+                                     </div>
+                                 `).join('')}
+                             </div>
+                        </div>
+                        ` : ''}
+
                         <div class="mt-4 pt-4 border-t border-dashed border-slate-100 flex justify-between items-center">
                             <span class="text-[10px] font-black text-slate-400 uppercase">Final Total</span>
                             <span class="text-xl font-black text-violet-600">${fmt(sale.total || total)}</span>

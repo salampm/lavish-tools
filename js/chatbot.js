@@ -332,13 +332,35 @@
     };
 
     window.renderChatFAB = function () {
-        if (document.getElementById('chat-integrated-btn')) return;
-        const btn = document.createElement('button'); 
-        btn.id = 'chat-integrated-btn'; 
-        btn.onclick = window.openChatbot;
-        btn.className = "flex items-center gap-3 px-5 py-3 bg-slate-950 text-white rounded-2xl shadow-xl text-[10px] font-black uppercase tracking-widest hover:scale-110 active:scale-95 transition-all fixed bottom-8 right-8 z-[8000] ring-1 ring-white/10";
-        btn.innerHTML = `<i data-lucide="sparkles" class="w-4 h-4 text-violet-400"></i> Ask Lily`;
-        document.body.appendChild(btn);
+        // 1. Floating Action Button (Global / Mobile)
+        if (!document.getElementById('chat-integrated-btn')) {
+            const btn = document.createElement('button'); 
+            btn.id = 'chat-integrated-btn'; 
+            btn.onclick = window.openChatbot;
+            btn.className = "flex items-center justify-center w-14 h-14 bg-slate-950 text-white rounded-2xl shadow-2xl hover:scale-110 active:scale-95 transition-all fixed bottom-8 right-8 z-[8000] ring-1 ring-white/10 group";
+            btn.innerHTML = `
+                <div class="relative">
+                    <i data-lucide="sparkles" class="w-6 h-6 text-violet-400 group-hover:animate-pulse"></i>
+                    <div class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 border-2 border-slate-950 rounded-full"></div>
+                </div>
+            `;
+            document.body.appendChild(btn);
+        }
+
+        // 2. Header-Right Integration (Desktop / Dashboard Context)
+        const headerRight = document.querySelector('.header-right');
+        if (headerRight && !document.getElementById('lily-header-btn')) {
+            const hBtn = document.createElement('button');
+            hBtn.id = 'lily-header-btn';
+            hBtn.onclick = window.openChatbot;
+            hBtn.className = "flex items-center gap-3 px-4 py-2.5 bg-violet-50 hover:bg-violet-600 group transition-all rounded-2xl border border-violet-100/50 shadow-sm";
+            hBtn.innerHTML = `
+                <i data-lucide="sparkles" class="w-4 h-4 text-violet-600 group-hover:text-white transition-colors"></i>
+                <span class="text-[10px] font-black text-violet-700 uppercase tracking-widest group-hover:text-white transition-colors">Ask Lily</span>
+            `;
+            headerRight.prepend(hBtn);
+        }
+
         if (window.lucide) lucide.createIcons();
     };
     if (document.readyState === 'complete') window.renderChatFAB(); else window.addEventListener('load', window.renderChatFAB);

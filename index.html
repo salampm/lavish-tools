@@ -425,7 +425,7 @@
             const urgentOrders = tailoringOrders.filter(o => o.status !== 'Delivered' && o.deliveryDate && (new Date(o.deliveryDate) - now) < (48 * 60 * 60 * 1000) && (new Date(o.deliveryDate) - now) >= 0).length;
             const overdueOrders = tailoringOrders.filter(o => o.status !== 'Delivered' && o.deliveryDate && (new Date(o.deliveryDate) < today)).length;
             // --- LIQUIDITY CALCULATIONS (Inflow) ---
-            let cashIn = 0, upiIn = 0;
+            let cashIn = 0, upiIn = 0, bankIn = 0;
             
             // 1. Audit ALL POS Sales for payments in this range
             (window.erpState.sales || []).forEach(s => {
@@ -434,10 +434,14 @@
                         if (log.date >= start && log.date <= end) {
                             cashIn += (log.cashParts || 0);
                             upiIn += (log.upiParts || 0);
+                            // Detect bank/other if not Mixed but labeled as such
+                            if (log.method === 'Bank' || log.method === 'Card') {
+                                bankIn += (log.amount || 0);
+                            }
                         }
                     });
                 } else if (s.date >= start && s.date <= end) {
-                    // Fallback for legacy records or missing logs (attribute to sale date)
+                    // Fallback for legacy records or missing logs
                     const b = s.paymentBreakdown || {};
                     if (s.paymentBreakdown) {
                         cashIn += (b.cash || 0);
@@ -445,6 +449,7 @@
                     } else {
                         if (s.paymentMode === 'Cash') cashIn += (s.advancePaid || s.total || 0);
                         else if (s.paymentMode === 'UPI') upiIn += (s.advancePaid || s.total || 0);
+                        else if (s.paymentMode === 'Bank' || s.paymentMode === 'Card') bankIn += (s.advancePaid || s.total || 0);
                     }
                 }
             });
@@ -456,6 +461,7 @@
                         if (log.date >= start && log.date <= end) {
                             cashIn += (log.cashParts || 0);
                             upiIn += (log.upiParts || 0);
+                            if (log.method === 'Bank' || log.method === 'Card') bankIn += (log.amount || 0);
                         }
                     });
                 } else {
@@ -467,6 +473,7 @@
                         if (!o.advanceBreakdown) {
                             if (o.advanceMethod === 'Cash') cashIn += (o.advancePaid || 0);
                             else if (o.advanceMethod === 'UPI') upiIn += (o.advancePaid || 0);
+                            else if (o.advanceMethod === 'Bank' || o.advanceMethod === 'Card') bankIn += (o.advancePaid || 0);
                         }
                     }
                 }
@@ -475,7 +482,7 @@
 
 
             // --- LIQUIDITY CALCULATIONS (Outflow) ---
-            let cashOut = 0, upiOut = 0;
+            let cashOut = 0, upiOut = 0, bankOut = 0;
 
             // Expenses (Operation Burn)
             expenses.forEach(e => {
@@ -485,6 +492,9 @@
                 if (!e.paymentBreakdown) {
                     if (e.paymentMethod === 'Cash') cashOut += (e.amount || 0);
                     else if (e.paymentMethod === 'UPI') upiOut += (e.amount || 0);
+                    else if (e.paymentMethod === 'Bank' || e.paymentMethod === 'Card') bankOut += (e.amount || 0);
+                } else {
+                    // Check if there was other parts in any generic way (mostly cash/upi breakdown covered above)
                 }
             });
 
@@ -536,10 +546,12 @@
             }
 
             const expTotal = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+            const realizations = (cashIn + upiIn + bankIn) - (cashOut + upiOut + bankOut);
+            
             const lowStock = (window.erpState.items || []).filter(i => (i.stock || 0) < 5).length;
 
             const retailDues = (window.erpState.sales || []).reduce((sum, s) => sum + (s.balanceDue || 0), 0);
-            const tailoringDues = tailoringOrders.reduce((sum, o) => sum + Math.max(0, (o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0)), 0);
+            const tailoringDues = (window.erpState.orders || []).reduce((sum, o) => sum + Math.max(0, (o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0)), 0);
             const totalDues = retailDues + tailoringDues;
             
             const readyOrders = tailoringOrders.filter(o => o.status === 'Ready').length;
@@ -553,10 +565,10 @@
                 <div class="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm relative overflow-hidden group">
                     <div class="absolute -right-4 -top-4 w-20 h-20 bg-indigo-50 rounded-full group-hover:scale-150 transition-transform duration-700 opacity-50"></div>
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Total Inflow</p>
-                    <h3 class="text-4xl font-black text-slate-900 relative z-10 text-center">${window.fmt(cashIn + upiIn)}</h3>
+                    <h3 class="text-4xl font-black text-slate-900 relative z-10 text-center">${window.fmt(cashIn + upiIn + bankIn)}</h3>
                     <div class="flex items-center justify-center gap-2 mt-3 relative z-10">
                         <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                        <p class="text-[9px] font-bold text-slate-500 uppercase">Cash: ${window.fmt(cashIn)} | UPI: ${window.fmt(upiIn)}</p>
+                        <p class="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">C: ${window.fmt(cashIn)} | U: ${window.fmt(upiIn)} ${bankIn ? '| B: ' + window.fmt(bankIn) : ''}</p>
                     </div>
                 </div>
                 ` : ''}
@@ -566,10 +578,10 @@
                 <div class="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm relative overflow-hidden group">
                     <div class="absolute -right-4 -top-4 w-20 h-20 bg-rose-50 rounded-full group-hover:scale-150 transition-transform duration-700 opacity-50"></div>
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Total Outflow</p>
-                    <h3 class="text-4xl font-black text-rose-600 relative z-10 text-center">${window.fmt(cashOut + upiOut)}</h3>
+                    <h3 class="text-4xl font-black text-rose-600 relative z-10 text-center">${window.fmt(cashOut + upiOut + bankOut)}</h3>
                     <div class="flex items-center justify-center gap-2 mt-3 relative z-10">
                         <span class="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
-                        <p class="text-[9px] font-bold text-slate-500 uppercase">Cash: ${window.fmt(cashOut)} | UPI: ${window.fmt(upiOut)}</p>
+                        <p class="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">C: ${window.fmt(cashOut)} | U: ${window.fmt(upiOut)} ${bankOut ? '| B: ' + window.fmt(bankOut) : ''}</p>
                     </div>
                 </div>
                 ` : ''}
@@ -626,11 +638,14 @@
                 <!-- Block 3: Net Revenue -->
                 <div class="bg-slate-900 p-8 rounded-[48px] shadow-2xl relative overflow-hidden group">
                     <div class="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
-                    <p class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Net Revenue</p>
-                    <h3 class="text-4xl font-black text-white relative z-10 text-center">${window.fmt(revTotal - expTotal)}</h3>
+                    <p class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 relative z-10 text-center">Business Performance</p>
+                    <h3 class="text-4xl font-black text-white relative z-10 text-center">${window.fmt(realizations)}</h3>
                     <div class="flex items-center justify-center gap-2 mt-3 relative z-10">
-                        <span class="w-1.5 h-1.5 bg-violet-400 rounded-full"></span>
-                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Retail: ${window.fmt(revRetail)} | Tailor: ${window.fmt(revTailoring)}</p>
+                        <span class="w-1.5 h-1.5 ${realizations >= 0 ? 'bg-emerald-400' : 'bg-rose-400'} rounded-full"></span>
+                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">${realizations >= 0 ? 'Realized Profit' : 'Liquidity Gap'}</p>
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-white/5 text-center">
+                         <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest">Book Revenue: ${window.fmt(revTotal - expTotal)}</p>
                     </div>
                 </div>
                 ` : ''}
@@ -793,32 +808,8 @@
             }
 
             let entries = [];
-            if (type === 'Inflow') {
-                // Collect Sales
-                const sales = (window.erpState.sales || []).filter(s => s.date >= start && s.date <= end);
-                sales.forEach(s => {
-                    const b = s.paymentBreakdown || {};
-                    const amt = mode === 'Cash' ? (b.cash || 0) : (b.upi || 0);
-                    // Backfill
-                    let extra = 0;
-                    if (!s.paymentBreakdown && s.paymentMode === mode) extra = (s.advancePaid || s.total || 0);
-                    if (amt > 0 || extra > 0) {
-                        entries.push({ date: s.date, name: s.customerName || 'Walk-in Client', amount: amt || extra, cat: 'Retail Sale', ref: s.billNo });
-                    }
-                });
-
-                // Collect Tailoring
-                (window.erpState.orders || []).forEach(o => {
-                    const d = o.createdAt?.toDate ? o.createdAt.toDate().getTime() : (o.orderDate ? new Date(o.orderDate).getTime() : 0);
-                    if (d >= start && d <= end) {
-                        const b = o.advanceBreakdown || {};
-                        const amt = mode === 'Cash' ? (b.cash || 0) : (b.upi || 0);
-                        if (amt > 0) {
-                            entries.push({ date: d, name: o.customerName || 'Tailoring Client', amount: amt, cat: 'Tailoring Advance', ref: o.billNo });
-                        }
-                    }
-                });
-            } else {
+            
+            if (type === 'Outflow') {
                 // Collect Expenses
                 const expenses = (window.erpState.expenses || []).filter(e => e.date >= start && e.date <= end);
                 expenses.forEach(e => {
@@ -829,6 +820,70 @@
                     if (amt > 0 || extra > 0) {
                         entries.push({ date: e.date, name: e.description || 'Unspecified', amount: amt || extra, cat: e.category, ref: e.billNo });
                     }
+                });
+            }
+
+            // --- REVOLUTIONARY AUDIT: paymentLog Integration (Inflow) ---
+            if (type === 'Inflow') {
+                // POS Sales Audit
+                (window.erpState.sales || []).forEach(s => {
+                    if (s.paymentLog && s.paymentLog.length > 0) {
+                        s.paymentLog.forEach(log => {
+                            if (log.date >= start && log.date <= end) {
+                                const amt = mode === 'Cash' ? (log.cashParts || 0) : (log.upiParts || 0);
+                                if (amt !== 0) {
+                                    entries.push({ 
+                                        date: log.date, 
+                                        name: (s.customerName || 'Walk-in Client') + (log.note ? ` (${log.note})` : ''), 
+                                        amount: amt, 
+                                        cat: 'POS Payment', 
+                                        ref: s.billNo 
+                                    });
+                                }
+                            }
+                        });
+                    } else if (s.date >= start && s.date <= end) {
+                        // Fallback for legacy records
+                        const b = s.paymentBreakdown || {};
+                        const amt = mode === 'Cash' ? (b.cash || 0) : (b.upi || 0);
+                        let extra = 0;
+                        if (!s.paymentBreakdown && s.paymentMode === mode) extra = (s.advancePaid || s.total || 0);
+                        if (amt > 0 || extra > 0) entries.push({ date: s.date, name: s.customerName || 'Walk-in Client', amount: amt || extra, cat: 'Retail Sale', ref: s.billNo });
+                    }
+                });
+                
+                // Tailoring Orders Audit
+                (window.erpState.orders || []).forEach(o => {
+                    if (o.paymentLog && o.paymentLog.length > 0) {
+                        o.paymentLog.forEach(log => {
+                            if (log.date >= start && log.date <= end) {
+                                const amt = mode === 'Cash' ? (log.cashParts || 0) : (log.upiParts || 0);
+                                if (amt !== 0) {
+                                    entries.push({ 
+                                        date: log.date, 
+                                        name: (o.customerName || 'Tailoring Client') + (log.note ? ` (${log.note})` : ''), 
+                                        amount: amt, 
+                                        cat: 'Tailoring Pmt', 
+                                        ref: o.billNo 
+                                    });
+                                }
+                            }
+                        });
+                    } else {
+                        const d = o.createdAt?.toMillis ? o.createdAt.toMillis() : (o.timestamp || 0);
+                        if (d >= start && d <= end) {
+                            const b = o.advanceBreakdown || {};
+                            const amt = mode === 'Cash' ? (b.cash || 0) : (b.upi || 0);
+                            if (amt > 0) entries.push({ date: d, name: o.customerName || 'Tailoring Client', amount: amt, cat: 'Tailoring Advance', ref: o.billNo });
+                        }
+                    }
+                });
+
+                // Deduplicate to prioritize paymentLog
+                const loggerRefs = new Set(entries.filter(e => e.cat.includes('Payment') || e.cat.includes('Pmt')).map(e => e.ref));
+                entries = entries.filter(e => {
+                    if (e.cat === 'Retail Sale' || e.cat === 'Tailoring Advance') return !loggerRefs.has(e.ref);
+                    return true;
                 });
             }
 
@@ -915,6 +970,16 @@
             window.FB.collection('items').onSnapshot(snap => {
                 window.erpState.items = snap.docs.map(doc => ({id: doc.id, ...doc.data()}));
                 window.saveLocalState();
+                window.batchedRender();
+            });
+
+            window.FB.collection('voided_sales').onSnapshot(snap => {
+                window.erpState.voidedSales = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.batchedRender();
+            });
+
+            window.FB.collection('voided_orders').onSnapshot(snap => {
+                window.erpState.voidedOrders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 window.batchedRender();
             });
 
@@ -1061,9 +1126,13 @@
 
         // --- SHARED RECEIPT MODAL LOGIC (Mirrored from POSv1) ---
         window.openReceipt = (id) => {
-            const sale = window.erpState.sales.find(s => s.id === id);
+            let sale = window.erpState.sales.find(s => s.id === id);
+            if (!sale) {
+                sale = (window.erpState.voidedSales || []).find(s => s.id === id);
+            }
             if (!sale) return;
 
+            const isVoided = (sale.voidedAt !== undefined) || (window.erpState.voidedSales || []).some(v => v.id === id);
             const subtotal = sale.subtotal || 0;
             const discount = sale.discount || 0;
             const total = sale.total || (subtotal - discount);
@@ -1082,16 +1151,17 @@
             modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
 
             modal.innerHTML = `
-                <div class="bg-white w-full max-w-sm rounded-[40px] shadow-2xl animate-pop-in border border-slate-100 overflow-hidden my-auto relative">
+                <div class="bg-white w-full max-w-sm rounded-[40px] shadow-2xl animate-pop-in border border-slate-100 overflow-hidden my-auto relative ${isVoided ? 'opacity-90 grayscale-[0.3]' : ''}">
                     <button onclick="this.closest('.fixed').remove()" class="absolute top-8 right-8 w-10 h-10 bg-white/80 backdrop-blur-md border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all shadow-sm z-10">
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                     
-                    <div class="bg-slate-50 border-b border-slate-100 p-8 flex items-center justify-between text-slate-800">
+                    <div class="${isVoided ? 'bg-rose-500 text-white' : 'bg-slate-50 text-slate-800'} border-b border-slate-100 p-8 flex items-center justify-between">
                         <div>
                             <h3 class="font-black text-xl leading-none">${sale.billNo}</h3>
-                            <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1.5">${new Date(sale.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                            <p class="text-[10px] font-black uppercase tracking-widest ${isVoided ? 'text-rose-100' : 'text-slate-400'} mt-1.5">${new Date(sale.date || sale.orderDate || sale.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
                         </div>
+                        ${isVoided ? `<div class="bg-white/20 px-3 py-1.5 rounded-full font-black text-[10px] uppercase tracking-tighter">VOIDED</div>` : ''}
                     </div>
 
                     <div class="p-8">
@@ -1113,6 +1183,26 @@
                                     </div>
                                 `).join('')}
                             </div>
+
+                            ${sale.paymentLog && sale.paymentLog.length > 0 ? `
+                            <div class="mt-4 pt-4 border-t border-slate-100">
+                                 <h4 class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Collection Audit</h4>
+                                 <div class="space-y-2">
+                                     ${sale.paymentLog.map(log => `
+                                         <div class="flex justify-between items-center text-[10px] font-bold">
+                                             <div class="flex flex-col">
+                                                 <span class="text-slate-800">${log.note || 'Payment'}</span>
+                                                 <span class="text-[8px] text-slate-400 uppercase tracking-tighter">${window.fmtDate(log.date)} via ${log.method}</span>
+                                             </div>
+                                             <span class="${(log.amount || 0) < 0 ? 'text-rose-500' : 'text-emerald-600'}">
+                                                 ${(log.amount || 0) < 0 ? '-' : '+'}${window.fmt(Math.abs(log.amount))}
+                                             </span>
+                                         </div>
+                                     `).join('')}
+                                 </div>
+                            </div>
+                            ` : ''}
+
                             <div class="mt-4 pt-4 border-t border-dashed border-slate-100 flex justify-between items-center">
                                 <span class="text-[10px] font-black text-slate-400 uppercase">Final Amount</span>
                                 <span class="text-xl font-black text-violet-600">${window.fmt(sale.total)}</span>
@@ -1143,7 +1233,7 @@
                                 <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Refund Item
                             </button>
                             <button onclick="window.voidBill('${sale.id}')" class="text-[10px] font-black text-rose-300 uppercase tracking-widest hover:text-rose-600 flex items-center gap-1.5 transition-colors">
-                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Void Bill
+                                <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Administrative Void
                             </button>
                         </div>
                     </div>
@@ -1206,15 +1296,17 @@
             if (!ok) return;
 
             try {
-                // 1. Update stock
+                // 💎 Diamond Standards: Structured Refund Log
+                const refundValue = item.price * qtyToRefund;
+                
+                // RESTOCK ITEM
                 const originalItem = window.erpState.items.find(x => x.id === item.id || x.sku === item.sku);
                 if (originalItem) {
                     await window.FB.collection('items').doc(originalItem.id).update({
-                        stock: Number(originalItem.stock || 0) + qtyToRefund
+                        stock: window.firebase ? firebase.firestore.FieldValue.increment(qtyToRefund) : (Number(originalItem.stock || 0) + qtyToRefund)
                     });
                 }
 
-                const refundValue = item.price * qtyToRefund;
                 const newSubtotal = Math.max(0, (sale.subtotal || 0) - refundValue);
                 const newTotal = Math.max(0, (sale.total || 0) - refundValue);
                 const newBalanceDue = Math.max(0, (sale.balanceDue || 0) - refundValue);
@@ -1226,11 +1318,22 @@
                     newItems[itemIdx].qty -= qtyToRefund;
                 }
 
+                const newPaymentLog = (sale.paymentLog || []).concat([{
+                    date: Date.now(),
+                    amount: -refundValue,
+                    method: sale.paymentMode || 'Cash',
+                    cashParts: (sale.paymentMode === 'Cash' || sale.paymentMode === 'Mixed') ? -refundValue : 0,
+                    upiParts: (sale.paymentMode === 'UPI') ? -refundValue : 0,
+                    note: `Refund: ${item.name}`,
+                    isRefund: true
+                }]);
+
                 await window.FB.collection('sales').doc(saleId).update({
                     items: newItems,
                     subtotal: newSubtotal,
                     total: newTotal,
                     balanceDue: newBalanceDue,
+                    paymentLog: newPaymentLog,
                     refundLog: [...(sale.refundLog || []), { item: item.name, amount: refundValue, date: Date.now() }]
                 });
 
@@ -1253,11 +1356,20 @@
                 const ok = await window.erpConfirm("Permanently delete this bill?", "Confirm Deletion");
                 if (ok) {
                     try {
-                        await window.FB.collection('sales').doc(id).delete();
-                        window.erpAlert("Bill deleted.", "Success", "check-circle");
+                        const batch = window.FB.db.batch();
+                        const sale = (window.erpState.sales || []).find(s => s.id === id);
+                        const voidData = { voidedAt: Date.now(), voidedBy: 'Owner', originalId: id };
+                        
+                        if (sale) {
+                            const voidRef = window.FB.collection('voided_sales').doc();
+                            batch.set(voidRef, { ...sale, ...voidData, _type: 'sale' });
+                            batch.delete(window.FB.collection('sales').doc(id));
+                        }
+                        
+                        await batch.commit();
+                        window.erpAlert("Bill voided and recorded.", "Success", "shield-check");
                         document.querySelectorAll(".fixed .animate-pop-in").forEach(x => x.closest('.fixed').remove());
-                        window.renderApp();
-                    } catch (e) { window.erpAlert("Delete failed", "Error", "x-circle"); }
+                    } catch (e) { console.error(e); window.erpAlert("Void failed", "Error", "x-circle"); }
                 }
             } else {
                 window.erpAlert("Incorrect Security PIN.", "Access Denied", "shield-off");
