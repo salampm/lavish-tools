@@ -2888,16 +2888,18 @@ window.APP_VERSION = "v2.4.2";
                         </button>
                     ` : ''}
 
-                    <div class="mt-6 pt-6 border-t border-slate-100 flex items-center justify-between">
-                        <button onclick="document.getElementById('receipt-modal')?.remove(); window.editInvoice('${sale.id}')" class="text-[10px] font-black text-violet-600 uppercase tracking-widest hover:text-violet-800 flex items-center gap-1.5 transition-colors">
+                    <div class="mt-6 pt-6 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                        <button onclick="document.getElementById('receipt-modal')?.remove(); window.editInvoice('${sale.id}')" class="px-4 py-2.5 bg-violet-50 text-violet-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-100 flex items-center gap-1.5 transition-colors">
                             <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit Bill
                         </button>
-                        <button onclick="window.refundItem('${sale.id}')" class="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-amber-500 flex items-center gap-1.5 transition-colors">
-                            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Refund
-                        </button>
-                        <button onclick="window.voidBill('${sale.id}')" class="text-[10px] font-black text-rose-300 uppercase tracking-widest hover:text-rose-600 flex items-center gap-1.5 transition-colors">
-                            <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Void
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <button onclick="window.refundItem('${sale.id}')" class="px-4 py-2.5 bg-slate-100 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-100 hover:text-amber-600 flex items-center gap-1.5 transition-colors">
+                                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Refund
+                            </button>
+                            <button onclick="window.voidBill('${sale.id}')" class="px-4 py-2.5 bg-rose-50 text-rose-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-100 hover:text-rose-600 flex items-center gap-1.5 transition-colors border border-rose-100">
+                                <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Void
+                            </button>
+                        </div>
                     </div>
 
                     <button onclick="document.getElementById('receipt-modal')?.remove()" class="w-full flex items-center justify-center gap-2 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-black transition-all mt-8">

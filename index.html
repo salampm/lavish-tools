@@ -435,16 +435,9 @@
                     });
                 }
                 
-                // Track if we need to manually add the initial checkout payment
-                // (Old invoices won't have it in paymentLog)
-                let initialAccountedFor = false;
-
                 if (s.paymentLog && s.paymentLog.length > 0) {
+                    // Modern Flow: ONLY use paymentLog - never use fallback
                     s.paymentLog.forEach(log => {
-                        if (log.isInitial || !log.isRefund && !log.note) initialAccountedFor = true; // basic heuristic if isInitial is completely missing but we have old format logs that *might* be initial... wait, just checking isInitial is safer if we know checkout sets it now. However, let's look for `isInitial` or if the log date is exactly the sale date.
-                        // Actually, if it's an old sale, it didn't have log at all. It got log when collected. Collection sets note="Balance Settlement".
-                        if (log.isInitial) initialAccountedFor = true;
-
                         const logDate = typeof log.date === 'number' ? log.date : (log.date?.toMillis ? log.date.toMillis() : Date.now());
                         if (logDate >= start && logDate <= end) {
                             const c = log.cashParts !== undefined ? (log.cashParts || 0) : (log.method === 'Cash' ? (log.amount || 0) : 0);
@@ -452,7 +445,7 @@
                             if (c === 0 && u === 0 && (log.amount || 0) > 0) {
                                 if (log.method === 'Cash') cashIn += (log.amount || 0);
                                 else if (log.method === 'UPI') upiIn += (log.amount || 0);
-                                else if (log.method === 'Mixed') cashIn += (log.amount || 0); // Default mixed to cash
+                                else if (log.method === 'Mixed') cashIn += (log.amount || 0);
                                 else if (log.method === 'Bank' || log.method === 'Card') bankIn += (log.amount || 0);
                             } else {
                                 cashIn += c;
@@ -461,10 +454,8 @@
                             }
                         }
                     });
-                }
-                
-                // If the initial checkout payment wasn't found in the logs, AND the checkout date is in range, add it!
-                if (!initialAccountedFor && inRange) {
+                } else if (inRange) {
+                    // Legacy Flow: completely missing paymentLog, so fallback to total strings
                     const b = s.paymentBreakdown || {};
                     if (b.cash || b.upi) {
                         cashIn += (b.cash || 0);
@@ -473,7 +464,7 @@
                         if (s.paymentMode === 'Cash') cashIn += (s.advancePaid || s.total || 0);
                         else if (s.paymentMode === 'UPI') upiIn += (s.advancePaid || s.total || 0);
                         else if (s.paymentMode === 'Mixed') {
-                            cashIn += (b.cash || s.advancePaid || 0); // Fallback
+                            cashIn += (b.cash || s.advancePaid || 0);
                             upiIn += (b.upi || 0);
                         }
                         else if (s.paymentMode === 'Bank' || s.paymentMode === 'Card') bankIn += (s.advancePaid || s.total || 0);
@@ -499,8 +490,6 @@
 
                 if (o.paymentLog && o.paymentLog.length > 0) {
                     o.paymentLog.forEach(log => {
-                        if (log.isInitial) initialAccountedFor = true;
-
                         const logDate = typeof log.date === 'number' ? log.date : (log.date?.toMillis ? log.date.toMillis() : Date.now());
                         if (logDate >= start && logDate <= end) {
                             const c = log.cashParts !== undefined ? (log.cashParts || 0) : (log.method === 'Cash' ? (log.amount || 0) : 0);
@@ -516,9 +505,7 @@
                             }
                         }
                     });
-                }
-                
-                if (!initialAccountedFor && oInRange) {
+                } else if (oInRange) {
                     const b = o.advanceBreakdown || {};
                     if (b.cash || b.upi) {
                         cashIn += (b.cash || 0);
@@ -1239,13 +1226,16 @@
                             <i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp Receipt
                         </button>
 
-                        <div class="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
-                            <button onclick="window.refundItem('${sale.id}')" class="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-amber-500 flex items-center gap-1.5 transition-colors">
-                                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Refund Item
-                            </button>
-                            <button onclick="window.voidBill('${sale.id}')" class="text-[10px] font-black text-rose-300 uppercase tracking-widest hover:text-rose-600 flex items-center gap-1.5 transition-colors">
-                                <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Administrative Void
-                            </button>
+                        <div class="mt-6 pt-6 border-t border-slate-50 flex flex-wrap items-center justify-between gap-3">
+                            <div></div> <!-- Spacer for flex-between -->
+                            <div class="flex items-center gap-2">
+                                <button onclick="window.refundItem('${sale.id}')" class="px-4 py-2 bg-slate-100 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-100 hover:text-amber-600 flex items-center gap-1.5 transition-colors">
+                                    <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Refund
+                                </button>
+                                <button onclick="window.voidBill('${sale.id}')" class="px-4 py-2 bg-rose-50 text-rose-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-100 hover:text-rose-600 flex items-center gap-1.5 transition-colors border border-rose-100">
+                                    <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Void
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>`;
