@@ -2,7 +2,7 @@
 (function () {
 
     const BOT_NAME = "Lily";
-    window.LILY_VERSION = "2.5.4_DIAMOND";
+    window.LILY_VERSION = "2.5.4_DIAMOND_OPT";
     const GEMINI_URL = "https://little-violet-7bc7.lavishlavenderin.workers.dev?t=" + Date.now() + "&v=2.5.4";
 
     const COMMANDS = [
@@ -76,9 +76,8 @@
     function buildAIContext() {
         const state = window.erpState;
         if (!state) return "Data unavailable.";
-        const now = new Date();
         
-        // 1. Multi-Month Context Generation
+        // 1. Analytics Context
         const historyMap = {};
         const allSales = (state.sales || []);
         allSales.forEach(s => {
@@ -86,9 +85,16 @@
             historyMap[m] = (historyMap[m] || 0) + (parseFloat(s.total) || 0);
         });
 
-        // 2. Client & Order Optimization
+        // 2. Fuzzy Client Selection (Fix for "Afna")
         const mention = (_lastUserPrompt || "").toLowerCase();
-        const relevantClients = (state.clients || []).filter(c => mention.includes(c.name?.toLowerCase())).slice(0, 5);
+        const keywords = mention.split(' ').filter(w => w.length > 2 && !['what', 'how', 'show', 'tell', 'find'].includes(w));
+        
+        const relevantClients = (state.clients || []).filter(c => {
+            const name = (c.name || "").toLowerCase();
+            const phone = (c.phone || "").toLowerCase();
+            return keywords.some(k => name.includes(k) || phone.includes(k));
+        }).slice(0, 8);
+
         const topLoyalty = (state.clients || []).slice().sort((a,b) => (b.loyaltyPoints||0)-(a.loyaltyPoints||0)).slice(0, 10);
         const clients = [...new Set([...relevantClients, ...topLoyalty])].map(c => `${c.name}: ${c.loyaltyPoints} pts (${c.phone})`);
 
@@ -124,10 +130,11 @@
     async function callGemini(userPrompt) {
         try {
             const context = buildAIContext();
-            const LILY_PROMPT = `You are Lily, the boutique co-pilot. Tone: Professional, premium, precise.
+            const LILY_PROMPT = `You are Lily, the boutique co-pilot. Tone: Professional, premium, precise. 
+            If you find a client match in [RELEVANT CLIENTS], provide their phone and points clearly.
             JSON ACTIONS: {"action": "NAME", "params": {}}.
             - printSpecificReceipt: {billNo OR customerName}
-            - sendWhatsApp: {phone, message} - composing context-aware warm msgs.
+            - sendWhatsApp: {phone, message} 
             - viewLastReceipt / printLast / gotoDashboard / gotoPOS / gotoTailoring: {}
             [BOUTIQUE STATE]
             ${context}`;
@@ -161,8 +168,6 @@
     async function executeAction(json) {
         if (!json || !json.action) return;
         const state = window.erpState;
-        const msg = document.getElementById('chat-messages');
-
         switch (json.action) {
             case 'printSpecificReceipt':
                 const query = (json.params.billNo || json.params.customerName || "").toLowerCase();
@@ -180,7 +185,6 @@
                     return { text: `Pulling bill for ${target.customerName}...` };
                 }
                 break;
-
             case 'sendWhatsApp':
                 const phone = (window.sanitizePhone || (p => String(p).replace(/\D/g, '')))(json.params.phone);
                 if (phone && json.params.message) {
@@ -188,7 +192,6 @@
                     return { text: "WhatsApp dispatched." };
                 }
                 break;
-
             case 'viewLastReceipt': {
                 const latest = (state.sales || []).reduce((best, s) => toTimestamp(s.date) > toTimestamp(best?.date) ? s : best, null);
                 if (latest && window.viewReceipt) window.viewReceipt(latest.id);
@@ -205,14 +208,11 @@
         }
     }
 
-    // === LOCAL HANDLERS ===
     async function executeLocal(action, text) {
         const state = window.erpState;
         const nowStr = new Date().toISOString().split('T')[0];
-
         switch (action) {
-            case 'help': return { text: `**Lily v2.5.2 FINAL** 🌸\n\n• Audit: *"Sales today"* \n• Printing: *"Print B-105"* \n• Stock: *"Stock Kurti"* \n• Dues: *"Pending dues"* \n• Navigation: *"Go to terminal"*` };
-            
+            case 'help': return { text: `**Lily Diamond v2.5.4** 🏁\n\n• Audit: *"Sales today"* \n• Printing: *"Print B-105"* \n• Stock: *"Stock Kurti"* \n• Dues: *"Pending dues"* \n• Navigation: *"Go to terminal"*` };
             case 'todayReport': {
                 const filter = (arr) => arr.filter(x => (typeof x.date === 'string' ? x.date : new Date(toTimestamp(x.date)).toISOString().split('T')[0]) === nowStr);
                 const sales = filter(state.sales || []), exps = filter(state.expenses || []);
@@ -220,26 +220,22 @@
                 const cost = exps.reduce((a, e) => a + (parseFloat(e.amount) || 0), 0);
                 return { text: `**Today's Audit**\nRevenue: **${fmt(rev)}**\nExpenses: **${fmt(cost)}**\nNet: **${fmt(rev-cost)}**` };
             }
-
             case 'checkStock': {
                 const name = parseItemName(text);
                 const matches = (state.items || []).filter(i => (i.name && i.name.toLowerCase().includes(name)) || (i.sku && i.sku.toLowerCase() === name));
                 if (!matches.length) return null;
                 return { text: `**Stock Lookups**:\n` + matches.slice(0, 5).map(i => `📦 **${esc(i.name)}**: ${i.stock ?? i.quantity ?? 0} left`).join('\n') };
             }
-
             case 'pendingDues': {
                 const total = (state.sales || []).reduce((acc, s) => acc + (parseFloat(s.balanceDue || 0)), 0);
                 const tBal = (state.orders || []).filter(o => o.status !== 'Delivered').reduce((acc, o) => acc + ((o.totalCost||0)-(o.advancePaid||0)), 0);
                 return { text: `💰 **Outstanding Book Balance**:\nTotal: ${fmt(total+tBal)}` };
             }
-
             case 'gotoDashboard': case 'gotoPOS': case 'gotoTailoring': return await executeAction({ action });
             default: return null;
         }
     }
 
-    // === UI ===
     function formatMarkdown(text) {
         if (!text) return "";
         let safe = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -265,7 +261,7 @@
             <div class="absolute inset-0 bg-slate-900/40" onclick="window.closeChatbot()"></div>
             <div class="fixed inset-0 lg:inset-auto lg:bottom-10 lg:right-10 z-[9000] flex flex-col items-center lg:items-end p-4 lg:p-0 pointer-events-none">
                 <div id="chatbot-window" onclick="event.stopPropagation()" class="bg-white w-full h-full lg:w-[440px] lg:h-[760px] lg:rounded-[40px] shadow-2xl flex flex-col overflow-hidden animate-pop-in pointer-events-auto border-0 lg:border border-slate-100">
-                    <div class="bg-slate-950 p-6 lg:p-8 flex items-center gap-4 shrink-0 shrink-0 relative">
+                    <div class="bg-slate-950 p-6 lg:p-8 flex items-center gap-4 shrink-0 relative">
                         <div class="w-12 h-12 bg-gradient-to-tr from-violet-600 to-indigo-500 rounded-2xl flex items-center justify-center relative">
                             <span class="font-black text-white text-xl">L</span>
                             <div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-slate-950 rounded-full"></div>
@@ -274,7 +270,7 @@
                             <h3 class="font-black text-sm lg:text-base uppercase tracking-tight opacity-90 leading-none mb-1">Lily AI</h3>
                             <div class="flex items-center gap-1.5">
                                 <span class="text-emerald-400 text-[8px] font-black uppercase tracking-[0.2em] animate-pulse">Live</span>
-                                <span class="text-slate-500 text-[8px] font-bold uppercase leading-none">• v2.5.2 Optimized</span>
+                                <span class="text-slate-500 text-[8px] font-bold uppercase leading-none">• v2.5.4 Diamond</span>
                             </div>
                         </div>
                         <button onclick="window.closeChatbot()" class="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white transition-all bg-white/5 rounded-xl"><i data-lucide="x" class="w-5 h-5"></i></button>
@@ -303,12 +299,7 @@
         const input = document.getElementById('chat-input'), sendBtn = document.getElementById('chat-send-btn'), messages = document.getElementById('chat-messages');
         if (!input || !messages) return;
         const text = input.value.trim();
-        if (!text) return;
-
-        if (text.length > 500) {
-            messages.insertAdjacentHTML('beforeend', `<div class="text-center p-2 text-rose-400 text-[9px] font-black uppercase">Max 500 chars</div>`);
-            input.value = ''; return;
-        }
+        if (!text || text.length > 500) { if(text.length > 500) messages.insertAdjacentHTML('beforeend', `<div class="text-center p-2 text-rose-400 text-[9px] font-black uppercase">Max 500 chars</div>`); input.value=''; return; }
 
         _processing = true; input.disabled = true; sendBtn.disabled = true; input.value = '';
         _lastUserPrompt = text;
@@ -318,16 +309,7 @@
         try {
             messages.insertAdjacentHTML('beforeend', `<div class="flex justify-end"><div class="bg-violet-600 text-white p-5 rounded-3xl rounded-tr-none max-w-[85%] shadow-sm text-sm font-semibold leading-relaxed">${esc(text)}</div></div>`);
             messages.scrollTop = messages.scrollHeight;
-
-            messages.insertAdjacentHTML('beforeend', `
-                <div id="${tid}" class="flex gap-3">
-                    <div class="w-10 h-10 bg-slate-950 border border-slate-100 rounded-2xl flex items-center justify-center text-white text-[10px] font-black shrink-0 relative">L</div>
-                    <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex gap-1.5 items-center">
-                        <div class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce"></div>
-                        <div class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
-                        <div class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
-                    </div>
-                </div>`);
+            messages.insertAdjacentHTML('beforeend', `<div id="${tid}" class="flex gap-3"><div class="w-10 h-10 bg-slate-950 border border-slate-100 rounded-2xl flex items-center justify-center text-white text-[10px] font-black shrink-0 relative">L</div><div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex gap-1.5 items-center"><div class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce"></div><div class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style="animation-delay:150ms"></div><div class="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style="animation-delay:300ms"></div></div></div>`);
             messages.scrollTop = messages.scrollHeight;
 
             const intent = getLocalIntent(text);
@@ -337,27 +319,15 @@
             if (resp) {
                 _chatHistory.push({ role: 'lily', text: resp.text });
                 while (_chatHistory.length > 16) _chatHistory.shift();
-
                 const thinking = document.getElementById(tid); if (thinking) thinking.remove();
-                
-                messages.insertAdjacentHTML('beforeend', `
-                    <div class="flex flex-col gap-3 group">
-                        <div class="flex gap-3 relative">
-                            <div class="w-10 h-10 bg-slate-950 border border-slate-100 rounded-2xl flex items-center justify-center text-white text-xs font-black shrink-0">L</div>
-                            <div class="bg-white p-5 rounded-3xl rounded-tl-none border border-slate-100 shadow-sm max-w-[85%] text-sm text-slate-700 leading-relaxed relative chat-bubble">
-                                <button onclick="window.copyChatText(this)" class="chat-copy-btn p-1 absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-50 border border-slate-200 rounded text-slate-400"><i data-lucide="copy" class="w-3 h-3"></i></button>
-                                ${formatMarkdown(resp.text)}
-                            </div>
-                        </div>
-                    </div>`);
+                messages.insertAdjacentHTML('beforeend', `<div class="flex flex-col gap-3 group"><div class="flex gap-3 relative"><div class="w-10 h-10 bg-slate-950 border border-slate-100 rounded-2xl flex items-center justify-center text-white text-xs font-black shrink-0">L</div><div class="bg-white p-5 rounded-3xl rounded-tl-none border border-slate-100 shadow-sm max-w-[85%] text-sm text-slate-700 leading-relaxed relative chat-bubble"><button onclick="window.copyChatText(this)" class="chat-copy-btn p-1 absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-50 border border-slate-200 rounded text-slate-400"><i data-lucide="copy" class="w-3 h-3"></i></button>${formatMarkdown(resp.text)}</div></div></div>`);
                 if (window.lucide) lucide.createIcons(); messages.scrollTop = messages.scrollHeight;
                 if (resp.navigate) setTimeout(() => { location.href = resp.navigate; }, 1200);
             }
         } catch (err) {
-            console.error(err);
             if(document.getElementById(tid)) document.getElementById(tid).remove();
             if (_chatHistory.length && _chatHistory[_chatHistory.length - 1].role === 'user') _chatHistory.pop();
-            messages.insertAdjacentHTML('beforeend', `<div class="text-center p-4 text-rose-500 text-[10px] font-black uppercase">Error. Try refreshing app.</div>`);
+            messages.insertAdjacentHTML('beforeend', `<div class="text-center p-4 text-rose-500 text-[10px] font-black uppercase">Service Busy. Try again.</div>`);
         } finally { _processing = false; input.disabled = false; input.focus(); sendBtn.disabled = false; }
     };
 
@@ -366,7 +336,7 @@
         const btn = document.createElement('button'); 
         btn.id = 'chat-integrated-btn'; 
         btn.onclick = window.openChatbot;
-        btn.className = "flex items-center gap-3 px-5 py-3 bg-slate-950 text-white rounded-2xl shadow-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all fixed bottom-8 right-8 z-[8000] ring-1 ring-white/10";
+        btn.className = "flex items-center gap-3 px-5 py-3 bg-slate-950 text-white rounded-2xl shadow-xl text-[10px] font-black uppercase tracking-widest hover:scale-110 active:scale-95 transition-all fixed bottom-8 right-8 z-[8000] ring-1 ring-white/10";
         btn.innerHTML = `<i data-lucide="sparkles" class="w-4 h-4 text-violet-400"></i> Ask Lily`;
         document.body.appendChild(btn);
         if (window.lucide) lucide.createIcons();
