@@ -561,10 +561,24 @@ window.APP_VERSION = "v2.4.2";
                 };
             });
 
+        const voidedList = (window.erpState.voidedSales || [])
+            .map(v => {
+                const dt = v.voidedAt || Date.now();
+                return {
+                    ...v,
+                    _type: v._type || 'sale',
+                    _isVoid: true,
+                    _sortDate: dt,
+                    _displayDate: window.fmtDate(dt),
+                    _orderDate: v.date ? window.fmtDate(v.date) : window.fmtDate(dt),
+                    _balance: 0
+                };
+            });
+
         const sortOrder = window.erpState.historySort || 'desc';
         const sortKey = window.erpState.historySortKey || 'date';
 
-        let list = [...salesList, ...ordersList].sort((a,b) => {
+        let list = [...salesList, ...ordersList, ...voidedList].sort((a,b) => {
             if (sortKey === 'balance') {
                 return sortOrder === 'desc' ? b._balance - a._balance : a._balance - b._balance;
             }
@@ -660,12 +674,12 @@ window.APP_VERSION = "v2.4.2";
                                      <div class="flex flex-col">
                                          <div class="flex items-center gap-2 mb-1">
                                              <p class="text-base font-black text-slate-800 leading-tight group-hover:text-violet-600 transition-all">${window.esc(s.billNo || 'INV-000')}</p>
-                                             <span class="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${s._type === 'sale' ? 'bg-indigo-50 text-indigo-500' : 'bg-emerald-50 text-emerald-600'}">
-                                                 ${s._type === 'sale' ? 'POS' : 'TLR'}
+                                             <span class="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${s._isVoid ? 'bg-rose-50 text-rose-500' : (s._type === 'sale' ? 'bg-indigo-50 text-indigo-500' : 'bg-emerald-50 text-emerald-600')}">
+                                                 ${s._isVoid ? 'VOIDED' : (s._type === 'sale' ? 'POS' : 'TLR')}
                                              </span>
                                          </div>
                                          ${isRefund ? '<span class="w-fit px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[7px] font-black uppercase tracking-tighter">Refunded Case</span>' : ''}
-                                         <span class="text-[8px] font-black text-indigo-400 uppercase tracking-widest mt-1">${window.esc(methodLabel)}</span>
+                                         ${s._isVoid ? '<span class="w-fit px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-[7px] font-black uppercase tracking-tighter mt-1">Permanently Voided</span>' : `<span class="text-[8px] font-black text-indigo-400 uppercase tracking-widest mt-1">${window.esc(methodLabel)}</span>`}
                                      </div>
                                      <div class="flex flex-col">
                                          <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">${s._orderDate}</p>
@@ -2382,6 +2396,15 @@ window.APP_VERSION = "v2.4.2";
                 hasStitching: hasStitching,
                 stitchingOrderNo: stitchingNo,
                 taxAmount: taxAmount,
+                paymentLog: [{
+                    date: Date.now(),
+                    amount: finalPaid,
+                    method: method,
+                    cashParts: method === 'Mixed' ? cash : (method === 'Cash' ? finalPaid : 0),
+                    upiParts: method === 'Mixed' ? upi : (method === 'UPI' ? finalPaid : 0),
+                    note: isAdvance ? "Initial Advance" : "Full Payment",
+                    isInitial: true
+                }],
                 loyaltySnapshot: {
                     earned: pointsEarned,
                     total: Math.max(0, (client ? (client.loyaltyPoints || 0) : 0) - Math.min(redeemAmt, client?.loyaltyPoints || 0) + pointsEarned),
@@ -2695,9 +2718,10 @@ window.APP_VERSION = "v2.4.2";
                         date: Date.now(), 
                         amount: amt, 
                         method, 
-                        cashParts: method === 'Mixed' ? parseFloat(document.getElementById('collect_cash').value || 0) : null,
-                        upiParts: method === 'Mixed' ? parseFloat(document.getElementById('collect_upi').value || 0) : null,
-                        note: "Due Collection" 
+                        cashParts: method === 'Mixed' ? parseFloat(document.getElementById('collect_cash').value || 0) : (method === 'Cash' ? amt : 0),
+                        upiParts: method === 'Mixed' ? parseFloat(document.getElementById('collect_upi').value || 0) : (method === 'UPI' ? amt : 0),
+                        note: "Due Collection",
+                        isCollection: true
                     }])
                 };
 
@@ -2958,11 +2982,22 @@ window.APP_VERSION = "v2.4.2";
                 newItems[itemIdx].qty -= qtyToRefund;
             }
 
+            const newPaymentLog = (sale.paymentLog || []).concat([{
+                date: Date.now(),
+                amount: -refundValue,
+                method: sale.paymentMode || 'Cash',
+                cashParts: (sale.paymentMode === 'Cash' || sale.paymentMode === 'Mixed') ? -refundValue : 0,
+                upiParts: (sale.paymentMode === 'UPI') ? -refundValue : 0, // Simplification: Mixed refunds assumed cash or same split
+                note: `Refund: ${item.name} (Qty ${qtyToRefund})`,
+                isRefund: true
+            }]);
+
             batch.update(DATA_PATH('sales').doc(saleId), {
                 items: newItems,
                 subtotal: newSubtotal,
                 total: newTotal,
                 balanceDue: newBalanceDue,
+                paymentLog: newPaymentLog,
                 refundLog: [...(sale.refundLog || []), { item: item.name, amount: refundValue, date: Date.now() }]
             });
 

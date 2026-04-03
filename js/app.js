@@ -639,8 +639,10 @@ window.generateThermalPrint = function(data) {
         html += `<div style='text-align:center;font-size:9px;color:#666;'>${window.esc(line.trim())}</div>`;
     });
     
-    html += `<div style='text-align:center;font-size:9px;font-weight:bold;margin-top:2px;'>${window.esc(pConf.phone)}</div>`;
-    if (pConf.website) html += `<div style='text-align:center;font-size:9px;color:#888;'>${window.esc(pConf.website)}</div>`;
+    html += `<div style='text-align:center;font-size:9px;font-weight:bold;margin-top:2px;display:flex;justify-content:center;gap:12px;'>`;
+    html += `<span>${window.esc(pConf.phone)}</span>`;
+    if (pConf.website) html += `<span style='color:#888;'>${window.esc(pConf.website)}</span>`;
+    html += `</div>`;
 
     // Extra Top Fields
     if (pConf.extraFields) {
@@ -674,10 +676,10 @@ window.generateThermalPrint = function(data) {
     html += `<tr style='font-weight:900;text-transform:uppercase;font-size:9px;color:#666;'><td style='padding-bottom:4px;'>Item</td><td style='text-align:center;'>Qty</td><td style='text-align:right;'>Amt</td></tr>`;
 
     (data.items || []).forEach(i => {
-        html += `<tr><td style='padding:4px 0;' colspan='2'><div style='font-weight:bold;'>${window.esc(i.name)}</div>`;
+        html += `<tr><td style='padding:4px 0;' colspan='3'><div style='font-weight:bold;'>${window.esc(i.name)}</div>`;
         if (i.tailoringRef) html += `<div style='font-size:9px;color:#666;'>Job: ${window.esc(i.tailoringRef)}</div>`;
         html += `</td></tr>`;
-        html += `<tr style='font-size:10px;color:#444;'><td style='padding-bottom:6px;'>${i.qty} x ${fmt(i.price)}</td><td style='text-align:right;padding-bottom:6px;'>${fmt(i.qty * i.price)}</td></tr>`;
+        html += `<tr style='font-size:10px;color:#444;'><td style='padding-bottom:6px;'>${i.qty} x ${fmt(i.price)}</td><td style='text-align:center;padding-bottom:6px;'>${i.qty}</td><td style='text-align:right;padding-bottom:6px;'>${fmt(i.qty * i.price)}</td></tr>`;
     });
     html += `</table>`;
     html += `<hr style='border:none;border-top:1px dashed #ccc;margin:8px 0;'>`;

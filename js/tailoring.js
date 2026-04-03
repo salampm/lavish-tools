@@ -385,17 +385,22 @@ window.APP_VERSION = "v2.4.1";
         const delivered = orders.filter(o => {
             const bal = (o.totalCost || 0) - (o.advancePaid || 0) - (o.deliveryDiscount || 0);
             return o.status === 'Delivered' || (o.status === 'Ready' && bal <= 0);
-        }).sort((a,b) => {
-                const da = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp || 0);
-                const db = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp || 0);
+        });
+
+        const voided = (window.erpState.voidedOrders || []).map(v => ({ ...v, _isVoid: true }));
+
+        const combined = [...delivered, ...voided].sort((a,b) => {
+                const da = a.voidedAt || (a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp || 0));
+                const db = b.voidedAt || (b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp || 0));
                 return window.erpState.historySort === 'desc' ? db - da : da - db;
             });
+
         return `
         <div class="p-8 h-full flex flex-col overflow-hidden bg-slate-50">
             <div class="mb-8 flex justify-between items-center bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
                 <div>
                     <h2 class="text-xl font-black text-slate-800 tracking-tight">Archives</h2>
-                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Completed Tailoring Orders</p>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Completed & Voided Tailoring Orders</p>
                 </div>
                 <div class="flex gap-3">
                     <button onclick="window.toggleHistorySort()" class="bg-indigo-50 text-indigo-600 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-sm flex items-center gap-2 hover:bg-indigo-100 transition-colors">
@@ -416,13 +421,17 @@ window.APP_VERSION = "v2.4.1";
                                 <th class="p-6">Placed On</th>
                                 <th class="p-6">Garment Count</th>
                                 <th class="p-6 text-right">Total Yield</th>
-                                <th class="p-6 text-right pr-10">Delivered On</th>
+                                <th class="p-6 text-right pr-10">Status / Date</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
-                            ${delivered.map(o => `
+                            ${combined.map(o => `
                                 <tr onclick="window.openOrderDetails('${o.id}')" class="hover:bg-slate-50/50 transition-colors cursor-pointer group">
-                                    <td class="p-6 border-l-4 border-transparent group-hover:border-violet-500 transition-colors"><span class="bg-violet-50 text-violet-600 px-3 py-1 rounded-lg font-black font-mono shadow-sm border border-violet-100">${window.esc(o.billNo)}</span></td>
+                                    <td class="p-6 border-l-4 border-transparent group-hover:border-violet-500 transition-colors">
+                                        <span class="${o._isVoid ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-violet-50 text-violet-600 border-violet-100'} px-3 py-1 rounded-lg font-black font-mono shadow-sm border">
+                                            ${window.esc(o.billNo)}
+                                        </span>
+                                    </td>
                                     <td class="p-6">
                                         <p class="font-black text-slate-800 text-sm mb-0.5">${window.esc(o.customerName)}</p>
                                         <p class="text-[10px] text-slate-400 font-bold">${window.esc(o.phone)}</p>
@@ -430,7 +439,9 @@ window.APP_VERSION = "v2.4.1";
                                     <td class="p-6 font-bold text-slate-500">${window.fmtDate(o.orderDate || o.timestamp)}</td>
                                     <td class="p-6 text-slate-500 font-bold">${o.items?.length || 0} Items</td>
                                     <td class="p-6 text-right font-black text-slate-800 text-sm">${fmt(o.totalCost)}</td>
-                                    <td class="p-6 text-right pr-10 font-black text-emerald-500">${window.fmtDate(o.actualDeliveryDate || o.deliveryDate)}</td>
+                                    <td class="p-6 text-right pr-10 font-black ${o._isVoid ? 'text-rose-500' : 'text-emerald-500'}">
+                                        ${o._isVoid ? 'VOIDED' : window.fmtDate(o.actualDeliveryDate || o.deliveryDate)}
+                                    </td>
                                 </tr>
                             `).join('') || `<tr><td colspan="6" class="p-20 text-center text-slate-300 italic font-bold">No archives found</td></tr>`}
                         </tbody>
@@ -590,6 +601,15 @@ window.APP_VERSION = "v2.4.1";
                 advanceBreakdown: { cash, upi },
                 status: 'Order Confirmed',
                 measurements: draftMeasurements,
+                paymentLog: [{
+                    date: Date.now(),
+                    amount: totalAdv,
+                    method: method,
+                    cashParts: method === 'Mixed' ? cash : (method === 'Cash' ? totalAdv : 0),
+                    upiParts: method === 'Mixed' ? upi : (method === 'UPI' ? totalAdv : 0),
+                    note: totalAdv > 0 ? "Advance Paid" : "No Advance",
+                    isInitial: true
+                }],
                 notesLog: [{
                     text: `Order created with ₹${totalAdv} advance via ${method} ${method === 'Mixed' ? `(Cash: ₹${cash}, UPI: ₹${upi})` : ''}`,
                     timestamp: new Date().toLocaleString()
@@ -1000,6 +1020,17 @@ window.APP_VERSION = "v2.4.1";
         log.push({ text: logMsg, timestamp: new Date().toLocaleString() });
         
         const updates = { notesLog: log };
+        if (type === 'advance' && amt > 0) {
+            updates.paymentLog = (o.paymentLog || []).concat([{
+                date: Date.now(),
+                amount: amt,
+                method: method,
+                cashParts: method === 'Mixed' ? cash : (method === 'Cash' ? amt : 0),
+                upiParts: method === 'Mixed' ? upi : (method === 'UPI' ? amt : 0),
+                note: r || "Collection Adjustment",
+                isCollection: true
+            }]);
+        }
         if (type === 'cost') {
             updates.totalCost = (o.totalCost || 0) + amt;
         } else {
@@ -1162,6 +1193,16 @@ window.APP_VERSION = "v2.4.1";
         const log = o.notesLog || [];
         log.push({ text: logMsg, timestamp: new Date().toLocaleString() });
 
+        const pLog = (o.paymentLog || []).concat([{
+            date: Date.now(),
+            amount: rec,
+            method: method,
+            cashParts: method === 'Mixed' ? cash : (method === 'Cash' ? rec : 0),
+            upiParts: method === 'Mixed' ? upi : (method === 'UPI' ? rec : 0),
+            note: isPartial ? "Partial Delivery Payment" : "Final Delivery Settlement",
+            isDelivery: true
+        }]);
+
         const existingBreakdown = o.advanceBreakdown || { cash: 0, upi: 0 };
         const newStatus = 'Delivered';
         const remark = isPartial ? "Delivered - Pending" : "";
@@ -1174,6 +1215,7 @@ window.APP_VERSION = "v2.4.1";
                 cash: (existingBreakdown.cash || 0) + cash,
                 upi: (existingBreakdown.upi || 0) + upi
             },
+            paymentLog: pLog,
             tailoringCost: labor,
             profit: (o.totalCost - (o.deliveryDiscount || 0) - disc) - labor,
             actualDeliveryDate: (rec + disc >= bal) ? Date.now() : (o.actualDeliveryDate || null),

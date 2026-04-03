@@ -424,23 +424,58 @@
             const activeOrders = tailoringOrders.filter(o => o.status !== 'Delivered').length;
             const urgentOrders = tailoringOrders.filter(o => o.status !== 'Delivered' && o.deliveryDate && (new Date(o.deliveryDate) - now) < (48 * 60 * 60 * 1000) && (new Date(o.deliveryDate) - now) >= 0).length;
             const overdueOrders = tailoringOrders.filter(o => o.status !== 'Delivered' && o.deliveryDate && (new Date(o.deliveryDate) < today)).length;
-            // --- LIQUIDITY CALCULATIONS ---
+            // --- LIQUIDITY CALCULATIONS (Inflow) ---
             let cashIn = 0, upiIn = 0;
-            let cashOut = 0, upiOut = 0;
+            
+            // 1. Audit ALL POS Sales for payments in this range
+            (window.erpState.sales || []).forEach(s => {
+                if (s.paymentLog && s.paymentLog.length > 0) {
+                    s.paymentLog.forEach(log => {
+                        if (log.date >= start && log.date <= end) {
+                            cashIn += (log.cashParts || 0);
+                            upiIn += (log.upiParts || 0);
+                        }
+                    });
+                } else if (s.date >= start && s.date <= end) {
+                    // Fallback for legacy records or missing logs (attribute to sale date)
+                    const b = s.paymentBreakdown || {};
+                    if (s.paymentBreakdown) {
+                        cashIn += (b.cash || 0);
+                        upiIn += (b.upi || 0);
+                    } else {
+                        if (s.paymentMode === 'Cash') cashIn += (s.advancePaid || s.total || 0);
+                        else if (s.paymentMode === 'UPI') upiIn += (s.advancePaid || s.total || 0);
+                    }
+                }
+            });
 
-            // Selling (POS)
-            sales.forEach(s => {
-                const b = s.paymentBreakdown || {};
-                cashIn += (b.cash || 0);
-                upiIn += (b.upi || 0);
-                // Backfill for old records
-                if (!s.paymentBreakdown) {
-                    if (s.paymentMode === 'Cash') cashIn += (s.advancePaid || s.total || 0);
-                    else if (s.paymentMode === 'UPI') upiIn += (s.advancePaid || s.total || 0);
+            // 2. Audit ALL Tailoring Orders for payments in this range
+            (window.erpState.orders || []).forEach(o => {
+                if (o.paymentLog && o.paymentLog.length > 0) {
+                    o.paymentLog.forEach(log => {
+                        if (log.date >= start && log.date <= end) {
+                            cashIn += (log.cashParts || 0);
+                            upiIn += (log.upiParts || 0);
+                        }
+                    });
+                } else {
+                    const d = o.createdAt?.toMillis ? o.createdAt.toMillis() : (o.timestamp || 0);
+                    if (d >= start && d <= end) {
+                        const b = o.advanceBreakdown || {};
+                        cashIn += (b.cash || 0);
+                        upiIn += (b.upi || 0);
+                        if (!o.advanceBreakdown) {
+                            if (o.advanceMethod === 'Cash') cashIn += (o.advancePaid || 0);
+                            else if (o.advanceMethod === 'UPI') upiIn += (o.advancePaid || 0);
+                        }
+                    }
                 }
             });
 
 
+
+            // --- LIQUIDITY CALCULATIONS (Outflow) ---
+            let cashOut = 0, upiOut = 0;
 
             // Expenses (Operation Burn)
             expenses.forEach(e => {
