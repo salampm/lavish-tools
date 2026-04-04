@@ -1,6 +1,5 @@
 
 // POS Shared Logic & State Management
-window.APP_VERSION = "v2.4.2";
 (function() {
     // Re-bind helpers for convenience
     const fmt = window.fmt;

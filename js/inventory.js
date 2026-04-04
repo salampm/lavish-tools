@@ -1,5 +1,4 @@
 // Inventory Module Logic
-window.APP_VERSION = "v2.4.1";
 (function() {
     const fmt = window.fmt;
     

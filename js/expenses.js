@@ -1,4 +1,4 @@
-window.APP_VERSION = "v2.4.1";
+// Expense Module Logic
 (function() {
     // Shared state inside IIFE
     window.erpState.expenses = window.erpState.expenses || [];

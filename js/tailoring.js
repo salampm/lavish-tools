@@ -1,5 +1,4 @@
 // Tailoring Module Logic
-window.APP_VERSION = "v2.4.1";
 (function() {
     // Re-bind helpers for convenience
     const fmt = window.fmt || ((v) => '₹' + (v || 0).toLocaleString('en-IN'));

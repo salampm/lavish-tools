@@ -1,5 +1,4 @@
 // Firebase Configuration & Initialization (Local File Compatible)
-window.APP_VERSION = "v2.4.1";
 (function() {
     const config = {
         apiKey: "AIzaSyAvBgfCOf3-apZUTWrcwhe-ZY3XEhxOXcw",
