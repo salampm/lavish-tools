@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#6E4A8A">
+    <link rel="manifest" href="manifest.json">
     <!-- Cache Busting -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
@@ -34,6 +36,10 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-2 md:gap-4 header-right">
+                    <button onclick="window.openChatbot()" class="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm flex items-center gap-2">
+                        <i data-lucide="sparkles" class="w-4 h-4 text-indigo-500 group-hover:text-white"></i>
+                        <span class="text-[10px] font-black uppercase tracking-widest hidden lg:block">Lily AI</span>
+                    </button>
                     <div id="clock" class="text-right hidden md:block">
                         <p id="dash-time" class="text-sm font-black text-slate-900 leading-none">00:00:00</p>
                         <p id="dash-date" class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Monday, 16 March</p>
@@ -43,30 +49,7 @@
 
             <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
                 <div id="dashboard-content" class="max-w-[1600px] mx-auto">
-                    <!-- Lily Intelligence Hub (New Primary CTA) -->
-                    <div id="lily-hub-cta" class="mb-10 bg-gradient-to-br from-slate-900 to-slate-800 rounded-[48px] p-10 shadow-2xl relative overflow-hidden group cursor-pointer hover:scale-[1.01] transition-all" onclick="window.openChatbot()">
-                        <div class="absolute -right-20 -top-20 w-80 h-80 bg-violet-600/20 rounded-full blur-[100px] group-hover:bg-violet-600/30 transition-all duration-700"></div>
-                        <div class="absolute -left-20 -bottom-20 w-80 h-80 bg-indigo-600/10 rounded-full blur-[100px]"></div>
-                        
-                        <div class="flex flex-col md:flex-row items-center justify-between gap-10 relative z-10">
-                            <div class="flex items-center gap-8">
-                                <div class="w-20 h-20 bg-gradient-to-tr from-violet-600 to-indigo-500 rounded-[32px] flex items-center justify-center shadow-2xl shadow-violet-500/20 relative">
-                                    <span class="font-black text-white text-3xl">L</span>
-                                    <div class="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 border-4 border-slate-900 rounded-full animate-pulse"></div>
-                                </div>
-                                <div>
-                                    <h3 class="text-2xl font-black text-white tracking-tight leading-none mb-3 uppercase italic">Consult Lily Intelligence</h3>
-                                    <p class="text-slate-400 text-sm font-medium max-w-md leading-relaxed">Your hybrid AI co-pilot is active. Ask for sales audits, stock checks, or send smart WhatsApp reminders to clients instantly.</p>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-4">
-                                <span class="hidden lg:block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] bg-white/5 px-6 py-3 rounded-2xl border border-white/5 italic">System Status: Optimal</span>
-                                <div class="px-8 py-5 bg-white text-slate-950 rounded-3xl font-black text-xs uppercase tracking-widest shadow-xl group-hover:bg-violet-600 group-hover:text-white transition-all flex items-center gap-3">
-                                    <i data-lucide="sparkles" class="w-4 h-4"></i> Apply Logic
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- Dashboard Analytics View -->
 
                     <div class="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
                         <div>
@@ -329,7 +312,6 @@
             window.renderApp();
         };
 
-        window.LILY_VERSION = "2.5.4_DIAMOND";
         const GEMINI_URL = "https://little-violet-7bc7.lavishlavenderin.workers.dev?t=" + Date.now() + "&v=2.5.4";
 
         window.renderApp = function() {

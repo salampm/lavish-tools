@@ -9,6 +9,14 @@ document.addEventListener('gesturestart', (e) => {
     e.preventDefault();
 }, { passive: false });
 
+// === PWA STANDALONE BACK NAVIGATION LOCK ===
+if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
+    history.pushState(null, document.title, location.href);
+    window.addEventListener('popstate', function () {
+        history.pushState(null, document.title, location.href);
+    });
+}
+
 // --- CACHE & UPDATE MANAGEMENT ---
 // 1. Force unregister old Service Workers that often block updates
 // Legacy SW cleanup — remove after one deployment cycle
@@ -187,7 +195,6 @@ window.erpState = {
         { id: 'inventory', icon: 'package', label: 'Inventory', url: 'inventory.html', roles: ['Owner'] },
         { id: 'clients', icon: 'users', label: 'Clients', url: 'pos.html?tab=clients' },
         { id: 'reports', icon: 'file-spreadsheet', label: 'Master Reports', url: 'pos.html?tab=reports', roles: ['Owner'] },
-        { id: 'lily', icon: 'sparkles', label: 'Lily Assistant', onclick: 'window.openChatbot()', url: '#' },
         { id: 'settings', icon: 'settings', label: 'Master Settings', url: 'pos.html?tab=settings', roles: ['Owner'] }
     ],
     isOnline: navigator.onLine,

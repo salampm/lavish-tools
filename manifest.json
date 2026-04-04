@@ -1,0 +1,20 @@
+{
+  "name": "Lavish Lavender POS",
+  "short_name": "Lavish POS",
+  "start_url": "/lavish-tools/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#6E4A8A",
+  "icons": [
+    {
+      "src": "/lavish-tools/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/lavish-tools/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

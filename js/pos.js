@@ -565,23 +565,10 @@ window.APP_VERSION = "v2.4.2";
                 };
             });
 
-        const voidedList = (window.erpState.voidedSales || [])
-            .map(v => {
-                const dt = v.voidedAt || Date.now();
-                return {
-                    ...v,
-                    _type: v._type || 'sale',
-                    _isVoid: true,
-                    _sortDate: dt,
-                    _displayDate: window.fmtDate(dt),
-                    _balance: 0
-                };
-            });
-
         const sortOrder = window.erpState.historySort || 'desc';
         const sortKey = window.erpState.historySortKey || 'date';
 
-        let list = [...salesList, ...ordersList, ...voidedList].sort((a,b) => {
+        let list = [...salesList, ...ordersList].sort((a,b) => {
             if (sortKey === 'balance') return sortOrder === 'desc' ? b._balance - a._balance : a._balance - b._balance;
             if (sortKey === 'bill') {
                 const numA = parseInt((a.billNo || '').replace(/\D/g, '')) || 0;

@@ -349,5 +349,6 @@
 
         if (window.lucide) lucide.createIcons();
     };
-    if (document.readyState === 'complete') window.renderChatFAB(); else window.addEventListener('load', window.renderChatFAB);
+    // Manual call recommended only where desired
+    // if (document.readyState === 'complete') window.renderChatFAB(); else window.addEventListener('load', window.renderChatFAB);
 })();
